@@ -12,6 +12,7 @@ import { createGoogleAdminAuth, createAdminService } from './admin.mjs';
 import { createGoogleUserAuth } from './identity.mjs';
 import { createCustomerService } from './customers.mjs';
 import { createAccountRoutes } from './account-routes.mjs';
+import {createDiscoveryRoutes} from './discovery-routes.mjs';
 import {createManagementService} from './management.mjs';
 import {paymentQR} from './payment-qr.mjs';
 
@@ -76,6 +77,7 @@ async function body(req,limit=4096) {
   try { const value=JSON.parse(Buffer.concat(chunks).toString('utf8')); if(!value || typeof value!=='object' || Array.isArray(value)) throw 0; return value; }
   catch { throw Object.assign(new Error('Permintaan tidak sah.'),{status:400}); }
 }
+const discoveryRoutes=createDiscoveryRoutes({service,adminAuth,shortLinks,originURL:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',demo,reply,body,allow});
 const server = http.createServer(async (req,res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
   const origin = origins.has(req.headers.origin) ? req.headers.origin : null;
@@ -96,6 +98,7 @@ const server = http.createServer(async (req,res) => {
       const bytes=await coverMedia.read(path.slice('/api/media/'.length));
       res.writeHead(200,{'content-type':'image/webp','content-length':bytes.length,'cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'",...(origin?{'access-control-allow-origin':origin,vary:'Origin'}:{})});res.end(req.method==='HEAD'?undefined:bytes);return;
     }
+    if(await discoveryRoutes(req,res,{path,origin}))return;
     if(await accountRoutes(req,res,{path,origin}))return;
     if(path.startsWith('/api/links/')&&req.method==='GET') {
       if(req.headers.origin&&!origin) return reply(res,403,{error:'Akses tidak dibenarkan.'});
@@ -113,9 +116,6 @@ const server = http.createServer(async (req,res) => {
         if(!shortLinks) return reply(res,503,{error:'Pautan pendek belum tersedia. Cuba lagi sebentar.'},origin);
         return reply(res,200,await shortLinks.shorten(data.url),origin);
       }
-      if (path === '/api/suggest') return reply(res, 200, await service.suggest(data.query, data.sessionToken), origin);
-      if (path === '/api/search') return reply(res, 200, await service.search(data.query), origin);
-      if (path === '/api/import') return reply(res, 200, await service.import(data.token), origin);
       return reply(res, 404, { error:'Tidak ditemui.' }, origin);
     }
     if (preview && ['GET','HEAD'].includes(req.method)) {
