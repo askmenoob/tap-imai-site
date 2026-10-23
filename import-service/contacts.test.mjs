@@ -62,3 +62,11 @@ test('citation attached to a handle explanation still supplies a clearly labelle
   const found=await extractGoogleProfiles(data,'Loffee Coffee',{resolve:async x=>x});
   assert.deepEqual(found.candidates,{instagram:['https://instagram.com/loffeecoffee.official']});
 });
+
+test('Google citation provenance survives a redirect that cannot be resolved by the server',async()=>{
+  const text='Official Instagram: https://www.instagram.com/loffeecoffee.official';
+  const source='https://vertexaisearch.cloud.google.com/grounding-api-redirect/example';
+  const raw={candidates:[{content:{parts:[{text}]},groundingMetadata:{webSearchQueries:['Loffee Coffee'],groundingChunks:[{web:{uri:source,domain:'instagram.com'}}],groundingSupports:[{segment:{text},groundingChunkIndices:[0]}]}}]};
+  const found=await extractGoogleProfiles(raw,'Loffee Coffee',{resolve:async()=>{throw new Error('redirect unavailable');}});
+  assert.deepEqual(found.candidates.instagram,['https://instagram.com/loffeecoffee.official']);assert.equal(found.sources['https://instagram.com/loffeecoffee.official'],source);
+});
