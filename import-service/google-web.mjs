@@ -114,6 +114,3 @@ export function createGoogleWebSearch({project,model='gemini-3.8-flash',getToken
     },
   };
 }
-
-
-
