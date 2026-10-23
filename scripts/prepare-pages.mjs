@@ -2,6 +2,7 @@ import { copyFile, mkdir, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { duitNowOriginalBase64 } from '../assets-src/duitnow-original.mjs';
+import { createAppIcon } from '../assets-src/pwa-icons.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = join(root, 'dist');
@@ -12,10 +13,13 @@ const publicFiles = [
   'business-subscribe.js', 'business-admin.css', 'business-import.css',
   'assets/index-CjwyeWEp.js', 'assets/index-vlpK9gB_.css',
   'assets/duitnow-original.jpeg',
+  'manifest.webmanifest', 'pwa.js', 'pwa.css', 'sw.js', 'offline.html', '_headers',
+  'assets/app-icon-180.png', 'assets/app-icon-192.png', 'assets/app-icon-512.png',
 ];
 
 await mkdir(join(root, 'assets'), { recursive: true });
 await writeFile(join(root, 'assets/duitnow-original.jpeg'), Buffer.from(duitNowOriginalBase64, 'base64'));
+for (const size of [180, 192, 512]) await writeFile(join(root, 'assets/app-icon-' + size + '.png'), createAppIcon(size));
 
 for (const file of publicFiles) {
   const destination = join(output, file);
