@@ -143,9 +143,6 @@ function renderCard(document2, profile, now = Date.now()) {
   }
   const footer = el("footer", "business-footer");
   footer.append(el("span", "", "POWERED BY SMARTTAP"));
-  const create = el("a", "", "Cipta halaman anda");
-  create.href = "/subscribe/";
-  footer.append(create);
   content.append(footer);
   card.append(cover, content);
   main.append(card);
