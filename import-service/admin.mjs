@@ -1,6 +1,7 @@
 import {createGoogleIdentityAuth} from './identity.mjs';
 import {validateSmartTapURL} from './short-links.mjs';
 import {malaysiaPhone,whatsappFromPhone,threadsProfile} from './contacts.mjs';
+import {pageState} from './page-state.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 export function createGoogleAdminAuth({clientId,emails=[],keySet}) {
@@ -14,10 +15,11 @@ export function createGoogleAdminAuth({clientId,emails=[],keySet}) {
   };
 }
 export function validId(id){if(typeof id!=='string'||!/^[A-Za-z0-9_-]{16}$/.test(id))throw fail(404,'Pautan tidak ditemui.');}
-export function pageView({id,record,revision},origin='https://tap.imai.my',includeOwner=false){
+export function pageView({id,record,revision},origin='https://tap.imai.my',includeOwner=false,now=Date.now()){
   const url=validateSmartTapURL(record.url,origin);
   return {id,url:origin+'/?s='+id,profile:JSON.parse(Buffer.from(new URL(url).searchParams.get('p'),'base64url').toString('utf8')),
-    revision,createdAt:record.createdAt||null,updatedAt:record.updatedAt||record.createdAt||null,...(includeOwner?{ownerEmail:record.ownerEmail||''}:{})};
+    revision,createdAt:record.createdAt||null,updatedAt:record.updatedAt||record.createdAt||null,state:pageState(record,now),manualState:record.lifecycle?.state||'active',subscription:record.subscription||null,
+    renewal:record.renewal?Object.fromEntries(Object.entries(record.renewal).filter(([key])=>includeOwner||!['submittedBy','decidedBy'].includes(key))):null,...(includeOwner?{ownerEmail:record.ownerEmail||''}:{})};
 }
 export function profileURL(value,origin='https://tap.imai.my'){
   if(!value||typeof value!=='object'||Array.isArray(value))throw fail(400,'Maklumat suntingan tidak sah.');
@@ -37,7 +39,7 @@ export async function savePage({store,id,previous,revision,changes,actor,now=Dat
   return store.getVersion(id);
 }
 export function createAdminService({store,origin='https://tap.imai.my',now=Date.now}) {
-  const view=item=>pageView(item,origin,true);
+  const view=item=>pageView(item,origin,true,now());
   return {
     async get(id){validId(id);const item=await store.getVersion(id);if(!item)throw fail(404,'Pautan tidak ditemui.');return view({id,...item});},
     async list(cursor) {
