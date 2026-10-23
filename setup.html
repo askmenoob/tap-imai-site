@@ -5,8 +5,8 @@
   <meta name="theme-color" content="#fffaf4"><meta name="referrer" content="no-referrer">
   <title>Cari perniagaan — SmartTap</title>
   <meta name="description" content="Cari perniagaan, semak maklumat automatik dan cipta halaman SmartTap anda.">
-  <link rel="stylesheet" href="business-import.css">
-  <script src="import-config.js"></script><script type="module" src="business-import.js"></script>
+  <link rel="stylesheet" href="business-import.css?v=suggest-20261023-1">
+  <script src="import-config.js"></script><script type="module" src="business-import.js?v=suggest-20261023-1"></script>
 </head>
 <body>
   <header><a class="brand" href="./">◈ SMART<span>TAP</span></a><a href="./">Borang manual ↗</a></header>
@@ -15,10 +15,10 @@
     <p id="demo" class="notice" hidden>MOD DEMO TEMPATAN — semua hasil di sini ialah data contoh, bukan carian Google sebenar.</p>
     <section class="panel" aria-labelledby="search-heading">
       <h2 id="search-heading">Cari perniagaan</h2>
-      <form id="search-form"><label for="query">Nama perniagaan <span class="optional">Tambahkan bandar jika perlu</span></label><div class="search-row"><input id="query" name="query" placeholder="Contoh: Loffee Coffee Shah Alam" minlength="2" maxlength="160" required autocomplete="organization"><button id="search-button">Cari perniagaan ↗</button></div></form>
-      <p id="search-status" role="status" aria-live="polite"></p><div id="choices"></div>
+      <form id="search-form"><label for="query">Nama perniagaan <span class="optional">Cadangan nama dan alamat muncul semasa anda menaip</span></label><div class="search-row"><input id="query" name="query" role="combobox" aria-autocomplete="list" aria-controls="choices" aria-expanded="false" aria-describedby="search-hint" placeholder="Contoh: Loffee Coffee" minlength="2" maxlength="160" required autocomplete="off" spellcheck="false"><button id="search-button">Cari perniagaan ↗</button></div><p id="search-hint" class="help">Taip sekurang-kurangnya 3 aksara, kemudian pilih perniagaan dan alamat yang betul.</p>
+      <p id="search-status" role="status" aria-live="polite"></p><div id="choices" role="listbox" aria-label="Cadangan perniagaan" hidden></div></form>
       <div id="google-attribution" hidden><span class="gmp" translate="no">Google Maps</span><div id="third-party-attribution"></div></div>
-      <p class="help">Logo dan sosial diambil daripada laman rasmi apabila tersedia. Maklumat yang tidak ditemui atau mempunyai beberapa padanan memerlukan semakan anda.</p>
+      <p class="help">Telefon diperoleh daripada Google Maps. Profil sosial dicari melalui Google dan laman rasmi apabila tersedia. Semak akaun yang dicadangkan sebelum berkongsi.</p>
     </section>
     <section id="editor" class="panel" aria-labelledby="edit-heading" hidden>
       <p class="eyebrow">SEMAK SEBELUM KONGSI</p><h2 id="edit-heading">Maklumat perniagaan</h2>
