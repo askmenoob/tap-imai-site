@@ -2,6 +2,7 @@ import {randomBytes} from 'node:crypto';
 import {gmailAddress,ownerKey} from './identity.mjs';
 import {validId,pageView,profileURL,savePage} from './admin.mjs';
 import {validateSmartTapURL} from './short-links.mjs';
+import {requirePublicPage} from './page-state.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const notFound=()=>fail(404,'Halaman ini tidak tersedia untuk akaun Gmail anda.');
@@ -9,9 +10,9 @@ function requireAdmin(actor){if(actor?.role!=='admin'||!actor.email)throw fail(4
 function userKey(actor){if(actor?.role!=='user')throw fail(403,'Login Gmail diperlukan.');return ownerKey(actor.email);}
 function owns(record,key){try{return !!record.ownerEmail&&ownerKey(record.ownerEmail)===key;}catch{return false;}}
 function validCursor(cursor){if(cursor!==undefined&&cursor!==null&&(typeof cursor!=='string'||cursor.length>2048||!/^[-A-Za-z0-9_+/=]*$/.test(cursor)))throw fail(400,'Halaman senarai tidak sah.');}
-export function createCustomerService({store,origin='https://tap.imai.my',now=Date.now,newId=()=>randomBytes(12).toString('base64url')}){
-  const view=(id,item,admin=false)=>pageView({id,...item},origin,admin);
-  async function owned(id,actor){validId(id);const key=userKey(actor);const item=await store.getVersion(id);if(!item||!owns(item.record,key))throw notFound();return item;}
+export function createCustomerService({store,origin='https://tap.imai.my',now=Date.now,newId=()=>randomBytes(12).toString('base64url'),newSubscription=null}){
+  const view=(id,item,admin=false)=>pageView({id,...item},origin,admin,now());
+  async function owned(id,actor){validId(id);const key=userKey(actor);const item=await store.getVersion(id);if(!item||item.record.lifecycle?.state==='deleted'||!owns(item.record,key))throw notFound();return item;}
   return {
     async register({url,email}={},actor){
       requireAdmin(actor);email=gmailAddress(email);url=validateSmartTapURL(url,origin);
@@ -20,7 +21,7 @@ export function createCustomerService({store,origin='https://tap.imai.my',now=Da
         // Membership is discoverability only; each read/write rechecks the primary record.
         await store.grantOwner(ownerKey(email),id);
         const createdAt=new Date(now()).toISOString();
-        if(await store.create(id,{v:1,url,createdAt,ownerEmail:email,ownerRegisteredAt:createdAt,ownerRegisteredBy:actor.email}))return view(id,await store.getVersion(id),true);
+        if(await store.create(id,{v:1,url,createdAt,ownerEmail:email,ownerRegisteredAt:createdAt,ownerRegisteredBy:actor.email,...(newSubscription?{subscription:structuredClone(newSubscription)}:{})}))return view(id,await store.getVersion(id),true);
       }
       throw fail(503,'Pendaftaran belum dapat disimpan. Cuba lagi.');
     },
@@ -34,12 +35,13 @@ export function createCustomerService({store,origin='https://tap.imai.my',now=Da
     },
     async list(actor,cursor){
       const key=userKey(actor);validCursor(cursor);const page=await store.listOwner(key,cursor);
-      const items=await Promise.all(page.ids.map(async id=>{const item=await store.getVersion(id);return item&&owns(item.record,key)?view(id,item):null;}));
+      const items=await Promise.all(page.ids.map(async id=>{const item=await store.getVersion(id);return item&&item.record.lifecycle?.state!=='deleted'&&owns(item.record,key)?view(id,item):null;}));
       return {items:items.filter(Boolean),cursor:page.cursor};
     },
     async get(id,actor){return view(id,await owned(id,actor));},
     async update(id,data,actor){
       const previous=await owned(id,actor);
+      requirePublicPage(previous.record,now());
       if(!data||Object.keys(data).some(key=>!['profile','revision'].includes(key)))throw fail(400,'Anda hanya boleh menyunting maklumat halaman sendiri.');
       const url=profileURL(data.profile,origin);
       const saved=await savePage({store,id,previous,revision:data.revision,changes:{v:1,url},actor,now});
