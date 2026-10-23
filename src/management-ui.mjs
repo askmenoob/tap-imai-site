@@ -4,7 +4,7 @@ const date=value=>value?new Date(value).toLocaleDateString('ms-MY',{timeZone:'As
 export const stateLabels={active:'Aktif',disabled:'Dinyahaktifkan',deleted:'Dipadam',pending:'Menunggu pengaktifan',expired:'Langganan tamat',nfc_only:'NFC sahaja · sekali bayar'};
 export function createManagementUI({customer,api,onUpdate,onBusy}){
   const panel=document.createElement('section');panel.className='management-panel';
-  panel.innerHTML=`<h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej ↗</a>
+  panel.innerHTML=`<h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review ↗</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej ↗</a>
   <div id="lifecycle-actions" class="actions" ${customer?'hidden':''}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button></div>
   <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
   <p id="management-status" role="status" aria-live="polite"></p>
@@ -29,6 +29,7 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
   async function show(item){
     const changed=current?.id!==item.id,oldStatus=current?.renewal?.status;current=item;$('page-state').textContent=stateLabels[item.state]||item.state;
     $('subscription-summary').textContent=item.subscription?.plan==='annual'?'Halaman tahunan · tamat '+date(item.subscription.expiresAt):item.subscription?.plan==='nfc_only'?'NFC terus ke Google Review. Tiada langganan halaman QR.':'Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.';
+    $('direct-review-wrap').hidden=item.subscription?.plan!=='nfc_only';$('direct-review').href=item.profile.google;
     $('state-toggle').textContent=item.manualState==='disabled'?'Aktifkan halaman':'Nyahaktifkan halaman';$('state-toggle').hidden=item.manualState==='deleted';$('delete-open').hidden=item.manualState==='deleted';$('state-restore').hidden=item.manualState!=='deleted';$('delete-form').hidden=true;
     if(changed){$('management-status').textContent='';$('payment-reference').value='';$('payment-date').value=today();$('payment-nfc').value='0';$('payment-stickers').value='0';}
     try{config=await api('/plan');if(current?.id!==item.id)return;}catch(error){$('billing-availability').textContent=error.message;return;}
