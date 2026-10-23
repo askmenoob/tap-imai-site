@@ -29,28 +29,23 @@ export function validateSmartTapURL(value,origin='https://tap.imai.my') {
 }
 export function createShortLinks({store,secret,origin='https://tap.imai.my',now=Date.now}) {
   if(!store||!secret||secret.length<32) throw new Error('Configure short link storage and signing secret.');
-  const cache=new Map();
-  const remember=(id,url)=>{
-    cache.set(id,{url,expires:now()+300000});
-    if(cache.size>1000) cache.delete(cache.keys().next().value);
-  };
   return {
     async shorten(value) {
       const url=validateSmartTapURL(value,origin);
       for(let attempt=0;attempt<3;attempt++) {
         const id=createHmac('sha256',secret).update(`${attempt}:${url}`).digest('base64url').slice(0,16);
-        if(cache.get(id)?.url===url || await store.create(id,{v:1,url,createdAt:new Date(now()).toISOString()}) || (await store.get(id))?.url===url) {
-          remember(id,url);return {id,url:origin+'/?s='+id};
+        if(await store.create(id,{v:1,url,createdAt:new Date(now()).toISOString()}) || (await store.get(id))?.url===url) {
+          return {id,url:origin+'/?s='+id};
         }
       }
       throw new Error('Pautan pendek tidak dapat disimpan. Cuba lagi.');
     },
     async resolve(id) {
       if(typeof id!=='string'||!/^[A-Za-z0-9_-]{16}$/.test(id)) throw Object.assign(new Error('Pautan pendek tidak ditemui.'),{status:404});
-      if(cache.get(id)?.expires>now()) return {url:cache.get(id).url};
       const record=await store.get(id);
       if(!record) throw Object.assign(new Error('Pautan pendek tidak ditemui.'),{status:404});
-      const url=validateSmartTapURL(record.url,origin);remember(id,url);return {url};
+      // Read the durable record so edits made by another instance take effect on the next scan.
+      const url=validateSmartTapURL(record.url,origin);return {url};
     },
   };
 }
@@ -58,6 +53,27 @@ export function createShortLinks({store,secret,origin='https://tap.imai.my',now=
 export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
   if(!/^[a-z0-9][a-z0-9.-]{2,62}$/.test(bucket||'')) throw new Error('Invalid short link bucket.');
   const object=id=>'links/'+id+'.json';
+  const base='https://storage.googleapis.com/storage/v1/b/'+bucket+'/o/';
+  async function request(url,options={}) {
+    const response=await fetcher(url,{...options,headers:{Authorization:'Bearer '+await getToken(),...options.headers},signal:AbortSignal.timeout(10000)});
+    if(response.status===404) return null;
+    if(response.status===412) return false;
+    if(!response.ok) throw new Error('Short link storage unavailable');
+    return response.json();
+  }
+  async function read(id,generation) {
+    const url=new URL(base+encodeURIComponent(object(id)));url.searchParams.set('alt','media');
+    if(generation) url.searchParams.set('generation',generation);
+    return request(url);
+  }
+  async function write(name,record,revision='0') {
+    const endpoint=new URL('https://storage.googleapis.com/upload/storage/v1/b/'+bucket+'/o');
+    endpoint.searchParams.set('uploadType','media');endpoint.searchParams.set('name',name);endpoint.searchParams.set('ifGenerationMatch',revision);
+    const result=await request(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(record)});
+    if(result===false)return false;
+    if(!result)throw new Error('Short link storage unavailable');
+    return true;
+  }
   return {
     async create(id,record) {
       const endpoint=new URL('https://storage.googleapis.com/upload/storage/v1/b/'+bucket+'/o');
@@ -67,13 +83,28 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
       if(!response.ok) throw new Error('Short link storage unavailable');
       return true;
     },
-    async get(id) {
-      const response=await fetcher('https://storage.googleapis.com/storage/v1/b/'+bucket+'/o/'+encodeURIComponent(object(id))+'?alt=media',{
-        headers:{Authorization:'Bearer '+await getToken()},signal:AbortSignal.timeout(10000),
-      });
-      if(response.status===404) return null;
-      if(!response.ok) throw new Error('Short link storage unavailable');
-      return response.json();
+    get:read,
+    async getVersion(id) {
+      const metadata=await request(base+encodeURIComponent(object(id)));
+      if(!metadata) return null;
+      const record=await read(id,metadata.generation);
+      if(!record) throw Object.assign(new Error('Rekod telah berubah. Muat semula senarai.'),{status:409});
+      return {record,revision:metadata.generation};
     },
+    async list(cursor) {
+      const url=new URL(base);url.searchParams.set('prefix','links/');url.searchParams.set('maxResults','25');
+      url.searchParams.set('fields','items(name,generation),nextPageToken');
+      if(cursor)url.searchParams.set('pageToken',cursor);
+      const page=await request(url);
+      const entries=(page.items||[]).filter(item=>/^links\/[A-Za-z0-9_-]{16}\.json$/.test(item.name));
+      const items=await Promise.all(entries.map(async item=>{
+        const id=item.name.slice(6,-5);const record=await read(id,item.generation);
+        if(!record) throw Object.assign(new Error('Senarai telah berubah. Muat semula senarai.'),{status:409});
+        return {id,record,revision:item.generation};
+      }));
+      return {items,cursor:page.nextPageToken||null};
+    },
+    archive:(id,revision,record)=>write('history/'+id+'/'+revision+'.json',record),
+    update:(id,record,revision)=>write(object(id),record,revision),
   };
 }
