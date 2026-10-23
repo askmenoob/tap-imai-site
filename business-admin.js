@@ -2036,7 +2036,7 @@ var require_svg_tag = __commonJS({
 var require_browser = __commonJS({
   "node_modules/qrcode/lib/browser.js"(exports) {
     var canPromise = require_can_promise();
-    var QRCode3 = require_qrcode();
+    var QRCode2 = require_qrcode();
     var CanvasRenderer = require_canvas();
     var SvgRenderer = require_svg_tag();
     function renderCanvas(renderFunc, canvas, text, opts, cb) {
@@ -2079,7 +2079,7 @@ var require_browser = __commonJS({
         }
         return new Promise(function(resolve, reject) {
           try {
-            const data = QRCode3.create(text, opts);
+            const data = QRCode2.create(text, opts);
             resolve(renderFunc(data, canvas, opts));
           } catch (e) {
             reject(e);
@@ -2087,13 +2087,13 @@ var require_browser = __commonJS({
         });
       }
       try {
-        const data = QRCode3.create(text, opts);
+        const data = QRCode2.create(text, opts);
         cb(null, renderFunc(data, canvas, opts));
       } catch (e) {
         cb(e);
       }
     }
-    exports.create = QRCode3.create;
+    exports.create = QRCode2.create;
     exports.toCanvas = renderCanvas.bind(null, CanvasRenderer.render);
     exports.toDataURL = renderCanvas.bind(null, CanvasRenderer.renderToDataURL);
     exports.toString = renderCanvas.bind(null, function(data, _, opts) {
@@ -2103,7 +2103,7 @@ var require_browser = __commonJS({
 });
 
 // src/admin.js
-var import_qrcode2 = __toESM(require_browser(), 1);
+var import_qrcode = __toESM(require_browser(), 1);
 
 // import-service/contacts.mjs
 function malaysiaPhone(value) {
@@ -2136,7 +2136,6 @@ function googleLogin({ clientId, container, onCredential, onError, prompt = fals
 }
 
 // src/management-ui.mjs
-var import_qrcode = __toESM(require_browser(), 1);
 var money = (cents) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(cents / 100);
 var date = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) : "Belum bermula";
 var stateLabels = { active: "Aktif", disabled: "Dinyahaktifkan", deleted: "Dipadam", pending: "Menunggu pengaktifan", expired: "Langganan tamat", nfc_only: "NFC sahaja \xB7 sekali bayar" };
@@ -2150,7 +2149,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   <div id="billing-section"><h3>Langganan & bayaran DuitNow</h3><p id="billing-availability"></p><p id="payment-summary"></p>
   <div id="order-support" class="notice" hidden><h4>Pertanyaan pesanan</h4><p>Hubungi super admin tentang pesanan yang telah disahkan, termasuk penyediaan NFC dan penghantaran.</p><a id="order-whatsapp" class="button" target="_blank" rel="noopener noreferrer">WhatsApp super admin tentang pesanan \u2197</a><p class="help">Draf mesej disediakan dengan nama perniagaan dan ID pesanan. Semak dan hantar sendiri dalam WhatsApp.</p></div>
   <form id="payment-form" hidden><label for="payment-package">Pakej</label><select id="payment-package"></select><div class="quantity-grid"><div><label for="payment-nfc">NFC tambahan \xB7 RM30/unit</label><input id="payment-nfc" type="number" min="0" max="10" step="1" value="0"></div><div><label for="payment-stickers">NFC table sticker \xB7 kuantiti</label><input id="payment-stickers" type="number" min="0" max="200" step="1" value="0"></div></div><p class="help">Sticker: RM20/unit untuk 1\u201319 unit; RM15/unit untuk 20 unit atau lebih.</p><div id="payment-quote" role="status"></div><p class="help">Harga produk tidak termasuk penghantaran. Urus penghantaran dan cajnya secara berasingan dengan super admin.</p>
-  <div id="payment-instructions" hidden><p>Bayar jumlah di atas menggunakan QR DuitNow ini. Semak nama penerima sebelum mengesahkan bayaran dalam aplikasi bank.</p><img id="payment-qr" alt="QR DuitNow bayaran kepada NIK AZFAR BIN NIK ZAINAL"><strong id="payment-payee"></strong><p><a id="payment-download" download="smarttap-duitnow.png">Muat turun QR bayaran</a></p></div>
+  <div id="payment-instructions" hidden><p>Bayar jumlah di atas menggunakan QR DuitNow ini. Semak nama penerima sebelum mengesahkan bayaran dalam aplikasi bank.</p><img id="payment-qr" width="1118" height="1762" alt="Gambar penuh QR DuitNow asal \u2014 NIK AZFAR BIN NIK ZAINAL, MAE Maybank"><strong id="payment-payee"></strong><div class="actions"><a id="payment-open" class="button secondary" target="_blank" rel="noopener noreferrer">Lihat QR penuh \u2197</a><a id="payment-download" class="button secondary" download="smarttap-duitnow-asal.jpeg">Muat turun gambar QR asal</a></div></div>
   <p class="notice">Selepas membayar, hantar rujukan transaksi. Langganan dilanjutkan selepas super admin mengesahkan wang diterima. Jangan bayar semasa menggunakan demo tempatan.</p><label for="payment-reference">Rujukan transaksi bank</label><input id="payment-reference" required minlength="3" maxlength="80" autocomplete="off"><label for="payment-date">Tarikh bayaran</label><input id="payment-date" type="date" required><button id="payment-submit">Hantar untuk semakan bayaran</button></form>
   <form id="payment-review" hidden><h4>Semakan super admin</h4><p id="review-details"></p><label class="check-label"><input id="bank-confirm" type="checkbox"> Saya telah menyemak akaun bank dan wang benar-benar diterima untuk transaksi ini.</label><label for="review-note">Nota kepada pelanggan (pilihan)</label><input id="review-note" maxlength="200"><div class="actions"><button id="payment-approve">Sahkan bayaran</button><button type="button" id="payment-reject" class="secondary">Tolak permohonan</button></div></form></div>`;
   document.getElementById("edit-form").before(panel);
@@ -2166,6 +2165,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("review-note").value = "";
     $2("payment-qr").removeAttribute("src");
     $2("payment-download").removeAttribute("href");
+    $2("payment-open").removeAttribute("href");
     $2("delete-form").hidden = true;
     $2("order-support").hidden = true;
     $2("order-whatsapp").removeAttribute("href");
@@ -2203,10 +2203,10 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       const total = document.createElement("strong");
       total.textContent = "Jumlah produk: " + money(result.amountCents);
       $2("payment-quote").append(total);
-      const image = await import_qrcode.default.toDataURL(config.qrPayload, { width: 640, margin: 4, errorCorrectionLevel: "M" });
-      if (version !== sequence) return;
+      const image = "/assets/duitnow-original.jpeg";
       $2("payment-qr").src = image;
       $2("payment-download").href = image;
+      $2("payment-open").href = image;
       $2("payment-payee").textContent = config.payee;
       $2("payment-instructions").hidden = false;
       $2("payment-submit").disabled = false;
@@ -2219,6 +2219,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     current = item;
     orderSupport(item);
     $2("page-state").textContent = stateLabels[item.state] || item.state;
+    for (const id of ["page-state", "subscription-summary"]) $2(id).dataset.state = item.state;
     $2("subscription-summary").textContent = item.subscription?.plan === "annual" ? "Halaman tahunan \xB7 tamat " + date(item.subscription.expiresAt) : item.subscription?.plan === "nfc_only" ? "NFC terus ke Google Review. Tiada langganan halaman QR." : "Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.";
     $2("direct-review-wrap").hidden = item.subscription?.plan !== "nfc_only";
     $2("direct-review").href = item.profile.google;
@@ -2487,7 +2488,7 @@ async function edit(item) {
   $("download").removeAttribute("href");
   $("qr").removeAttribute("src");
   try {
-    const png = await import_qrcode2.default.toDataURL(item.url, { width: 1024, margin: 4, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } });
+    const png = await import_qrcode.default.toDataURL(item.url, { width: 1024, margin: 4, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } });
     if (selected?.id === item.id) {
       $("qr").src = png;
       $("download").href = png;
