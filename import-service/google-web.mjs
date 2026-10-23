@@ -2,7 +2,7 @@ import { socialType } from './metadata.mjs';
 import { safeWebURL } from './safe-fetch.mjs';
 
 let credential;
-async function runtimeToken() {
+export async function runtimeToken() {
   if(credential&&credential.expires>Date.now()) return credential.token;
   const response=await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',{
     headers:{'Metadata-Flavor':'Google'},signal:AbortSignal.timeout(3000),
