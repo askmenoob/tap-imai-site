@@ -32,7 +32,7 @@ async function openPage() {
   const id=params.get('s');const payload=params.get('p');
   if(id===null&&!payload){root.hidden=true;location.replace(new URL('./setup.html',location.href).href);return;}
   try {
-    if(id===null){render(decodeProfilePayload(payload));return;}
+    if(id===null)throw new Error('Gunakan URL pendek SmartTap untuk membuka halaman ini.');
     status('Sedang membuka halaman SmartTap…');
     if(!/^[A-Za-z0-9_-]{16}$/.test(id))throw new Error('Pautan pendek ini tidak sah.');
     const endpoint=location.hostname==='127.0.0.1'?location.origin:window.SMARTTAP_IMPORT_CONFIG?.endpoint;
