@@ -2270,7 +2270,7 @@ if (registering) {
 $("shorten")?.remove();
 $("short-status")?.remove();
 $("share").rows = 1;
-$("result").querySelector(".notice").textContent = "Simpan URL pendek ini. Super admin boleh mengemas kini maklumat pada URL dan QR yang sama. Menjana semula melalui borang ini menghasilkan pautan baharu.";
+$("result").querySelector(".notice").textContent = "Simpan URL pendek ini. Daftarkan Gmail pemilik dengan super admin dan semak status pakej sebelum berkongsi. Halaman yang menunggu pengaktifan boleh diurus melalui ruang pelanggan. URL dan QR kekal sama selepas renew.";
 function httpsURL(value) {
   try {
     const u = new URL(value);
@@ -2655,7 +2655,7 @@ $("profile-form").addEventListener("submit", async (event) => {
     showShareURL(page.url, page.png);
     $("manage-registration").href = "/admin.html?page=" + new URL(page.url).searchParams.get("s");
     $("manage-registration").hidden = false;
-    if (registering) $("result").querySelector(".notice").textContent = "Pendaftaran Gmail selesai. Pelanggan boleh login di tap.imai.my/edit untuk menyunting halaman ini. URL pendek dan QR kekal sama selepas suntingan.";
+    if (registering) $("result").querySelector(".notice").textContent = "Pendaftaran Gmail selesai. Pelanggan boleh login di tap.imai.my/edit untuk menyemak pakej, menghantar rujukan bayaran dan menyunting halaman selepas diaktifkan. URL pendek dan QR kekal sama.";
     $("result").hidden = false;
     $("form-status").textContent = "URL pendek dan QR anda sedia.";
     $("result").scrollIntoView({ behavior: "smooth", block: "start" });

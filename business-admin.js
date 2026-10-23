@@ -2036,7 +2036,7 @@ var require_svg_tag = __commonJS({
 var require_browser = __commonJS({
   "node_modules/qrcode/lib/browser.js"(exports) {
     var canPromise = require_can_promise();
-    var QRCode2 = require_qrcode();
+    var QRCode3 = require_qrcode();
     var CanvasRenderer = require_canvas();
     var SvgRenderer = require_svg_tag();
     function renderCanvas(renderFunc, canvas, text, opts, cb) {
@@ -2079,7 +2079,7 @@ var require_browser = __commonJS({
         }
         return new Promise(function(resolve, reject) {
           try {
-            const data = QRCode2.create(text, opts);
+            const data = QRCode3.create(text, opts);
             resolve(renderFunc(data, canvas, opts));
           } catch (e) {
             reject(e);
@@ -2087,13 +2087,13 @@ var require_browser = __commonJS({
         });
       }
       try {
-        const data = QRCode2.create(text, opts);
+        const data = QRCode3.create(text, opts);
         cb(null, renderFunc(data, canvas, opts));
       } catch (e) {
         cb(e);
       }
     }
-    exports.create = QRCode2.create;
+    exports.create = QRCode3.create;
     exports.toCanvas = renderCanvas.bind(null, CanvasRenderer.render);
     exports.toDataURL = renderCanvas.bind(null, CanvasRenderer.renderToDataURL);
     exports.toString = renderCanvas.bind(null, function(data, _, opts) {
@@ -2103,7 +2103,7 @@ var require_browser = __commonJS({
 });
 
 // src/admin.js
-var import_qrcode = __toESM(require_browser(), 1);
+var import_qrcode2 = __toESM(require_browser(), 1);
 
 // import-service/contacts.mjs
 function malaysiaPhone(value) {
@@ -2135,6 +2135,181 @@ function googleLogin({ clientId, container, onCredential, onError, prompt = fals
   document.head.append(script);
 }
 
+// src/management-ui.mjs
+var import_qrcode = __toESM(require_browser(), 1);
+var money = (cents) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(cents / 100);
+var date = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) : "Belum bermula";
+var stateLabels = { active: "Aktif", disabled: "Dinyahaktifkan", deleted: "Dipadam", pending: "Menunggu pengaktifan", expired: "Langganan tamat", nfc_only: "NFC sahaja \xB7 sekali bayar" };
+function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }) {
+  const panel = document.createElement("section");
+  panel.className = "management-panel";
+  panel.innerHTML = `<h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review \u2197</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej \u2197</a>
+  <div id="lifecycle-actions" class="actions" ${customer2 ? "hidden" : ""}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button></div>
+  <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
+  <p id="management-status" role="status" aria-live="polite"></p>
+  <div id="billing-section"><h3>Langganan & bayaran DuitNow</h3><p id="billing-availability"></p><p id="payment-summary"></p>
+  <form id="payment-form" hidden><label for="payment-package">Pakej</label><select id="payment-package"></select><div class="quantity-grid"><div><label for="payment-nfc">NFC tambahan \xB7 RM30/unit</label><input id="payment-nfc" type="number" min="0" max="10" step="1" value="0"></div><div><label for="payment-stickers">NFC table sticker \xB7 kuantiti</label><input id="payment-stickers" type="number" min="0" max="200" step="1" value="0"></div></div><p class="help">Sticker: RM20/unit untuk 1\u201319 unit; RM15/unit untuk 20 unit atau lebih.</p><div id="payment-quote" role="status"></div><p class="help">Harga produk tidak termasuk penghantaran. Urus penghantaran dan cajnya secara berasingan dengan super admin.</p>
+  <div id="payment-instructions" hidden><p>Bayar jumlah di atas menggunakan QR DuitNow ini. Semak nama penerima sebelum mengesahkan bayaran dalam aplikasi bank.</p><img id="payment-qr" alt="QR DuitNow bayaran kepada NIK AZFAR BIN NIK ZAINAL"><strong id="payment-payee"></strong><p><a id="payment-download" download="smarttap-duitnow.png">Muat turun QR bayaran</a></p></div>
+  <p class="notice">Selepas membayar, hantar rujukan transaksi. Langganan dilanjutkan selepas super admin mengesahkan wang diterima. Jangan bayar semasa menggunakan demo tempatan.</p><label for="payment-reference">Rujukan transaksi bank</label><input id="payment-reference" required minlength="3" maxlength="80" autocomplete="off"><label for="payment-date">Tarikh bayaran</label><input id="payment-date" type="date" required><button id="payment-submit">Hantar untuk semakan bayaran</button></form>
+  <form id="payment-review" hidden><h4>Semakan super admin</h4><p id="review-details"></p><label class="check-label"><input id="bank-confirm" type="checkbox"> Saya telah menyemak akaun bank dan wang benar-benar diterima untuk transaksi ini.</label><label for="review-note">Nota kepada pelanggan (pilihan)</label><input id="review-note" maxlength="200"><div class="actions"><button id="payment-approve">Sahkan bayaran</button><button type="button" id="payment-reject" class="secondary">Tolak permohonan</button></div></form></div>`;
+  document.getElementById("edit-form").before(panel);
+  const $2 = (id) => panel.querySelector("#" + id);
+  let current = null, config = null, quote = null, sequence = 0, working = false;
+  const today = () => new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);
+  const options = () => ({ package: $2("payment-package").value, extraNfcQty: Number($2("payment-nfc").value), stickerQty: Number($2("payment-stickers").value) });
+  function clear() {
+    current = null;
+    quote = null;
+    sequence++;
+    $2("payment-reference").value = "";
+    $2("review-note").value = "";
+    $2("payment-qr").removeAttribute("src");
+    $2("payment-download").removeAttribute("href");
+    $2("delete-form").hidden = true;
+  }
+  async function cart() {
+    quote = null;
+    $2("payment-submit").disabled = true;
+    $2("payment-instructions").hidden = true;
+    const item = current, version = ++sequence;
+    if (!item || !config?.enabled) return;
+    $2("payment-quote").textContent = "Mengira jumlah\u2026";
+    try {
+      const result = await api2("/links/" + item.id + "/quote", { method: "POST", body: options() });
+      if (version !== sequence || current?.id !== item.id) return;
+      quote = result;
+      $2("payment-quote").replaceChildren();
+      for (const line of result.items) {
+        const row = document.createElement("p");
+        row.textContent = line.name + " \xD7 " + line.quantity + " \xB7 " + money(line.totalCents);
+        $2("payment-quote").append(row);
+      }
+      const total = document.createElement("strong");
+      total.textContent = "Jumlah produk: " + money(result.amountCents);
+      $2("payment-quote").append(total);
+      const image = await import_qrcode.default.toDataURL(config.qrPayload, { width: 640, margin: 4, errorCorrectionLevel: "M" });
+      if (version !== sequence) return;
+      $2("payment-qr").src = image;
+      $2("payment-download").href = image;
+      $2("payment-payee").textContent = config.payee;
+      $2("payment-instructions").hidden = false;
+      $2("payment-submit").disabled = false;
+    } catch (error) {
+      if (version === sequence) $2("payment-quote").textContent = error.message;
+    }
+  }
+  async function show(item) {
+    const changed = current?.id !== item.id, oldStatus = current?.renewal?.status;
+    current = item;
+    $2("page-state").textContent = stateLabels[item.state] || item.state;
+    $2("subscription-summary").textContent = item.subscription?.plan === "annual" ? "Halaman tahunan \xB7 tamat " + date(item.subscription.expiresAt) : item.subscription?.plan === "nfc_only" ? "NFC terus ke Google Review. Tiada langganan halaman QR." : "Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.";
+    $2("direct-review-wrap").hidden = item.subscription?.plan !== "nfc_only";
+    $2("direct-review").href = item.profile.google;
+    $2("state-toggle").textContent = item.manualState === "disabled" ? "Aktifkan halaman" : "Nyahaktifkan halaman";
+    $2("state-toggle").hidden = item.manualState === "deleted";
+    $2("delete-open").hidden = item.manualState === "deleted";
+    $2("state-restore").hidden = item.manualState !== "deleted";
+    $2("delete-form").hidden = true;
+    if (changed) {
+      $2("management-status").textContent = "";
+      $2("payment-reference").value = "";
+      $2("payment-date").value = today();
+      $2("payment-nfc").value = "0";
+      $2("payment-stickers").value = "0";
+    }
+    try {
+      config = await api2("/plan");
+      if (current?.id !== item.id) return;
+    } catch (error) {
+      $2("billing-availability").textContent = error.message;
+      return;
+    }
+    $2("billing-availability").textContent = config.enabled ? "Pakej halaman ditawarkan setahun sahaja. Bayaran disemak secara manual." : "Permohonan bayaran belum dibuka. Hubungi super admin untuk maklumat lanjut.";
+    const pending = item.renewal?.status === "pending";
+    $2("payment-form").hidden = !config.enabled || pending || item.manualState === "deleted";
+    $2("payment-review").hidden = customer2 || !pending || !config.enabled || item.manualState === "deleted";
+    const payment = item.renewal;
+    $2("payment-summary").textContent = payment ? ({ pending: "Menunggu semakan bayaran", approved: "Bayaran disahkan", rejected: "Permohonan ditolak" }[payment.status] || payment.status) + " \xB7 " + money(payment.amountCents) + " \xB7 " + payment.reference + (payment.note ? " \xB7 " + payment.note : "") : "";
+    $2("review-details").textContent = payment ? "Rujukan: " + payment.reference + " \xB7 " + payment.paidDate + " \xB7 " + money(payment.amountCents) + " \xB7 " + payment.items.map((x) => x.name + " \xD7 " + x.quantity).join(", ") : "";
+    $2("bank-confirm").checked = false;
+    $2("review-note").value = "";
+    const selected2 = $2("payment-package").value, annual = !!item.subscription?.lastPaymentId && item.subscription.plan === "annual";
+    $2("payment-package").replaceChildren();
+    for (const product of config.packages) {
+      if (product.id === "addons" && !item.subscription?.lastPaymentId || product.id !== "addons" && (annual && product.id !== "renew" || !annual && product.id === "renew")) continue;
+      const option = document.createElement("option");
+      option.value = product.id;
+      option.textContent = product.name + (product.id === "addons" ? "" : " \xB7 " + money(product.amountCents) + (product.months ? " / " + product.months + " bulan" : " \xB7 sekali bayar"));
+      $2("payment-package").append(option);
+    }
+    if (!changed && selected2 && [...$2("payment-package").options].some((x) => x.value === selected2)) $2("payment-package").value = selected2;
+    if (changed) {
+      const params = new URLSearchParams(location.search);
+      const kind = params.get("package");
+      if (kind && [...$2("payment-package").options].some((x) => x.value === kind)) $2("payment-package").value = kind;
+      for (const [id, key, max] of [["payment-nfc", "extraNfcQty", 10], ["payment-stickers", "stickerQty", 200]]) {
+        const n = Number(params.get(key) || 0);
+        if (Number.isInteger(n) && n >= 0 && n <= max) $2(id).value = String(n);
+      }
+    }
+    if (oldStatus === "pending" && payment?.status === "approved") {
+      $2("payment-reference").value = "";
+      $2("payment-nfc").value = "0";
+      $2("payment-stickers").value = "0";
+    }
+    if (!$2("payment-form").hidden) await cart();
+  }
+  async function action(path, body, message) {
+    if (working || !current) return;
+    working = true;
+    onBusy(true);
+    const id = current.id;
+    $2("management-status").textContent = "Menyimpan\u2026";
+    for (const node of panel.querySelectorAll("button,input,select")) node.disabled = true;
+    try {
+      const updated = await api2("/links/" + id + path, { method: "POST", body });
+      if (current?.id !== id) return;
+      onUpdate(updated);
+      await show(updated);
+      $2("management-status").textContent = message;
+    } catch (error) {
+      $2("management-status").textContent = error.message;
+    } finally {
+      working = false;
+      onBusy(false);
+      for (const node of panel.querySelectorAll("button,input,select")) node.disabled = false;
+      if (!quote) $2("payment-submit").disabled = true;
+    }
+  }
+  $2("state-toggle").onclick = () => action("/state", { state: current.manualState === "disabled" ? "active" : "disabled", revision: current.revision }, "Status halaman dikemas kini. URL dan QR kekal sama.");
+  $2("state-restore").onclick = () => action("/state", { state: "disabled", revision: current.revision }, "Halaman dipulihkan sebagai nyahaktif. Semak langganan sebelum mengaktifkan.");
+  $2("delete-open").onclick = () => {
+    $2("delete-form").hidden = false;
+    $2("delete-name").value = "";
+    $2("delete-name").focus();
+  };
+  $2("delete-cancel").onclick = () => {
+    $2("delete-form").hidden = true;
+  };
+  $2("delete-form").onsubmit = (event) => {
+    event.preventDefault();
+    action("/state", { state: "deleted", confirmName: $2("delete-name").value, revision: current.revision }, "Halaman dipadam daripada paparan awam dan senarai pelanggan. Rekod boleh dipulihkan oleh super admin.");
+  };
+  for (const id of ["payment-package", "payment-nfc", "payment-stickers"]) $2(id).addEventListener("change", cart);
+  $2("payment-form").onsubmit = (event) => {
+    event.preventDefault();
+    if (!quote) return;
+    action("/renewal", { ...options(), reference: $2("payment-reference").value.trim(), paidDate: $2("payment-date").value, amountCents: quote.amountCents, revision: current.revision }, "Rujukan dihantar. Tunggu semakan bank oleh super admin.");
+  };
+  const decide = (decision) => action("/decision", { requestId: current.renewal.id, decision, revision: current.revision, confirmBank: $2("bank-confirm").checked, note: $2("review-note").value }, decision === "approve" ? "Bayaran disahkan. Tempoh halaman dikemas kini jika pakej mengandungi langganan tahunan." : "Permohonan bayaran ditolak. Pelanggan boleh menghantar rujukan yang betul.");
+  $2("payment-review").onsubmit = (event) => {
+    event.preventDefault();
+    decide("approve");
+  };
+  $2("payment-reject").onclick = () => decide("reject");
+  return { show, clear };
+}
+
 // src/admin.js
 var $ = (id) => document.getElementById(id);
 var customer = document.body.dataset.role === "user";
@@ -2149,6 +2324,18 @@ var expiryTimer;
 var session = 0;
 var busy = false;
 var saving = false;
+function lockControls(value) {
+  saving = value;
+  for (const id of ["save", "cancel", "refresh", "more", "save-owner", "owner-email"]) if ($(id)) $(id).disabled = value || id === "save" && customer && selected?.state !== "active";
+  for (const field of Object.keys(fields)) if ($("field-" + field)) $("field-" + field).disabled = value || customer && selected?.state !== "active";
+}
+var management = createManagementUI({ customer, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
+  selected = item;
+  records = records.map((record) => record.id === item.id ? item : record);
+  render();
+  $("edit-title").textContent = item.profile.name;
+  if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
+} });
 function logout(message = "Anda telah log keluar.") {
   credential = "";
   records = [];
@@ -2156,6 +2343,7 @@ function logout(message = "Anda telah log keluar.") {
   selected = null;
   session++;
   clearTimeout(expiryTimer);
+  management.clear();
   $("dashboard").hidden = true;
   $("editor").hidden = true;
   $("login-panel").hidden = false;
@@ -2179,7 +2367,7 @@ async function api(path, { method = "GET", body, authenticated = true } = {}) {
   }
   return result;
 }
-var date = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" }) : "\u2014";
+var date2 = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" }) : "\u2014";
 function render() {
   const query = $("filter").value.trim().toLowerCase();
   const shown = records.filter((item) => (item.profile.name + " " + item.url).toLowerCase().includes(query));
@@ -2197,7 +2385,7 @@ function render() {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     const meta = document.createElement("p");
-    meta.textContent = "Dicipta " + date(item.createdAt) + " \xB7 Dikemas kini " + date(item.updatedAt) + (!customer ? " \xB7 " + (item.ownerEmail || "Gmail pemilik belum didaftarkan") : "");
+    meta.textContent = (stateLabels[item.state] || "Aktif") + (item.renewal?.status === "pending" ? " \xB7 Bayaran menunggu semakan" : "") + " \xB7 Dicipta " + date2(item.createdAt) + " \xB7 Dikemas kini " + date2(item.updatedAt) + (!customer ? " \xB7 " + (item.ownerEmail || "Gmail pemilik belum didaftarkan") : "");
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Urus halaman";
@@ -2272,6 +2460,7 @@ async function edit(item) {
   $("open").href = item.url;
   $("copy-status").textContent = "";
   $("save-status").textContent = "";
+  if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
   for (const field of Object.keys(fields)) $("field-" + field).value = item.profile[field] || "";
   if ($("owner-email")) {
     $("owner-email").value = item.ownerEmail || "";
@@ -2281,7 +2470,7 @@ async function edit(item) {
   $("download").removeAttribute("href");
   $("qr").removeAttribute("src");
   try {
-    const png = await import_qrcode.default.toDataURL(item.url, { width: 1024, margin: 4, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } });
+    const png = await import_qrcode2.default.toDataURL(item.url, { width: 1024, margin: 4, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } });
     if (selected?.id === item.id) {
       $("qr").src = png;
       $("download").href = png;
@@ -2290,6 +2479,8 @@ async function edit(item) {
     $("copy-status").textContent = "QR belum dapat disediakan. URL pelanggan masih sama.";
   }
   $("editor").scrollIntoView({ behavior: "smooth", block: "start" });
+  lockControls(false);
+  await management.show(item);
 }
 for (const [key, text] of Object.entries(fields)) {
   const label = document.createElement("label");
