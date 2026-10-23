@@ -37,9 +37,15 @@ export async function extractGoogleProfiles(data,businessName,{resolve=resolveCi
   const text=(candidate.content?.parts||[]).filter(part=>!part.thought).map(part=>part.text||'').join('');
   let claimed=[];
   try {const parsed=JSON.parse(text.slice(text.indexOf('{'),text.lastIndexOf('}')+1));claimed=Array.isArray(parsed.profiles)?parsed.profiles:[];} catch { /* Malformed model output supplies no verified profiles. */ }
-  const cited=await Promise.all(grounding.groundingChunks.slice(0,12).map(async chunk=>{
-    try{return await resolve(chunk.web?.uri);}catch{return null;}
+  const entries=await Promise.all(grounding.groundingChunks.slice(0,12).map(async chunk=>{
+    const original=safeWebURL(chunk.web?.uri);
+    let resolved;try{resolved=await resolve(chunk.web?.uri);}catch{ /* The Google citation can still be opened by the user. */ }
+    const source=resolved || (original?.hostname==='vertexaisearch.cloud.google.com'&&original.pathname.startsWith('/grounding-api-redirect/')?original.href:null);
+    const declaredHost=String(chunk.web?.domain || chunk.web?.title || '').toLowerCase().replace(/^www\./,'');
+    const host=resolved?new URL(resolved).hostname:(/^[a-z0-9.-]+\.[a-z]{2,}$/.test(declaredHost)?declaredHost:'');
+    return {source,host};
   }));
+  const cited=entries.map(entry=>entry.source);
   const business=String(businessName).normalize('NFKD').toLowerCase().replace(/[^a-z0-9]/g,'');
   const candidates={};const sources={};
   const add=(url,source)=>{
@@ -78,7 +84,7 @@ export async function extractGoogleProfiles(data,businessName,{resolve=resolveCi
       for(const match of line.matchAll(/https:\/\/[^\s<>\[\]()"`]+/g)) {
         const url=canonical(match[0].replace(/[.,;]+$/,''));const kind=url&&socialType(url);if(!kind) continue;
         const host=new URL(url).hostname;
-        const source=cited.find(value=>value&&new URL(value).hostname===host);
+        const source=entries.find(entry=>entry.source&&entry.host===host)?.source;
         if(source) add(url,source);
       }
     }
