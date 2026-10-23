@@ -2,7 +2,7 @@ const denied=()=>Object.assign(new Error('Log masuk sebagai super admin untuk me
 function publicValue(value,placeId=''){
   if(typeof value==='string')return (placeId&&value.includes(placeId))||/place_?id[=:]|\/local\/writereview|g\.page\/r\/[^/]+\/review/i.test(value)?undefined:value;
   if(Array.isArray(value))return value.map(item=>publicValue(item,placeId)).filter(item=>item!==undefined);
-  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!['id','placeId','place_id','google','searchSuggestionsHtml'].includes(key)).map(([key,item])=>[key,publicValue(item,placeId)]).filter(([,item])=>item!==undefined));
+  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!['id','placeId','place_id','google'].includes(key)).map(([key,item])=>[key,publicValue(item,placeId)]).filter(([,item])=>item!==undefined));
   return value;
 }
 export function publicDiscovery(data){
