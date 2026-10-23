@@ -20,7 +20,7 @@ function translated(node,slot,current,set){
 function render(){
   document.documentElement.lang=language;
   // Prefer the application's navigation; the public card has its own compact bar.
-  const host=document.querySelector('.business-page')||document.querySelector('body > header')||document.body;
+  const host=document.querySelector('.business-page')||document.querySelector('body > header .app-tools')||document.querySelector('body > header')||document.body;
   if(picker.parentNode!==host)host.prepend(picker);
   const walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
   while(walk.nextNode()){
