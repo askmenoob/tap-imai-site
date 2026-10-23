@@ -2151,6 +2151,18 @@ function googleLogin({ clientId, container, onCredential, onError, prompt = fals
   document.head.append(script);
 }
 
+// src/payment-prompt.mjs
+function paymentPrompt(item, now = Date.now()) {
+  const annual = item.subscription?.plan === "annual";
+  const remaining = Date.parse(item.subscription?.expiresAt || "") - now;
+  const expired = item.state === "expired";
+  const soon = annual && item.state === "active" && remaining > 0 && remaining <= 30 * 864e5;
+  return {
+    message: expired ? "Langganan halaman telah tamat. Renew untuk mengaktifkan semula halaman." : soon ? "Tarikh tamat langganan semakin hampir. Anda boleh renew lebih awal pada pautan dan QR yang sama." : "",
+    label: expired || soon ? "Renew halaman" : annual ? "Renew / beli add-on" : "Beli pakej / add-on"
+  };
+}
+
 // src/management-ui.mjs
 var money = (cents) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(cents / 100);
 var date = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) : "Belum bermula";
@@ -2164,24 +2176,37 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   <p id="management-status" role="status" aria-live="polite"></p>
   <div id="billing-section"><h3>Langganan & bayaran DuitNow</h3><p id="billing-availability"></p><p id="payment-summary"></p>
   <div id="order-support" class="notice" hidden><h4>Pertanyaan pesanan</h4><p>Hubungi super admin tentang pesanan yang telah disahkan, termasuk penyediaan NFC dan penghantaran.</p><a id="order-whatsapp" class="button" target="_blank" rel="noopener noreferrer">WhatsApp super admin tentang pesanan \u2197</a><p class="help">Draf mesej disediakan dengan nama perniagaan dan ID pesanan. Semak dan hantar sendiri dalam WhatsApp.</p></div>
+  <p id="renewal-reminder" class="renewal-reminder" hidden></p><div id="payment-disclosure" class="actions" hidden><button id="payment-toggle" type="button" class="secondary" aria-controls="payment-form" aria-expanded="false">Renew / beli add-on</button><span class="help">QR bayaran dipaparkan apabila diperlukan.</span></div>
   <form id="payment-form" hidden><label for="payment-package">Pakej</label><select id="payment-package"></select><div class="quantity-grid"><div><label for="payment-nfc">NFC tambahan \xB7 RM30/unit</label><input id="payment-nfc" type="number" min="0" max="10" step="1" value="0"></div><div><label for="payment-stickers">NFC table sticker \xB7 kuantiti</label><input id="payment-stickers" type="number" min="0" max="200" step="1" value="0"></div></div><p class="help">Sticker: RM20/unit untuk 1\u201319 unit; RM15/unit untuk 20 unit atau lebih.</p><div id="payment-quote" role="status"></div><p class="help">Harga produk tidak termasuk penghantaran. Urus penghantaran dan cajnya secara berasingan dengan super admin.</p>
   <div id="payment-instructions" hidden><p>Bayar jumlah di atas menggunakan QR DuitNow ini. Semak nama penerima sebelum mengesahkan bayaran dalam aplikasi bank.</p><img id="payment-qr" width="1118" height="1762" alt="Gambar penuh QR DuitNow asal \u2014 NIK AZFAR BIN NIK ZAINAL, MAE Maybank"><strong id="payment-payee"></strong><div class="actions"><a id="payment-open" class="button secondary" target="_blank" rel="noopener noreferrer">Lihat QR penuh \u2197</a><a id="payment-download" class="button secondary" download="smarttap-duitnow-asal.jpeg">Muat turun gambar QR asal</a></div></div>
   <p class="notice">Selepas membayar, hantar rujukan transaksi. Langganan dilanjutkan selepas super admin mengesahkan wang diterima. Jangan bayar semasa menggunakan demo tempatan.</p><label for="payment-reference">Rujukan transaksi bank</label><input id="payment-reference" required minlength="3" maxlength="80" autocomplete="off"><label for="payment-date">Tarikh bayaran</label><input id="payment-date" type="date" required><button id="payment-submit">Hantar untuk semakan bayaran</button></form>
   <form id="payment-review" hidden><h4>Semakan super admin</h4><p id="review-details"></p><label class="check-label"><input id="bank-confirm" type="checkbox"> Saya telah menyemak akaun bank dan wang benar-benar diterima untuk transaksi ini.</label><label for="review-note">Nota kepada pelanggan (pilihan)</label><input id="review-note" maxlength="200"><div class="actions"><button id="payment-approve">Sahkan bayaran</button><button type="button" id="payment-reject" class="secondary">Tolak permohonan</button></div></form></div>`;
   document.getElementById("edit-form").before(panel);
   const $2 = (id) => panel.querySelector("#" + id);
-  let current = null, config = null, quote = null, sequence = 0, working = false;
+  let current = null, config = null, quote = null, sequence = 0, working = false, paymentOpen = !customer2, paymentAvailable = false;
+  function paymentVisibility(open) {
+    paymentOpen = open;
+    sequence++;
+    quote = null;
+    $2("payment-form").hidden = !paymentAvailable || customer2 && !open;
+    $2("payment-instructions").hidden = true;
+    $2("payment-toggle").setAttribute("aria-expanded", String(customer2 && open));
+    $2("payment-toggle").textContent = open ? "Tutup borang bayaran" : paymentPrompt(current || {}).label;
+    $2("payment-qr").removeAttribute("src");
+    $2("payment-download").removeAttribute("href");
+    $2("payment-open").removeAttribute("href");
+    $2("payment-submit").disabled = true;
+  }
   const today = () => new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);
   const options = () => ({ package: $2("payment-package").value, extraNfcQty: Number($2("payment-nfc").value), stickerQty: Number($2("payment-stickers").value) });
   function clear() {
     current = null;
-    quote = null;
-    sequence++;
+    paymentAvailable = false;
+    paymentVisibility(!customer2);
+    $2("payment-disclosure").hidden = true;
+    $2("renewal-reminder").hidden = true;
     $2("payment-reference").value = "";
     $2("review-note").value = "";
-    $2("payment-qr").removeAttribute("src");
-    $2("payment-download").removeAttribute("href");
-    $2("payment-open").removeAttribute("href");
     $2("delete-form").hidden = true;
     $2("order-support").hidden = true;
     $2("order-whatsapp").removeAttribute("href");
@@ -2204,7 +2229,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("payment-submit").disabled = true;
     $2("payment-instructions").hidden = true;
     const item = current, version = ++sequence;
-    if (!item || !config?.enabled) return;
+    if (!item || !config?.enabled || !paymentAvailable || customer2 && !paymentOpen) return;
     $2("payment-quote").textContent = "Mengira jumlah\u2026";
     try {
       const result = await api2("/links/" + item.id + "/quote", { method: "POST", body: options() });
@@ -2233,6 +2258,12 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   async function show(item) {
     const changed = current?.id !== item.id, oldStatus = current?.renewal?.status;
     current = item;
+    if (changed) {
+      paymentAvailable = false;
+      paymentVisibility(!customer2);
+      $2("payment-disclosure").hidden = true;
+      $2("renewal-reminder").hidden = true;
+    }
     orderSupport(item);
     $2("page-state").textContent = stateLabels[item.state] || item.state;
     for (const id of ["page-state", "subscription-summary"]) $2(id).dataset.state = item.state;
@@ -2260,8 +2291,16 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     }
     $2("billing-availability").textContent = config.enabled ? "Pakej halaman ditawarkan setahun sahaja. Bayaran disemak secara manual." : "Permohonan bayaran belum dibuka. Hubungi super admin untuk maklumat lanjut.";
     const pending = item.renewal?.status === "pending";
-    $2("payment-form").hidden = !config.enabled || pending || item.manualState === "deleted";
+    paymentAvailable = config.enabled && !pending && item.manualState !== "deleted";
+    if (!paymentAvailable || oldStatus !== item.renewal?.status && item.renewal?.status === "approved") paymentVisibility(!customer2);
+    $2("payment-form").hidden = !paymentAvailable || customer2 && !paymentOpen;
     $2("payment-review").hidden = customer2 || !pending || !config.enabled || item.manualState === "deleted";
+    const prompt = paymentPrompt(item);
+    $2("renewal-reminder").textContent = prompt.message;
+    $2("renewal-reminder").hidden = !customer2 || !paymentAvailable || !prompt.message;
+    $2("payment-disclosure").hidden = !customer2 || !paymentAvailable;
+    $2("payment-toggle").textContent = paymentOpen ? "Tutup borang bayaran" : prompt.label;
+    $2("payment-toggle").setAttribute("aria-expanded", String(customer2 && paymentOpen));
     const payment = item.renewal;
     $2("payment-summary").textContent = payment ? ({ pending: "Menunggu semakan bayaran", approved: "Bayaran disahkan", rejected: "Permohonan ditolak" }[payment.status] || payment.status) + " \xB7 " + money(payment.amountCents) + " \xB7 " + payment.reference + (payment.note ? " \xB7 " + payment.note : "") : "";
     $2("review-details").textContent = payment ? "Rujukan: " + payment.reference + " \xB7 " + payment.paidDate + " \xB7 " + money(payment.amountCents) + " \xB7 " + payment.items.map((x) => x.name + " \xD7 " + x.quantity).join(", ") : "";
@@ -2280,7 +2319,10 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     if (changed) {
       const params = new URLSearchParams(location.search);
       const kind = params.get("package");
-      if (kind && [...$2("payment-package").options].some((x) => x.value === kind)) $2("payment-package").value = kind;
+      if (kind && [...$2("payment-package").options].some((x) => x.value === kind)) {
+        $2("payment-package").value = kind;
+        if (customer2 && paymentAvailable) paymentVisibility(true);
+      }
       for (const [id, key, max] of [["payment-nfc", "extraNfcQty", 10], ["payment-stickers", "stickerQty", 200]]) {
         const n = Number(params.get(key) || 0);
         if (Number.isInteger(n) && n >= 0 && n <= max) $2(id).value = String(n);
@@ -2330,6 +2372,11 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     action("/state", { state: "deleted", confirmName: $2("delete-name").value, revision: current.revision }, "Halaman dipadam daripada paparan awam dan senarai pelanggan. Rekod boleh dipulihkan oleh super admin.");
   };
   for (const id of ["payment-package", "payment-nfc", "payment-stickers"]) $2(id).addEventListener("change", cart);
+  $2("payment-toggle").onclick = () => {
+    if (working || !paymentAvailable) return;
+    paymentVisibility(!paymentOpen);
+    if (paymentOpen) cart();
+  };
   $2("payment-form").onsubmit = (event) => {
     event.preventDefault();
     if (!quote) return;
