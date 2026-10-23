@@ -51,8 +51,9 @@ function status(message, error = false) {
   box.setAttribute("role", error ? "alert" : "status");
   box.style.cssText = "margin:15vh auto;padding:24px;max-width:640px;text-align:center;font:16px/1.7 system-ui";
   if (error) {
-    const link = element("a", "", "Buka SmartTap");
-    link.href = "./setup.html";
+    const id = params.get("s"), owned = /^[A-Za-z0-9_-]{16}$/.test(id || "");
+    const link = element("a", "", owned ? "Login pemilik halaman" : "Buka SmartTap");
+    link.href = owned ? "/edit/?s=" + encodeURIComponent(id) : "./setup.html";
     link.style.display = "block";
     box.append(link);
   }
@@ -104,10 +105,7 @@ async function openPage() {
     return;
   }
   try {
-    if (id === null) {
-      render(decodeProfilePayload(payload));
-      return;
-    }
+    if (id === null) throw new Error("Gunakan URL pendek SmartTap untuk membuka halaman ini.");
     status("Sedang membuka halaman SmartTap\u2026");
     if (!/^[A-Za-z0-9_-]{16}$/.test(id)) throw new Error("Pautan pendek ini tidak sah.");
     const endpoint = location.hostname === "127.0.0.1" ? location.origin : window.SMARTTAP_IMPORT_CONFIG?.endpoint;
