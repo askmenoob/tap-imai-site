@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
 import { createGoogleProvider } from './google.mjs';
 import { createImportService } from './service.mjs';
+import { createGoogleWebSearch } from './google-web.mjs';
 
 const preview = process.argv.includes('--preview');
 const demo = preview && process.env.PREVIEW_DEMO === '1';
@@ -17,21 +18,27 @@ const origins = new Set((process.env.ALLOWED_ORIGINS || 'https://tap.imai.my').s
 if (preview) origins.add('http://127.0.0.1:' + port);
 const demoLogo = 'https://placehold.co/160x160/173b33/ffffff.png?text=DEMO';
 const fixture = {
+  suggest:async query => query.toLowerCase().includes('tiada') ? [] : [
+    {id:'DemoPlaceId1234',name:'Kopi Contoh Shah Alam (DEMO)',address:'Shah Alam, Selangor — data contoh',attributions:[]},
+    {id:'DemoPlaceId5678',name:'Kopi Contoh Petaling Jaya (DEMO)',address:'Petaling Jaya, Selangor — data contoh',attributions:[]},
+  ],
   search: async query => query.toLowerCase().includes('tiada') ? [] : [{ id:'DemoPlaceId1234', name:'Kopi Contoh (DEMO)', address:'Lokasi contoh — bukan hasil Google sebenar', attributions:[] }],
-  details: async id => ({ id, website:'https://example.com/' }),
+  details: async id => ({ id, website:'https://example.com/',phone:'012-2258950' }),
 };
 const service = createImportService({ google: demo ? fixture : createGoogleProvider(key), secret,
+  ...(!demo && process.env.GOOGLE_SEARCH_ENABLED==='true' ? {webSearch:createGoogleWebSearch({project:process.env.GOOGLE_SEARCH_PROJECT,model:process.env.GOOGLE_SEARCH_MODEL || 'gemini-3.8-flash'})} : {}),
   ...(demo ? { readWebsite: async () => ({ url:'https://example.com/', html:`<script type="application/ld+json">${JSON.stringify({ '@type':'CafeOrCoffeeShop', name:'Kopi Contoh (DEMO)', description:'Kopi dan makanan untuk komuniti setempat. Data contoh untuk menguji aliran sahaja.', logo:demoLogo, sameAs:['https://www.instagram.com/example/','https://www.facebook.com/example/','https://www.tiktok.com/@example','https://wa.me/60123456789'] })}</script>` }) } : {}) });
 const windows = new Map();
 let day = ''; let dayCount = 0;
-function allow(remote) {
+function allow(remote, suggestions = false) {
   const today = new Date().toISOString().slice(0,10);
   if (today !== day) { day = today; dayCount = 0; }
-  const now = Date.now(); const previous = windows.get(remote);
+  const bucket=remote+(suggestions?':suggest':':lookup');
+  const now = Date.now(); const previous = windows.get(bucket);
   const state = !previous || now - previous.since >= 60000 ? { since:now, count:0 } : previous;
-  windows.set(remote, state);
+  windows.set(bucket, state);
   if (windows.size > 10000) for (const [id, item] of windows) if (now - item.since > 60000) windows.delete(id);
-  return ++state.count <= 12 && ++dayCount <= Number(process.env.MAX_DAILY_REQUESTS || 300);
+  return ++state.count <= (suggestions?30:12) && ++dayCount <= Number(process.env.MAX_DAILY_REQUESTS || 300);
 }
 function reply(res, status, data, origin) {
   res.writeHead(status, { 'content-type':'application/json; charset=utf-8', 'cache-control':'no-store',
@@ -54,8 +61,9 @@ const server = http.createServer(async (req,res) => {
       if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin':origin, 'access-control-allow-methods':'POST', 'access-control-allow-headers':'Content-Type', vary:'Origin' }); res.end(); return; }
       if (req.method !== 'POST') return reply(res, 405, { error:'Kaedah tidak dibenarkan.' }, origin);
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return reply(res, 415, { error:'Gunakan JSON.' }, origin);
-      if (!allow(req.socket.remoteAddress)) return reply(res, 429, { error:'Had carian dicapai. Cuba sebentar lagi.' }, origin);
+      if (!allow(req.socket.remoteAddress, path === '/api/suggest')) return reply(res, 429, { error:'Had carian dicapai. Cuba sebentar lagi.' }, origin);
       const data = await body(req);
+      if (path === '/api/suggest') return reply(res, 200, await service.suggest(data.query, data.sessionToken), origin);
       if (path === '/api/search') return reply(res, 200, await service.search(data.query), origin);
       if (path === '/api/import') return reply(res, 200, await service.import(data.token), origin);
       return reply(res, 404, { error:'Tidak ditemui.' }, origin);
