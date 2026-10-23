@@ -7,6 +7,7 @@ import {createGoogleAdminAuth,createAdminService} from './admin.mjs';
 import {createCustomerService} from './customers.mjs';
 import {createMemoryLinkStore,createCloudLinkStore,createShortLinks} from './short-links.mjs';
 import {createAccountRoutes} from './account-routes.mjs';
+import {createManagementService} from './management.mjs';
 const clientId='test.apps.googleusercontent.com',origin='https://tap.imai.my';
 const pair=await generateKeyPair('RS256');
 const token=async(email,overrides={})=>new SignJWT({email,email_verified:true,role:'admin',...overrides}).setProtectedHeader({alg:'RS256'}).setSubject(email).setAudience(clientId).setIssuer('https://accounts.google.com').setIssuedAt().setExpirationTime('5m').sign(pair.privateKey);
@@ -16,7 +17,8 @@ test('HTTP signed Google identities enforce customer boundaries, role and privat
   const store=createMemoryLinkStore(),customers=createCustomerService({store}),admin=createAdminService({store});
   const reply=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
   const body=async req=>{const chunks=[];for await(const chunk of req)chunks.push(chunk);return JSON.parse(Buffer.concat(chunks));};
-  const routes=createAccountRoutes({adminAuth:createGoogleAdminAuth({clientId,emails:['owner@gmail.com'],keySet:pair.publicKey}),userAuth:createGoogleUserAuth({clientId,keySet:pair.publicKey}),admin,customers,clientId,adminConfigured:true,reply,body});
+  const management=createManagementService({store,enabled:true,qrPayload:'test-only'});
+  const routes=createAccountRoutes({adminAuth:createGoogleAdminAuth({clientId,emails:['owner@gmail.com'],keySet:pair.publicKey}),userAuth:createGoogleUserAuth({clientId,keySet:pair.publicKey}),admin,customers,management,clientId,adminConfigured:true,reply,body});
   const server=http.createServer(async(req,res)=>{try{await routes(req,res,{path:new URL(req.url,origin).pathname,origin:req.headers.origin===origin?origin:null});}catch(e){reply(res,e.status||500,{error:e.message});}});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>server.close());
   const base='http://127.0.0.1:'+server.address().port;
@@ -37,6 +39,13 @@ test('HTTP signed Google identities enforce customer boundaries, role and privat
   const saved=await call('/api/user/links/'+alice.id,'alice@gmail.com','PUT',{profile:{...profile,name:'Alice Edited'},revision:alice.revision});assert.equal(saved.status,200);assert.equal(saved.data.url,alice.url);
   assert.equal((await call('/api/user/links/'+alice.id,'alice@gmail.com','PUT',{profile,revision:alice.revision})).status,409);
   const publicLink=await createShortLinks({store,secret:'s'.repeat(32)}).resolve(alice.id);assert.equal(Object.keys(publicLink).join(),'url');assert.ok(!JSON.stringify(publicLink).includes('alice@gmail.com'));
+  assert.equal((await call('/api/user/links/'+alice.id+'/state','alice@gmail.com','POST',{state:'deleted',revision:saved.data.revision,confirmName:'Alice Edited'})).status,403);
+  assert.equal((await call('/api/user/links/'+alice.id+'/decision','alice@gmail.com','POST',{decision:'approve',confirmBank:true})).status,403);
+  assert.equal((await call('/api/user/links/'+bob.id+'/quote','alice@gmail.com','POST',{package:'bundle'})).status,404);
+  assert.equal((await call('/api/user/links/'+alice.id+'/quote','alice@gmail.com','POST',{package:'bundle',stickerQty:20})).data.amountCents,40000);
+  assert.equal((await call('/api/user/links/'+bob.id+'/renewal','alice@gmail.com','POST',{package:'bundle',amountCents:10000,reference:'REF-X',paidDate:'2026-10-23',revision:bob.revision})).status,404);
+  const disabled=await call('/api/admin/links/'+alice.id+'/state','owner@gmail.com','POST',{state:'disabled',revision:saved.data.revision});assert.equal(disabled.status,200);
+  await assert.rejects(createShortLinks({store,secret:'s'.repeat(32)}).resolve(alice.id),e=>e.status===403);
 });
 test('customer verifier rejects non Gmail, unverified identities and client mismatch; ignores token roles',async()=>{
   const verify=createGoogleUserAuth({clientId,keySet:pair.publicKey});
