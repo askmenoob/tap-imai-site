@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!package.json
+!package-lock.json
+!import-service/
+!import-service/**
+import-service/*.test.mjs
