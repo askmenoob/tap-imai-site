@@ -5,10 +5,14 @@ import { malaysiaPhone, whatsappFromPhone, threadsProfile } from '../import-serv
 const $ = id => document.getElementById(id);
 const fieldNames = {name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web'};
 let activeSearch; let sequence = 0; let resultSequence = 0; let sources = {};
+let generatedLink=null;let activeShortening;
 let sessionToken = crypto.randomUUID();
 let places = []; let activePlace = -1; let placesFromDemo = false;
 const config = window.SMARTTAP_IMPORT_CONFIG || {};
 const endpoint = location.hostname === '127.0.0.1' ? location.origin : (config.endpoint || '');
+// Keep a cached copy of the earlier HTML usable during a Pages deployment.
+if(!$('shorten')) {const button=document.createElement('button');button.id='shorten';button.type='button';button.className='secondary';button.textContent='Jadikan pautan pendek';$('result').querySelector('.actions').append(button);}
+if(!$('short-status')) {const status=document.createElement('p');status.id='short-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');$('copy-status').before(status);}
 function httpsURL(value) {
   try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && (!u.port || u.port === '443') ? u.href : null; }
   catch { return null; }
@@ -21,7 +25,7 @@ function sourceLine(key, value) {
     link.textContent = new URL(value).hostname; link.target='_blank'; link.rel='noopener noreferrer'; line.append(link);
   } else line.textContent = 'Sumber: ' + value;
 }
-function invalidate() { resultSequence++; $('result').hidden=true; $('form-status').textContent=''; }
+function invalidate() { resultSequence++;activeShortening?.abort();generatedLink=null; $('result').hidden=true; $('form-status').textContent='';$('shorten').disabled=false;$('shorten').textContent='Jadikan pautan pendek';$('short-status').textContent='';$('copy-status').textContent=''; }
 function previewLogo() {
   const value = httpsURL($('field-logo').value.trim());
   $('logo-preview').hidden = true; $('logo-fallback').hidden = false;
@@ -214,10 +218,38 @@ $('profile-form').addEventListener('submit',async event=>{
     try { png=await QRCode.toDataURL(url.href,{width:1024,margin:3,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}}); }
     catch {throw new Error('Pautan terlalu panjang untuk QR. Pendekkan URL atau penerangan dan cuba lagi.');}
     if(current!==resultSequence) return;
-    $('share').value=url.href; $('qr').src=png; $('open').href=url.href; $('download').href=png;
+    generatedLink={original:url.href,short:null,mode:'original'};
+    showShareURL(url.href,png);
     $('result').hidden=false; $('form-status').textContent='Halaman dan QR anda sedia.';
     $('result').scrollIntoView({behavior:'smooth',block:'start'});
   } catch(error){$('form-status').textContent=error.message;}
   finally {$('generate').disabled=false;}
+});
+function showShareURL(url,png) {
+  $('share').value=url;$('qr').src=png;$('open').href=url;$('download').href=png;$('copy-status').textContent='';
+}
+$('shorten').addEventListener('click',async()=>{
+  const record=generatedLink;const current=resultSequence;if(!record)return;
+  $('shorten').disabled=true;$('short-status').textContent=record.mode==='short'?'Menukar kepada pautan asal…':'Menyediakan pautan pendek…';
+  activeShortening=new AbortController();
+  try {
+    const mode=record.mode==='short'?'original':'short';let target=record.original;
+    if(mode==='short') {
+      if(!record.short) {
+        const data=await api('/api/shorten',{url:record.original},activeShortening.signal);
+        const link=new URL(data.url);
+        if(link.origin!==location.origin||link.pathname!=='/'||link.hash||!/^[A-Za-z0-9_-]{16}$/.test(link.searchParams.get('s')||'')||[...link.searchParams.keys()].join()!=='s') throw new Error('Pautan pendek yang diterima tidak sah. Gunakan pautan asal.');
+        record.short=link.href;
+      }
+      target=record.short;
+    }
+    const png=await QRCode.toDataURL(target,{width:1024,margin:3,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}});
+    if(current!==resultSequence||record!==generatedLink)return;
+    record.mode=mode;showShareURL(target,png);
+    $('shorten').textContent=mode==='short'?'Gunakan pautan asal':'Jadikan pautan pendek';
+    $('short-status').textContent=mode==='short'?'Pautan pendek dan QR sedia dikongsi.':'Pautan asal dan QR sedia dikongsi.';
+  } catch(error) {
+    if(error.name!=='AbortError'&&current===resultSequence) $('short-status').textContent='Pautan pendek belum dapat disediakan. Pautan yang dipaparkan masih boleh digunakan. '+error.message;
+  } finally {if(current===resultSequence&&record===generatedLink)$('shorten').disabled=false;}
 });
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('share').value);$('copy-status').textContent='Pautan disalin.';}catch{$('share').focus();$('share').select();$('copy-status').textContent='Pilih dan salin pautan di atas secara manual.';}});
