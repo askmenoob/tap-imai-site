@@ -1,4 +1,5 @@
 import {createHmac} from 'node:crypto';
+import {requirePublicPage} from './page-state.mjs';
 
 const urlFields=['logo','google','instagram','facebook','tiktok','threads','whatsapp','website'];
 const fields=new Set(['v','name','tagline','phone',...urlFields]);
@@ -27,14 +28,16 @@ export function validateSmartTapURL(value,origin='https://tap.imai.my') {
     return url.href;
   } catch {throw invalid();}
 }
-export function createShortLinks({store,secret,origin='https://tap.imai.my',now=Date.now}) {
+export function createShortLinks({store,secret,origin='https://tap.imai.my',now=Date.now,newSubscription=null}) {
   if(!store||!secret||secret.length<32) throw new Error('Configure short link storage and signing secret.');
   return {
     async shorten(value) {
       const url=validateSmartTapURL(value,origin);
       for(let attempt=0;attempt<3;attempt++) {
         const id=createHmac('sha256',secret).update(`${attempt}:${url}`).digest('base64url').slice(0,16);
-        if(await store.create(id,{v:1,url,createdAt:new Date(now()).toISOString()}) || (await store.get(id))?.url===url) {
+        const created=await store.create(id,{v:1,url,createdAt:new Date(now()).toISOString(),...(newSubscription?{subscription:structuredClone(newSubscription)}:{})});
+        const existing=created?null:await store.get(id);
+        if(created || (existing?.url===url&&existing.lifecycle?.state!=='deleted')) {
           return {id,url:origin+'/?s='+id};
         }
       }
@@ -44,6 +47,7 @@ export function createShortLinks({store,secret,origin='https://tap.imai.my',now=
       if(typeof id!=='string'||!/^[A-Za-z0-9_-]{16}$/.test(id)) throw Object.assign(new Error('Pautan pendek tidak ditemui.'),{status:404});
       const record=await store.get(id);
       if(!record) throw Object.assign(new Error('Pautan pendek tidak ditemui.'),{status:404});
+      requirePublicPage(record,now());
       // Read the durable record so edits made by another instance take effect on the next scan.
       const url=validateSmartTapURL(record.url,origin);return {url};
     },
@@ -107,6 +111,8 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
     },
     archive:(id,revision,record)=>write('history/'+id+'/'+revision+'.json',record),
     update:(id,record,revision)=>write(object(id),record,revision),
+    claimPayment:(key,record)=>write('payments/'+ownerPrefix(key).slice(7,-1)+'.json',record),
+    getPayment:key=>request(base+encodeURIComponent('payments/'+ownerPrefix(key).slice(7,-1)+'.json')+'?alt=media'),
     grantOwner:(key,id)=>{
       if(!/^[A-Za-z0-9_-]{16}$/.test(id||''))throw new Error('Invalid link ID.');
       return write(ownerPrefix(key)+id+'.json',{v:1,id});
@@ -122,9 +128,11 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
 
 // Used only by the explicitly enabled localhost preview and isolated tests.
 export function createMemoryLinkStore(){
-  const records=new Map(),history=new Map(),memberships=new Map();let generation=0;
+  const records=new Map(),history=new Map(),memberships=new Map(),payments=new Map();let generation=0;
   const clone=value=>structuredClone(value);
-  return {records,history,memberships,
+  return {records,history,memberships,payments,
+    claimPayment:async(key,record)=>{if(payments.has(key))return false;payments.set(key,clone(record));return true;},
+    getPayment:async key=>clone(payments.get(key)||null),
     create:async(id,record)=>{if(records.has(id))return false;records.set(id,{record:clone(record),revision:String(++generation)});return true;},
     get:async id=>clone(records.get(id)?.record||null),
     getVersion:async id=>clone(records.get(id)||null),
