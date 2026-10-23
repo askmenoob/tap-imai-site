@@ -123,7 +123,7 @@ const server = http.createServer(async (req,res) => {
       if(path==='/edit/')req.url='/edit/index.html';
       const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path==='/subscribe/'?'/subscribe/index.html':path).slice(1);
       const file = resolve(root, relative);
-      if (!file.startsWith(root + sep) || !/^(?:index\.html|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|manifest\.webmanifest|pwa\.(?:js|css)|language\.(?:js|css)|language-catalog\.mjs|sw\.js|offline\.html|business-(?:import|logo|entry|admin|subscribe|page)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
+      if (!file.startsWith(root + sep) || !/^(?:index\.html|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|admin-entry\.js|manifest\.webmanifest|pwa\.(?:js|css)|language\.(?:js|css)|language-catalog\.mjs|sw\.js|offline\.html|business-(?:import|logo|entry|admin|subscribe|page)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
       const bytes = await readFile(file);
       res.writeHead(200, { 'content-type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.mjs':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.png':'image/png','.jpeg':'image/jpeg'})[extname(file)] || 'application/octet-stream', 'cache-control':'no-store' });
       res.end(req.method === 'HEAD' ? undefined : bytes); return;
