@@ -5,25 +5,34 @@ import { generateShortPage } from './short-page.mjs';
 import {googleLogin} from './google-login.mjs';
 
 const $ = id => document.getElementById(id);
+const registering=new URLSearchParams(location.search).get('register')==='1';
 const fieldNames = {name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web'};
+if(!registering)delete fieldNames.google;
+let publicDraftToken='';
 let activeSearch; let sequence = 0; let resultSequence = 0; let sources = {};
 let activeGeneration;
 let sessionToken = crypto.randomUUID();
 let places = []; let activePlace = -1; let placesFromDemo = false;
 const config = window.SMARTTAP_IMPORT_CONFIG || {};
 const endpoint = location.hostname === '127.0.0.1' ? location.origin : (config.endpoint || '');
-const registering=new URLSearchParams(location.search).get('register')==='1';
 let adminCredential='',adminExpiry=0,registrationTimer;
 async function registrationAPI(path,{method='GET',body,signal}={}){
   const response=await fetch(new URL('/api/admin/'+path,endpoint),{method,headers:{...(adminCredential?{Authorization:'Bearer '+adminCredential}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,cache:'no-store',credentials:'omit',signal});
   const data=await response.json();if(!response.ok)throw new Error(data.error||'Pendaftaran tidak berjaya.');return data;
 }
+function searchAccess(allowed){
+  if(!registering)return;
+  $('query').disabled=!allowed;$('search-button').disabled=!allowed;$('generate').disabled=!allowed;
+  const field=$('field-google');if(field){field.closest('[data-review-only]').hidden=!allowed;if(!allowed){field.value='';$('source-google').textContent='';}}
+  if(!allowed){activeSearch?.abort();sequence++;invalidate();$('editor').hidden=true;}
+}
 if(registering){
+  searchAccess(false);
   $('registration').hidden=false;$('generate').disabled=true;
-  const login=async token=>{adminCredential=token;$('register-status').textContent='Mengesahkan super admin…';
-    try{const actor=await registrationAPI('self');adminExpiry=actor.expiresAt;$('register-status').textContent='Super admin: '+actor.email;$('register-email').disabled=false;$('generate').disabled=false;
-      clearTimeout(registrationTimer);registrationTimer=setTimeout(()=>{adminCredential='';adminExpiry=0;$('register-email').disabled=true;$('generate').disabled=true;invalidate();$('register-status').textContent='Sesi tamat. Log masuk semula.';},Math.max(0,adminExpiry-Date.now()));
-    }catch(error){adminCredential='';adminExpiry=0;$('register-status').textContent=error.message;$('generate').disabled=true;}
+  const login=async token=>{searchAccess(false);adminCredential=token;$('register-status').textContent='Mengesahkan super admin…';
+    try{const actor=await registrationAPI('self');adminExpiry=actor.expiresAt;$('register-status').textContent='Super admin: '+actor.email;$('register-email').disabled=false;searchAccess(true);
+      clearTimeout(registrationTimer);registrationTimer=setTimeout(()=>{adminCredential='';adminExpiry=0;$('register-email').disabled=true;searchAccess(false);$('register-status').textContent='Sesi tamat. Log masuk semula.';},Math.max(0,adminExpiry-Date.now()));
+    }catch(error){adminCredential='';adminExpiry=0;$('register-status').textContent=error.message;searchAccess(false);}
   };
   registrationAPI('config').then(settings=>{
     if(settings.demo&&location.hostname==='127.0.0.1'){$('register-demo-login').hidden=false;$('register-demo-login').onclick=()=>login('localhost-demo');}
@@ -55,6 +64,7 @@ function previewLogo() {
 }
 for (const [key,label] of Object.entries(fieldNames)) {
   const wrapper = document.createElement('div');
+  if(key==='google'){wrapper.dataset.reviewOnly='true';wrapper.hidden=true;}
   const caption=document.createElement('label'); caption.htmlFor='field-'+key; caption.textContent=label+(['name','google'].includes(key)?' *':'');
   const input=document.createElement('input'); input.id='field-'+key; input.name=key;
   input.maxLength=key==='name'?90:key==='tagline'?150:500; input.autocomplete=key==='name'?'organization':'off';
@@ -73,10 +83,12 @@ async function api(path, body, signal) {
   if (!endpoint) throw new Error('Carian automatik belum tersedia. Cuba lagi kemudian atau hubungi pentadbir.');
   const base = new URL(endpoint);
   if (base.protocol!=='https:' && !(base.protocol==='http:' && base.hostname==='127.0.0.1')) throw new Error('Sambungan carian tidak sah.');
-  const response = await fetch(new URL(path,base),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});
+  if(registering&&(!adminCredential||adminExpiry<=Date.now()))throw new Error('Log masuk sebagai super admin untuk mencari Google Review Place ID.');
+  const route=registering?path.replace('/api/','/api/admin/'):path;
+  const response = await fetch(new URL(route,base),{method:'POST',headers:{'Content-Type':'application/json',...(registering?{Authorization:'Bearer '+adminCredential}:{})},body:JSON.stringify(body),signal});
   const data=await response.json();
   if (data.demo) $('demo').hidden=false;
-  if (!response.ok) throw new Error(data.error || 'Carian tidak tersedia sekarang.');
+  if(!response.ok){if(registering&&[401,403].includes(response.status)){adminCredential='';adminExpiry=0;searchAccess(false);}throw new Error(data.error||'Carian tidak tersedia sekarang.');}
   return data;
 }
 // Set these here as well so a cached copy of the previous HTML remains usable.
@@ -92,6 +104,7 @@ $('search-form').append(selectedBusiness);
 const searchSuggestions=document.createElement('iframe');searchSuggestions.title='Cadangan carian Google';searchSuggestions.className='google-search-suggestions';searchSuggestions.hidden=true;
 searchSuggestions.setAttribute('sandbox','allow-popups allow-popups-to-escape-sandbox');searchSuggestions.referrerPolicy='no-referrer';
 $('warnings').after(searchSuggestions);
+if(!registering){const note=document.createElement('p');note.className='notice';note.id='review-access';note.textContent='Pautan Google Review diurus oleh super admin dan dipasang secara automatik pada halaman anda.';$('warnings').before(note);}
 function activeOption(index) {
   activePlace=index;
   $('choices').querySelectorAll('[role="option"]').forEach((option,i)=>option.setAttribute('aria-selected',String(i===index)));
@@ -111,7 +124,7 @@ function showChoices() {
 }
 function cancelSearch() {
   activeSearch?.abort(); sequence++; closeChoices(true); $('query').setAttribute('aria-busy','false');
-  $('search-button').disabled=false; $('search-status').textContent='';
+  $('search-button').disabled=registering&&(!adminCredential||adminExpiry<=Date.now()); $('search-status').textContent='';
 }
 function renderPlaces(data,current) {
   closeChoices(true); places=data.places || []; placesFromDemo=!!data.demo;
@@ -143,7 +156,7 @@ const suggestions=createSuggestions({
   },
 });
 function queryChanged(event) {
-  cancelSearch(); selectedBusiness.hidden=true; $('google-attribution').hidden=true; $('editor').hidden=true; invalidate();
+  publicDraftToken='';cancelSearch(); selectedBusiness.hidden=true; $('google-attribution').hidden=true; $('editor').hidden=true; invalidate();
   if(event?.isComposing) {suggestions.cancel();return;}
   suggestions.update($('query').value);
 }
@@ -171,7 +184,7 @@ $('search-form').addEventListener('submit', async event => {
     const data=await api('/api/search',{query:$('query').value.trim()},activeSearch.signal);
     if(current===sequence) renderPlaces(data,current);
   } catch(error) {if(error.name!=='AbortError'&&current===sequence) $('search-status').textContent=error.message;}
-  finally {if(current===sequence) $('search-button').disabled=false;}
+  finally {if(current===sequence) $('search-button').disabled=registering&&(!adminCredential||adminExpiry<=Date.now());}
 });
 async function choose(place,current) {
   if(current!==sequence) return;
@@ -185,7 +198,7 @@ async function choose(place,current) {
   try {
     const data=await api('/api/import',{token:place.token},activeSearch.signal);
     if(current!==sequence) return;
-    invalidate(); sources=data.sources || {};
+    invalidate();publicDraftToken=data.draftToken||''; sources=data.sources || {};
     searchSuggestions.hidden=!data.searchSuggestionsHtml;searchSuggestions.srcdoc=data.searchSuggestionsHtml ? '<base target="_blank"><meta name="referrer" content="no-referrer">'+data.searchSuggestionsHtml : '';
     $('editor').hidden=false;
     $('fields').querySelectorAll('select').forEach(select=>select.remove());
@@ -205,7 +218,7 @@ async function choose(place,current) {
     $('field-name').focus({preventScroll:true});
     $('editor').scrollIntoView({behavior:'smooth',block:'start'});
   } catch(error) { if(error.name!=='AbortError' && current===sequence) $('search-status').textContent=error.message; }
-  finally { if(current===sequence) $('search-button').disabled=false; }
+  finally { if(current===sequence) $('search-button').disabled=registering&&(!adminCredential||adminExpiry<=Date.now()); }
 }
 function validate(profile) {
   const errors={};
@@ -215,7 +228,7 @@ function validate(profile) {
   for(const key of Object.keys(fieldNames).filter(k=>!['name','tagline','phone'].includes(k))) if(profile[key] && (!httpsURL(profile[key]) || profile[key].length>500)) errors[key]='Gunakan URL https:// penuh, maksimum 500 aksara.';
   if(profile.phone && !malaysiaPhone(profile.phone)) errors.phone='Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.';
   if(profile.threads && !threadsProfile(profile.threads)) errors.threads='Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.';
-  try {
+  if(registering)try {
     const review=new URL(profile.google); const host=review.hostname.toLowerCase();
     const valid=((host==='google.com'||host.endsWith('.google.com')||host==='google.com.my'||host.endsWith('.google.com.my'))&&review.pathname.includes('/local/writereview')&&review.searchParams.get('placeid')) || (host==='g.page'&&/\/r\/[^/]+\/review\/?$/i.test(review.pathname));
     if(!httpsURL(profile.google)||!valid) errors.google='Masukkan pautan Google Review terus dengan Place ID atau pautan g.page review.';
@@ -229,6 +242,7 @@ $('profile-form').addEventListener('submit',async event=>{
     const email=$('register-email').value.trim().toLowerCase();
     if(!/^[a-z0-9](?:[a-z0-9.]{0,62}[a-z0-9])?@gmail\.com$/.test(email)||email.includes('..')){$('form-status').textContent='Masukkan Gmail utama pelanggan @gmail.com, tanpa +alias.';$('register-email').focus();return;}
   }
+  if(!registering&&!publicDraftToken){$('form-status').textContent='Cari dan pilih perniagaan semula sebelum menjana halaman.';return;}
   const profile={v:1}; for(const key of Object.keys(fieldNames)) profile[key]=$('field-'+key).value.normalize('NFC').trim();
   if(malaysiaPhone(profile.phone)) profile.phone=malaysiaPhone(profile.phone);
   const errors=validate(profile);
@@ -238,17 +252,17 @@ $('profile-form').addEventListener('submit',async event=>{
   $('form-status').textContent='Menjana URL pendek dan QR…';
   try {
     const page=await generateShortPage(profile,{origin:location.origin,signal:activeGeneration.signal,
-      shorten:(url,signal)=>registering?registrationAPI('register',{method:'POST',body:{url,email:$('register-email').value.trim().toLowerCase()},signal}):api('/api/shorten',{url},signal),
+      shorten:(url,signal)=>registering?registrationAPI('register',{method:'POST',body:{url,email:$('register-email').value.trim().toLowerCase()},signal}):api('/api/create',{profile,draftToken:publicDraftToken},signal),
       qr:url=>QRCode.toDataURL(url,{width:1024,margin:4,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}}),
     });
     if(current!==resultSequence) return;
     showShareURL(page.url,page.png);
-    $('manage-registration').href='/admin.html?page='+new URL(page.url).searchParams.get('s');$('manage-registration').hidden=false;
+    $('manage-registration').href='/admin.html?page='+new URL(page.url).searchParams.get('s');$('manage-registration').hidden=!registering;
     if(registering)$('result').querySelector('.notice').textContent='Pendaftaran Gmail selesai. Pelanggan boleh login di tap.imai.my/edit untuk menyemak pakej, menghantar rujukan bayaran dan menyunting halaman selepas diaktifkan. URL pendek dan QR kekal sama.';
     $('result').hidden=false; $('form-status').textContent='URL pendek dan QR anda sedia.';
     $('result').scrollIntoView({behavior:'smooth',block:'start'});
   } catch(error){if(error.name!=='AbortError'&&current===resultSequence)$('form-status').textContent='URL pendek dan QR belum dapat dijana. Cuba lagi sebentar. '+error.message;}
-  finally {$('generate').disabled=false;}
+  finally {$('generate').disabled=registering&&(!adminCredential||adminExpiry<=Date.now());}
 });
 function showShareURL(url,png) {
   $('share').value=url;$('qr').src=png;$('open').href=url;$('download').href=png;$('copy-status').textContent='';

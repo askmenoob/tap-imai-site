@@ -1,28 +1,28 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { extractMetadata, socialType } from './metadata.mjs';
 import { fetchHTML, safeWebURL } from './safe-fetch.mjs';
 import { malaysiaPhone, whatsappFromPhone } from './contacts.mjs';
 
 export function createImportService({ google, secret, webSearch, readWebsite = fetchHTML, now = Date.now }) {
   if (!secret || secret.length < 32) throw new Error('A signing secret of at least 32 characters is required.');
-  const sign = data => createHmac('sha256', secret).update(data).digest('base64url');
+  const ticketKey=createHash('sha256').update('smarttap-discovery-v1\0'+secret).digest();
   function ticket(data) {
-    const encoded = Buffer.from(JSON.stringify({ ...data, expires: now() + 15 * 60 * 1000 })).toString('base64url');
-    return encoded + '.' + sign(encoded);
+    const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',ticketKey,iv);
+    const encrypted=Buffer.concat([cipher.update(JSON.stringify({purpose:'choice',...data,expires:now()+15*60*1000}),'utf8'),cipher.final()]);
+    return 'v1.'+Buffer.concat([iv,cipher.getAuthTag(),encrypted]).toString('base64url');
   }
-  function decode(value) {
+  function decode(value,purpose='choice') {
     try {
-      if (typeof value !== 'string' || value.length > 2000) throw 0;
-      const [data, signature, extra] = value.split('.');
-      if (extra || !data || !signature || !/^[A-Za-z0-9_-]+$/.test(signature)) throw 0;
-      const actual = Buffer.from(signature); const expected = Buffer.from(sign(data));
-      if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw 0;
-      const parsed = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-      if (parsed.expires < now() || parsed.expires > now() + 16 * 60 * 1000 || !/^[A-Za-z0-9_-]{8,200}$/.test(parsed.id)) throw 0;
+      if(typeof value!=='string'||value.length>4000||!/^v1\.[A-Za-z0-9_-]+$/.test(value))throw 0;
+      const bytes=Buffer.from(value.slice(3),'base64url');if(bytes.length<29||bytes.toString('base64url')!==value.slice(3))throw 0;
+      const decipher=createDecipheriv('aes-256-gcm',ticketKey,bytes.subarray(0,12));decipher.setAuthTag(bytes.subarray(12,28));
+      const parsed=JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)),decipher.final()]).toString('utf8'));
+      if(parsed.purpose!==purpose||!Number.isFinite(parsed.expires)||parsed.expires<now()||parsed.expires>now()+16*60*1000||!/^[A-Za-z0-9_-]{8,200}$/.test(parsed.id))throw 0;
       return parsed;
-    } catch { throw Object.assign(new Error('Hasil carian telah luput. Cari perniagaan semula.'), { status: 400 }); }
+    } catch {throw Object.assign(new Error('Hasil carian telah luput. Cari perniagaan semula.'),{status:400});}
   }
   return {
+    reviewFromDraft(token){const choice=decode(token,'draft');return 'https://search.google.com/local/writereview?placeid='+encodeURIComponent(choice.id);},
     async suggest(raw, session) {
       const query = typeof raw === 'string' ? raw.normalize('NFC').trim() : '';
       if ([...query].length < 3 || query.length > 160) throw Object.assign(new Error('Taip sekurang-kurangnya 3 aksara untuk cadangan.'), { status:400 });
@@ -93,6 +93,7 @@ export function createImportService({ google, secret, webSearch, readWebsite = f
       for (const key of ['logo','tagline','instagram','facebook','tiktok','threads','whatsapp']) {
         if (!result.profile[key]) result.warnings.push(`${key === 'tagline' ? 'Penerangan' : key}: ${result.candidates[key]?.length > 1 ? 'lebih daripada satu pautan ditemui; pilih pautan yang betul.' : 'belum ditemui daripada sumber rasmi.'}`);
       }
+      result.draftToken=ticket({id:choice.id,purpose:'draft'});
       return result;
     },
   };

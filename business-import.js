@@ -2208,7 +2208,10 @@ function googleLogin({ clientId, container, onCredential, onError, prompt = fals
 
 // src/import.js
 var $ = (id) => document.getElementById(id);
+var registering = new URLSearchParams(location.search).get("register") === "1";
 var fieldNames = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web" };
+if (!registering) delete fieldNames.google;
+var publicDraftToken = "";
 var activeSearch;
 var sequence = 0;
 var resultSequence = 0;
@@ -2220,7 +2223,6 @@ var activePlace = -1;
 var placesFromDemo = false;
 var config = window.SMARTTAP_IMPORT_CONFIG || {};
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : config.endpoint || "";
-var registering = new URLSearchParams(location.search).get("register") === "1";
 var adminCredential = "";
 var adminExpiry = 0;
 var registrationTimer;
@@ -2230,10 +2232,32 @@ async function registrationAPI(path, { method = "GET", body, signal } = {}) {
   if (!response.ok) throw new Error(data.error || "Pendaftaran tidak berjaya.");
   return data;
 }
+function searchAccess(allowed) {
+  if (!registering) return;
+  $("query").disabled = !allowed;
+  $("search-button").disabled = !allowed;
+  $("generate").disabled = !allowed;
+  const field = $("field-google");
+  if (field) {
+    field.closest("[data-review-only]").hidden = !allowed;
+    if (!allowed) {
+      field.value = "";
+      $("source-google").textContent = "";
+    }
+  }
+  if (!allowed) {
+    activeSearch?.abort();
+    sequence++;
+    invalidate();
+    $("editor").hidden = true;
+  }
+}
 if (registering) {
+  searchAccess(false);
   $("registration").hidden = false;
   $("generate").disabled = true;
   const login = async (token) => {
+    searchAccess(false);
     adminCredential = token;
     $("register-status").textContent = "Mengesahkan super admin\u2026";
     try {
@@ -2241,21 +2265,20 @@ if (registering) {
       adminExpiry = actor.expiresAt;
       $("register-status").textContent = "Super admin: " + actor.email;
       $("register-email").disabled = false;
-      $("generate").disabled = false;
+      searchAccess(true);
       clearTimeout(registrationTimer);
       registrationTimer = setTimeout(() => {
         adminCredential = "";
         adminExpiry = 0;
         $("register-email").disabled = true;
-        $("generate").disabled = true;
-        invalidate();
+        searchAccess(false);
         $("register-status").textContent = "Sesi tamat. Log masuk semula.";
       }, Math.max(0, adminExpiry - Date.now()));
     } catch (error) {
       adminCredential = "";
       adminExpiry = 0;
       $("register-status").textContent = error.message;
-      $("generate").disabled = true;
+      searchAccess(false);
     }
   };
   registrationAPI("config").then((settings) => {
@@ -2311,6 +2334,10 @@ function previewLogo() {
 }
 for (const [key, label] of Object.entries(fieldNames)) {
   const wrapper = document.createElement("div");
+  if (key === "google") {
+    wrapper.dataset.reviewOnly = "true";
+    wrapper.hidden = true;
+  }
   const caption = document.createElement("label");
   caption.htmlFor = "field-" + key;
   caption.textContent = label + (["name", "google"].includes(key) ? " *" : "");
@@ -2363,10 +2390,19 @@ async function api(path, body, signal) {
   if (!endpoint) throw new Error("Carian automatik belum tersedia. Cuba lagi kemudian atau hubungi pentadbir.");
   const base = new URL(endpoint);
   if (base.protocol !== "https:" && !(base.protocol === "http:" && base.hostname === "127.0.0.1")) throw new Error("Sambungan carian tidak sah.");
-  const response = await fetch(new URL(path, base), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
+  if (registering && (!adminCredential || adminExpiry <= Date.now())) throw new Error("Log masuk sebagai super admin untuk mencari Google Review Place ID.");
+  const route = registering ? path.replace("/api/", "/api/admin/") : path;
+  const response = await fetch(new URL(route, base), { method: "POST", headers: { "Content-Type": "application/json", ...registering ? { Authorization: "Bearer " + adminCredential } : {} }, body: JSON.stringify(body), signal });
   const data = await response.json();
   if (data.demo) $("demo").hidden = false;
-  if (!response.ok) throw new Error(data.error || "Carian tidak tersedia sekarang.");
+  if (!response.ok) {
+    if (registering && [401, 403].includes(response.status)) {
+      adminCredential = "";
+      adminExpiry = 0;
+      searchAccess(false);
+    }
+    throw new Error(data.error || "Carian tidak tersedia sekarang.");
+  }
   return data;
 }
 $("query").setAttribute("role", "combobox");
@@ -2387,6 +2423,13 @@ searchSuggestions.hidden = true;
 searchSuggestions.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
 searchSuggestions.referrerPolicy = "no-referrer";
 $("warnings").after(searchSuggestions);
+if (!registering) {
+  const note = document.createElement("p");
+  note.className = "notice";
+  note.id = "review-access";
+  note.textContent = "Pautan Google Review diurus oleh super admin dan dipasang secara automatik pada halaman anda.";
+  $("warnings").before(note);
+}
 function activeOption(index) {
   activePlace = index;
   $("choices").querySelectorAll('[role="option"]').forEach((option, i) => option.setAttribute("aria-selected", String(i === index)));
@@ -2418,7 +2461,7 @@ function cancelSearch() {
   sequence++;
   closeChoices(true);
   $("query").setAttribute("aria-busy", "false");
-  $("search-button").disabled = false;
+  $("search-button").disabled = registering && (!adminCredential || adminExpiry <= Date.now());
   $("search-status").textContent = "";
 }
 function renderPlaces(data, current) {
@@ -2468,6 +2511,7 @@ var suggestions = createSuggestions({
   }
 });
 function queryChanged(event) {
+  publicDraftToken = "";
   cancelSearch();
   selectedBusiness.hidden = true;
   $("google-attribution").hidden = true;
@@ -2522,7 +2566,7 @@ $("search-form").addEventListener("submit", async (event) => {
   } catch (error) {
     if (error.name !== "AbortError" && current === sequence) $("search-status").textContent = error.message;
   } finally {
-    if (current === sequence) $("search-button").disabled = false;
+    if (current === sequence) $("search-button").disabled = registering && (!adminCredential || adminExpiry <= Date.now());
   }
 });
 async function choose(place, current) {
@@ -2543,6 +2587,7 @@ async function choose(place, current) {
     const data = await api("/api/import", { token: place.token }, activeSearch.signal);
     if (current !== sequence) return;
     invalidate();
+    publicDraftToken = data.draftToken || "";
     sources = data.sources || {};
     searchSuggestions.hidden = !data.searchSuggestionsHtml;
     searchSuggestions.srcdoc = data.searchSuggestionsHtml ? '<base target="_blank"><meta name="referrer" content="no-referrer">' + data.searchSuggestionsHtml : "";
@@ -2585,7 +2630,7 @@ async function choose(place, current) {
   } catch (error) {
     if (error.name !== "AbortError" && current === sequence) $("search-status").textContent = error.message;
   } finally {
-    if (current === sequence) $("search-button").disabled = false;
+    if (current === sequence) $("search-button").disabled = registering && (!adminCredential || adminExpiry <= Date.now());
   }
 }
 function validate(profile) {
@@ -2596,7 +2641,7 @@ function validate(profile) {
   for (const key of Object.keys(fieldNames).filter((k) => !["name", "tagline", "phone"].includes(k))) if (profile[key] && (!httpsURL(profile[key]) || profile[key].length > 500)) errors[key] = "Gunakan URL https:// penuh, maksimum 500 aksara.";
   if (profile.phone && !malaysiaPhone(profile.phone)) errors.phone = "Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.";
   if (profile.threads && !threadsProfile(profile.threads)) errors.threads = "Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.";
-  try {
+  if (registering) try {
     const review = new URL(profile.google);
     const host = review.hostname.toLowerCase();
     const valid = (host === "google.com" || host.endsWith(".google.com") || host === "google.com.my" || host.endsWith(".google.com.my")) && review.pathname.includes("/local/writereview") && review.searchParams.get("placeid") || host === "g.page" && /\/r\/[^/]+\/review\/?$/i.test(review.pathname);
@@ -2622,6 +2667,10 @@ $("profile-form").addEventListener("submit", async (event) => {
       return;
     }
   }
+  if (!registering && !publicDraftToken) {
+    $("form-status").textContent = "Cari dan pilih perniagaan semula sebelum menjana halaman.";
+    return;
+  }
   const profile = { v: 1 };
   for (const key of Object.keys(fieldNames)) profile[key] = $("field-" + key).value.normalize("NFC").trim();
   if (malaysiaPhone(profile.phone)) profile.phone = malaysiaPhone(profile.phone);
@@ -2642,13 +2691,13 @@ $("profile-form").addEventListener("submit", async (event) => {
     const page = await generateShortPage(profile, {
       origin: location.origin,
       signal: activeGeneration.signal,
-      shorten: (url, signal) => registering ? registrationAPI("register", { method: "POST", body: { url, email: $("register-email").value.trim().toLowerCase() }, signal }) : api("/api/shorten", { url }, signal),
+      shorten: (url, signal) => registering ? registrationAPI("register", { method: "POST", body: { url, email: $("register-email").value.trim().toLowerCase() }, signal }) : api("/api/create", { profile, draftToken: publicDraftToken }, signal),
       qr: (url) => import_qrcode.default.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } })
     });
     if (current !== resultSequence) return;
     showShareURL(page.url, page.png);
     $("manage-registration").href = "/admin.html?page=" + new URL(page.url).searchParams.get("s");
-    $("manage-registration").hidden = false;
+    $("manage-registration").hidden = !registering;
     if (registering) $("result").querySelector(".notice").textContent = "Pendaftaran Gmail selesai. Pelanggan boleh login di tap.imai.my/edit untuk menyemak pakej, menghantar rujukan bayaran dan menyunting halaman selepas diaktifkan. URL pendek dan QR kekal sama.";
     $("result").hidden = false;
     $("form-status").textContent = "URL pendek dan QR anda sedia.";
@@ -2656,7 +2705,7 @@ $("profile-form").addEventListener("submit", async (event) => {
   } catch (error) {
     if (error.name !== "AbortError" && current === resultSequence) $("form-status").textContent = "URL pendek dan QR belum dapat dijana. Cuba lagi sebentar. " + error.message;
   } finally {
-    $("generate").disabled = false;
+    $("generate").disabled = registering && (!adminCredential || adminExpiry <= Date.now());
   }
 });
 function showShareURL(url, png) {
