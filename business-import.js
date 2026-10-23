@@ -2177,6 +2177,21 @@ function threadsProfile(value) {
   }
 }
 
+// src/short-page.mjs
+async function generateShortPage(profile, { origin, shorten, qr, signal }) {
+  const bytes = new TextEncoder().encode(JSON.stringify(profile));
+  const encoded = btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  if (encoded.length > 4096) throw new Error("Maklumat terlalu panjang. Pendekkan penerangan atau pautan.");
+  const original = new URL("/?p=" + encoded, origin);
+  const shortened = await shorten(original.href, signal);
+  signal?.throwIfAborted();
+  const link = new URL(shortened.url);
+  if (link.origin !== origin || link.pathname !== "/" || link.hash || !/^[A-Za-z0-9_-]{16}$/.test(link.searchParams.get("s") || "") || [...link.searchParams.keys()].join() !== "s") throw new Error("URL pendek tidak sah. Cuba jana semula.");
+  const png = await qr(link.href);
+  signal?.throwIfAborted();
+  return { url: link.href, png };
+}
+
 // src/import.js
 var $ = (id) => document.getElementById(id);
 var fieldNames = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web" };
@@ -2184,29 +2199,17 @@ var activeSearch;
 var sequence = 0;
 var resultSequence = 0;
 var sources = {};
-var generatedLink = null;
-var activeShortening;
+var activeGeneration;
 var sessionToken = crypto.randomUUID();
 var places = [];
 var activePlace = -1;
 var placesFromDemo = false;
 var config = window.SMARTTAP_IMPORT_CONFIG || {};
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : config.endpoint || "";
-if (!$("shorten")) {
-  const button = document.createElement("button");
-  button.id = "shorten";
-  button.type = "button";
-  button.className = "secondary";
-  button.textContent = "Jadikan pautan pendek";
-  $("result").querySelector(".actions").append(button);
-}
-if (!$("short-status")) {
-  const status = document.createElement("p");
-  status.id = "short-status";
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  $("copy-status").before(status);
-}
+$("shorten")?.remove();
+$("short-status")?.remove();
+$("share").rows = 1;
+$("result").querySelector(".notice").textContent = "URL pendek dan QR dijana bersama. Suntingan menghasilkan pautan baharu; kemas kini QR atau NFC selepas menyunting.";
 function httpsURL(value) {
   try {
     const u = new URL(value);
@@ -2234,13 +2237,9 @@ function sourceLine(key, value) {
 }
 function invalidate() {
   resultSequence++;
-  activeShortening?.abort();
-  generatedLink = null;
+  activeGeneration?.abort();
   $("result").hidden = true;
   $("form-status").textContent = "";
-  $("shorten").disabled = false;
-  $("shorten").textContent = "Jadikan pautan pendek";
-  $("short-status").textContent = "";
   $("copy-status").textContent = "";
 }
 function previewLogo() {
@@ -2299,6 +2298,12 @@ $("logo-preview").onerror = () => {
   $("logo-preview").hidden = true;
   $("logo-fallback").hidden = false;
 };
+if (new URLSearchParams(location.search).get("manual") === "1") {
+  $("editor").hidden = false;
+  $("warnings").hidden = true;
+  $("field-name").focus({ preventScroll: true });
+  $("editor").scrollIntoView({ block: "start" });
+}
 async function api(path, body, signal) {
   if (!endpoint) throw new Error("Carian automatik belum diaktifkan. Gunakan borang manual sementara pentadbir melengkapkan sambungan.");
   const base = new URL(endpoint);
@@ -2564,28 +2569,22 @@ $("profile-form").addEventListener("submit", async (event) => {
     return;
   }
   $("generate").disabled = true;
+  activeGeneration = new AbortController();
+  $("form-status").textContent = "Menjana URL pendek dan QR\u2026";
   try {
-    const data = JSON.stringify(profile);
-    const bytes = new TextEncoder().encode(data);
-    const encoded = btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-    const url = new URL("./", location.href);
-    url.search = "?p=" + encoded;
-    url.hash = "";
-    if (encoded.length > 4096) throw new Error("Maklumat terlalu panjang. Pendekkan penerangan atau pautan.");
-    let png;
-    try {
-      png = await import_qrcode.default.toDataURL(url.href, { width: 1024, margin: 3, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } });
-    } catch {
-      throw new Error("Pautan terlalu panjang untuk QR. Pendekkan URL atau penerangan dan cuba lagi.");
-    }
+    const page = await generateShortPage(profile, {
+      origin: location.origin,
+      signal: activeGeneration.signal,
+      shorten: (url, signal) => api("/api/shorten", { url }, signal),
+      qr: (url) => import_qrcode.default.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } })
+    });
     if (current !== resultSequence) return;
-    generatedLink = { original: url.href, short: null, mode: "original" };
-    showShareURL(url.href, png);
+    showShareURL(page.url, page.png);
     $("result").hidden = false;
-    $("form-status").textContent = "Halaman dan QR anda sedia.";
+    $("form-status").textContent = "URL pendek dan QR anda sedia.";
     $("result").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
-    $("form-status").textContent = error.message;
+    if (error.name !== "AbortError" && current === resultSequence) $("form-status").textContent = "URL pendek dan QR belum dapat dijana. Cuba lagi sebentar. " + error.message;
   } finally {
     $("generate").disabled = false;
   }
@@ -2597,37 +2596,6 @@ function showShareURL(url, png) {
   $("download").href = png;
   $("copy-status").textContent = "";
 }
-$("shorten").addEventListener("click", async () => {
-  const record = generatedLink;
-  const current = resultSequence;
-  if (!record) return;
-  $("shorten").disabled = true;
-  $("short-status").textContent = record.mode === "short" ? "Menukar kepada pautan asal\u2026" : "Menyediakan pautan pendek\u2026";
-  activeShortening = new AbortController();
-  try {
-    const mode = record.mode === "short" ? "original" : "short";
-    let target = record.original;
-    if (mode === "short") {
-      if (!record.short) {
-        const data = await api("/api/shorten", { url: record.original }, activeShortening.signal);
-        const link = new URL(data.url);
-        if (link.origin !== location.origin || link.pathname !== "/" || link.hash || !/^[A-Za-z0-9_-]{16}$/.test(link.searchParams.get("s") || "") || [...link.searchParams.keys()].join() !== "s") throw new Error("Pautan pendek yang diterima tidak sah. Gunakan pautan asal.");
-        record.short = link.href;
-      }
-      target = record.short;
-    }
-    const png = await import_qrcode.default.toDataURL(target, { width: 1024, margin: 3, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } });
-    if (current !== resultSequence || record !== generatedLink) return;
-    record.mode = mode;
-    showShareURL(target, png);
-    $("shorten").textContent = mode === "short" ? "Gunakan pautan asal" : "Jadikan pautan pendek";
-    $("short-status").textContent = mode === "short" ? "Pautan pendek dan QR sedia dikongsi." : "Pautan asal dan QR sedia dikongsi.";
-  } catch (error) {
-    if (error.name !== "AbortError" && current === resultSequence) $("short-status").textContent = "Pautan pendek belum dapat disediakan. Pautan yang dipaparkan masih boleh digunakan. " + error.message;
-  } finally {
-    if (current === resultSequence && record === generatedLink) $("shorten").disabled = false;
-  }
-});
 $("copy").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText($("share").value);
