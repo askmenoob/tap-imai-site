@@ -69,6 +69,20 @@ export async function extractGoogleProfiles(data,businessName,{resolve=resolveCi
       const url=canonical(match[0].replace(/[.,;]+$/,''));if(url) add(url,source);
     }
   }
+  // Google can attach the citation to the sentence explaining a handle rather
+  // than its preceding URL. Keep these as editable suggestions only when the
+  // answer has grounding support and cites the same social platform.
+  if(!claimed.length && grounding.groundingSupports?.length && !text.trim().startsWith('{') && !text.trim().startsWith('```json')) {
+    for(const line of text.split('\n')) {
+      if(!/\bofficial\b/i.test(line)||/not found|cannot|unverified|unofficial/i.test(line)) continue;
+      for(const match of line.matchAll(/https:\/\/[^\s<>\[\]()"`]+/g)) {
+        const url=canonical(match[0].replace(/[.,;]+$/,''));const kind=url&&socialType(url);if(!kind) continue;
+        const host=new URL(url).hostname;
+        const source=cited.find(value=>value&&new URL(value).hostname===host);
+        if(source) add(url,source);
+      }
+    }
+  }
   return {candidates,sources,grounded:true,searchSuggestionsHtml};
 }
 export function createGoogleWebSearch({project,model='gemini-3.8-flash',getToken=runtimeToken,fetcher=fetch}={}) {
