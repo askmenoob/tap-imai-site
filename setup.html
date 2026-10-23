@@ -6,13 +6,14 @@
   <title>Cari perniagaan — SmartTap</title>
   <meta name="description" content="Cari perniagaan, semak maklumat automatik dan cipta halaman SmartTap anda.">
   <link rel="stylesheet" href="business-import.css?v=short-only-20261023-1">
-  <script src="import-config.js"></script><script type="module" src="business-import.js?v=admin-20261023-1"></script>
+  <script src="import-config.js"></script><script type="module" src="business-import.js?v=owners-20261023-1"></script>
 </head>
 <body>
-  <header><a class="brand" href="./">◈ SMART<span>TAP</span></a><nav aria-label="Navigasi utama"><a href="./admin.html">Super admin</a> · <a href="./setup.html?manual=1#editor">Borang manual ↗</a></nav></header>
+  <header><a class="brand" href="./">◈ SMART<span>TAP</span></a><nav aria-label="Navigasi utama"><a href="/edit">Sunting halaman saya</a> · <a href="./admin.html">Super admin</a> · <a href="./setup.html?manual=1#editor">Borang manual ↗</a></nav></header>
   <main>
     <section class="intro"><p class="eyebrow">1 CARI · 2 SEMAK · 3 KONGSI</p><h1>Nama perniagaan anda.<br><em>Maklumatnya kami bantu cari.</em></h1><p>Cari lokasi yang betul. Semak logo, penerangan dan pautan yang ditemui sebelum menjana halaman anda.</p></section>
     <p id="demo" class="notice" hidden>MOD DEMO TEMPATAN — semua hasil di sini ialah data contoh, bukan carian Google sebenar.</p>
+    <section id="registration" class="panel" hidden><p class="eyebrow">PENDAFTARAN PELANGGAN · SUPER ADMIN</p><h2>Daftar Gmail pemilik</h2><p>Log masuk sebagai super admin, kemudian masukkan Gmail pelanggan. Halaman yang dijana akan terus didaftarkan kepada Gmail ini.</p><div id="register-google-login"></div><button id="register-demo-login" hidden>Login admin demo</button><p id="register-status" role="status"></p><label for="register-email">Gmail pelanggan *</label><input id="register-email" type="email" maxlength="100" autocomplete="off" placeholder="pelanggan@gmail.com" disabled><p class="help">Gunakan Gmail utama @gmail.com, tanpa +alias. Selepas didaftarkan, pelanggan boleh login di <a href="/edit">tap.imai.my/edit</a>.</p></section>
     <section class="panel" aria-labelledby="search-heading">
       <h2 id="search-heading">Cari perniagaan</h2>
       <form id="search-form"><label for="query">Nama perniagaan <span class="optional">Cadangan nama dan alamat muncul semasa anda menaip</span></label><div class="search-row"><input id="query" name="query" role="combobox" aria-autocomplete="list" aria-controls="choices" aria-expanded="false" aria-describedby="search-hint" placeholder="Contoh: Loffee Coffee" minlength="2" maxlength="160" required autocomplete="off" spellcheck="false"><button id="search-button">Cari perniagaan ↗</button></div><p id="search-hint" class="help">Taip sekurang-kurangnya 3 aksara, kemudian pilih perniagaan dan alamat yang betul.</p>
@@ -29,7 +30,7 @@
         <button id="generate">Jana halaman & QR ↗</button><p id="form-status" role="status" aria-live="polite"></p>
       </form>
     </section>
-    <section id="result" class="panel" hidden><p class="eyebrow">SEDIA DIKONGSI</p><h2>Pautan SmartTap anda</h2><img id="qr" alt="Kod QR halaman SmartTap"><label for="share">Pautan halaman</label><textarea id="share" readonly rows="1"></textarea><div class="actions"><button id="copy">Salin pautan</button><a id="open" class="button secondary" target="_blank" rel="noopener noreferrer">Buka halaman ↗</a><a id="download" class="button secondary" download="smarttap-qr.png">Muat turun QR PNG</a></div><p class="notice">Simpan URL pendek ini. Super admin boleh mengemas kini maklumat pada URL dan QR yang sama. Menjana semula melalui borang ini menghasilkan pautan baharu.</p><p id="copy-status" role="status"></p></section>
+    <section id="result" class="panel" hidden><p class="eyebrow">SEDIA DIKONGSI</p><h2>Pautan SmartTap anda</h2><img id="qr" alt="Kod QR halaman SmartTap"><label for="share">Pautan halaman</label><textarea id="share" readonly rows="1"></textarea><div class="actions"><button id="copy">Salin pautan</button><a id="open" class="button secondary" target="_blank" rel="noopener noreferrer">Buka halaman ↗</a><a id="download" class="button secondary" download="smarttap-qr.png">Muat turun QR PNG</a></div><p class="notice">Simpan URL pendek ini. Super admin boleh mengemas kini maklumat pada URL dan QR yang sama. Menjana semula melalui borang ini menghasilkan pautan baharu.</p><p id="copy-status" role="status"></p><a id="manage-registration" hidden>Urus pendaftaran Gmail ↗</a></section>
     <footer><a href="./">◈ SMARTTAP</a><span><a href="./privacy.html">Privasi</a> · <a href="./terms.html">Maklumat penggunaan</a></span></footer>
   </main>
 </body></html>
