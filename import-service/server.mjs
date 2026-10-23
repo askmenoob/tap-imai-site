@@ -11,9 +11,13 @@ import { createGoogleAdminAuth, createAdminService } from './admin.mjs';
 import { createGoogleUserAuth } from './identity.mjs';
 import { createCustomerService } from './customers.mjs';
 import { createAccountRoutes } from './account-routes.mjs';
+import {createManagementService} from './management.mjs';
+import {paymentQR} from './payment-qr.mjs';
 
 const preview = process.argv.includes('--preview');
 const demo = preview && process.env.PREVIEW_DEMO === '1';
+const paymentsEnabled=demo||process.env.PAYMENTS_ENABLED==='true';
+const newSubscription=paymentsEnabled?{plan:'annual',startsAt:null,expiresAt:null}:null;
 const port = Number(process.env.PORT || 8787);
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const key = (process.env.GOOGLE_PLACES_API_KEY || '').trim();
@@ -23,14 +27,15 @@ const origins = new Set((process.env.ALLOWED_ORIGINS || 'https://tap.imai.my').s
 if (preview) origins.add('http://127.0.0.1:' + port);
 const linkStore=demo?createMemoryLinkStore():
   process.env.SHORT_LINK_BUCKET?createCloudLinkStore({bucket:process.env.SHORT_LINK_BUCKET,getToken:runtimeToken}):null;
-const shortLinks=linkStore?createShortLinks({store:linkStore,secret,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
+const shortLinks=linkStore?createShortLinks({store:linkStore,secret,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription}):null;
 const adminClientId=(process.env.ADMIN_GOOGLE_CLIENT_ID||'').trim();
 const adminEmails=(process.env.ADMIN_EMAILS||'').split(',');
 const adminAuth=createGoogleAdminAuth({clientId:adminClientId,emails:adminEmails});
 const userAuth=createGoogleUserAuth({clientId:adminClientId});
 const admin=linkStore?createAdminService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
-const customers=linkStore?createCustomerService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
-const accountRoutes=createAccountRoutes({adminAuth,userAuth,admin,customers,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
+const customers=linkStore?createCustomerService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription}):null;
+const management=linkStore?createManagementService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',enabled:paymentsEnabled,qrPayload:paymentQR}):null;
+const accountRoutes=createAccountRoutes({adminAuth,userAuth,admin,customers,management,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
 const demoLogo = 'https://placehold.co/160x160/173b33/ffffff.png?text=DEMO';
 const fixture = {
   suggest:async query => query.toLowerCase().includes('tiada') ? [] : [
@@ -94,11 +99,11 @@ const server = http.createServer(async (req,res) => {
       return reply(res, 404, { error:'Tidak ditemui.' }, origin);
     }
     if (preview && ['GET','HEAD'].includes(req.method)) {
-      if(path==='/edit'){res.writeHead(301,{location:'/edit/'});res.end();return;}
+      if(path==='/edit'||path==='/subscribe'){res.writeHead(301,{location:path+'/'});res.end();return;}
       if(path==='/edit/')req.url='/edit/index.html';
-      const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path).slice(1);
+      const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path==='/subscribe/'?'/subscribe/index.html':path).slice(1);
       const file = resolve(root, relative);
-      if (!file.startsWith(root + sep) || !/^(?:index\.html|edit\/index\.html|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|business-(?:import|logo|entry|admin)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
+      if (!file.startsWith(root + sep) || !/^(?:index\.html|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|business-(?:import|logo|entry|admin|subscribe)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
       const bytes = await readFile(file);
       res.writeHead(200, { 'content-type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml'})[extname(file)] || 'application/octet-stream', 'cache-control':'no-store' });
       res.end(req.method === 'HEAD' ? undefined : bytes); return;
