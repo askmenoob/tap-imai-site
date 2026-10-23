@@ -12,7 +12,7 @@ function lockControls(value){
   saving=value;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])if($(id))$(id).disabled=value||(id==='save'&&customer&&selected?.state!=='active');
   for(const field of Object.keys(fields))if($('field-'+field))$('field-'+field).disabled=value||(customer&&selected?.state!=='active');
 }
-const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();$('edit-title').textContent=item.profile.name;}});
+const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
 function logout(message='Anda telah log keluar.'){
   credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
   management.clear();
@@ -69,6 +69,7 @@ async function login(token){
 async function edit(item){
   if(saving)return;
   selected=item;$('edit-title').textContent=item.profile.name;$('share').value=item.url;$('open').href=item.url;$('copy-status').textContent='';$('save-status').textContent='';
+  if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';
   for(const field of Object.keys(fields))$('field-'+field).value=item.profile[field]||'';
   if($('owner-email')){$('owner-email').value=item.ownerEmail||'';$('owner-status').textContent=item.ownerEmail?'Pemilik boleh login di tap.imai.my/edit dengan Gmail ini.':'Daftarkan Gmail supaya pelanggan boleh menyunting halaman ini.';}
   $('editor').hidden=false;$('download').removeAttribute('href');$('qr').removeAttribute('src');
