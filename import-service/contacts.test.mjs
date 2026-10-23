@@ -55,3 +55,10 @@ test('a grounded statement can cite a directory or tagged post for a business pr
   data.candidates[0].groundingMetadata.groundingSupports=[];
   assert.deepEqual((await extractGoogleProfiles(data,'Loffee Coffee',{resolve:async x=>x})).candidates,{});
 });
+
+test('citation attached to a handle explanation still supplies a clearly labelled platform suggestion',async()=>{
+  const text='Official Instagram: https://www.instagram.com/loffeecoffee.official\nSource: patrons tag the business handle.\nOfficial Threads: https://threads.com/@loffeecoffee';
+  const data={candidates:[{content:{parts:[{text}]},groundingMetadata:{webSearchQueries:['Loffee Coffee Shah Alam'],groundingChunks:[{web:{uri:'https://instagram.com/reel/example'}}],groundingSupports:[{segment:{text:'patrons tag the business handle'},groundingChunkIndices:[0]}]}}]};
+  const found=await extractGoogleProfiles(data,'Loffee Coffee',{resolve:async x=>x});
+  assert.deepEqual(found.candidates,{instagram:['https://instagram.com/loffeecoffee.official']});
+});
