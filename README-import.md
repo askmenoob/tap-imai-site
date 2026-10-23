@@ -25,7 +25,7 @@ For a clearly labelled, localhost-only fixture preview, set `PREVIEW_DEMO=1` the
 
 ## Deployment
 
-Frontend hosting: Cloudflare Pages Free project `tap-imai-site`, custom domain `tap.imai.my`, with source in `askmenoob/tap-imai-site`. The Pages build command is `npm run build && node scripts/prepare-pages.mjs`; output directory is `dist`. The preparation script allows exactly 17 public release files, including `/subscribe/`, `/edit/`, the admin page and existing assets. Backend source, environment files and the old GitHub Pages CNAME file are excluded from the published directory. The main branch remains the canonical source after the launch branch is merged.
+Frontend hosting: Cloudflare Pages Free project `tap-imai-site`, custom domain `tap.imai.my`, with source in `askmenoob/tap-imai-site`. The Pages build command is `npm run build && node scripts/prepare-pages.mjs`; output directory is `dist`. The preparation script allows exactly 18 public release files, including `/subscribe/`, `/edit/`, the admin page and existing assets. Backend source, environment files and the old GitHub Pages CNAME file are excluded from the published directory. The main branch remains the canonical source after the launch branch is merged.
 
 The approved 23 October 2026 launch activated the custom domain with SSL, verified authoritative and public DNS, and enabled PAYMENTS_ENABLED=true on Cloud Run revision tap-business-import-00014-qrq. Cloudflare automatic production deployments follow main. Payment activation is a manual bank-receipt workflow; deployment verification does not represent a real bank transfer or payment approval.
 
