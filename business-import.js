@@ -2192,6 +2192,20 @@ async function generateShortPage(profile, { origin, shorten, qr, signal }) {
   return { url: link.href, png };
 }
 
+// src/google-login.mjs
+function googleLogin({ clientId, container, onCredential, onError, prompt = false }) {
+  const script = document.createElement("script");
+  script.src = "https://accounts.google.com/gsi/client";
+  script.async = true;
+  script.onload = () => {
+    window.google.accounts.id.initialize({ client_id: clientId, callback: (result) => onCredential(result.credential), auto_select: false });
+    window.google.accounts.id.renderButton(container, { type: "standard", theme: "outline", size: "large", text: "signin_with", shape: "rectangular" });
+    if (prompt) window.google.accounts.id.prompt();
+  };
+  script.onerror = () => onError("Butang Google tidak dapat dimuatkan. Semak sambungan dan muat semula.");
+  document.head.append(script);
+}
+
 // src/import.js
 var $ = (id) => document.getElementById(id);
 var fieldNames = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web" };
@@ -2206,6 +2220,53 @@ var activePlace = -1;
 var placesFromDemo = false;
 var config = window.SMARTTAP_IMPORT_CONFIG || {};
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : config.endpoint || "";
+var registering = new URLSearchParams(location.search).get("register") === "1";
+var adminCredential = "";
+var adminExpiry = 0;
+var registrationTimer;
+async function registrationAPI(path, { method = "GET", body, signal } = {}) {
+  const response = await fetch(new URL("/api/admin/" + path, endpoint), { method, headers: { ...adminCredential ? { Authorization: "Bearer " + adminCredential } : {}, ...body ? { "Content-Type": "application/json" } : {} }, body: body ? JSON.stringify(body) : void 0, cache: "no-store", credentials: "omit", signal });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Pendaftaran tidak berjaya.");
+  return data;
+}
+if (registering) {
+  $("registration").hidden = false;
+  $("generate").disabled = true;
+  const login = async (token) => {
+    adminCredential = token;
+    $("register-status").textContent = "Mengesahkan super admin\u2026";
+    try {
+      const actor = await registrationAPI("self");
+      adminExpiry = actor.expiresAt;
+      $("register-status").textContent = "Super admin: " + actor.email;
+      $("register-email").disabled = false;
+      $("generate").disabled = false;
+      clearTimeout(registrationTimer);
+      registrationTimer = setTimeout(() => {
+        adminCredential = "";
+        adminExpiry = 0;
+        $("register-email").disabled = true;
+        $("generate").disabled = true;
+        invalidate();
+        $("register-status").textContent = "Sesi tamat. Log masuk semula.";
+      }, Math.max(0, adminExpiry - Date.now()));
+    } catch (error) {
+      adminCredential = "";
+      adminExpiry = 0;
+      $("register-status").textContent = error.message;
+      $("generate").disabled = true;
+    }
+  };
+  registrationAPI("config").then((settings) => {
+    if (settings.demo && location.hostname === "127.0.0.1") {
+      $("register-demo-login").hidden = false;
+      $("register-demo-login").onclick = () => login("localhost-demo");
+    } else if (settings.configured) googleLogin({ clientId: settings.clientId, container: $("register-google-login"), onCredential: login, onError: (message) => $("register-status").textContent = message });
+    else $("register-status").textContent = "Login super admin belum tersedia.";
+  }).catch((error) => $("register-status").textContent = error.message);
+  $("register-email").addEventListener("input", invalidate);
+}
 $("shorten")?.remove();
 $("short-status")?.remove();
 $("share").rows = 1;
@@ -2555,6 +2616,18 @@ $("profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   invalidate();
   const current = ++resultSequence;
+  if (registering) {
+    if (!adminCredential || adminExpiry <= Date.now()) {
+      $("form-status").textContent = "Log masuk sebagai super admin sebelum mendaftarkan pelanggan.";
+      return;
+    }
+    const email = $("register-email").value.trim().toLowerCase();
+    if (!/^[a-z0-9](?:[a-z0-9.]{0,62}[a-z0-9])?@gmail\.com$/.test(email) || email.includes("..")) {
+      $("form-status").textContent = "Masukkan Gmail utama pelanggan @gmail.com, tanpa +alias.";
+      $("register-email").focus();
+      return;
+    }
+  }
   const profile = { v: 1 };
   for (const key of Object.keys(fieldNames)) profile[key] = $("field-" + key).value.normalize("NFC").trim();
   if (malaysiaPhone(profile.phone)) profile.phone = malaysiaPhone(profile.phone);
@@ -2575,11 +2648,14 @@ $("profile-form").addEventListener("submit", async (event) => {
     const page = await generateShortPage(profile, {
       origin: location.origin,
       signal: activeGeneration.signal,
-      shorten: (url, signal) => api("/api/shorten", { url }, signal),
+      shorten: (url, signal) => registering ? registrationAPI("register", { method: "POST", body: { url, email: $("register-email").value.trim().toLowerCase() }, signal }) : api("/api/shorten", { url }, signal),
       qr: (url) => import_qrcode.default.toDataURL(url, { width: 1024, margin: 4, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } })
     });
     if (current !== resultSequence) return;
     showShareURL(page.url, page.png);
+    $("manage-registration").href = "/admin.html?page=" + new URL(page.url).searchParams.get("s");
+    $("manage-registration").hidden = false;
+    if (registering) $("result").querySelector(".notice").textContent = "Pendaftaran Gmail selesai. Pelanggan boleh login di tap.imai.my/edit untuk menyunting halaman ini. URL pendek dan QR kekal sama selepas suntingan.";
     $("result").hidden = false;
     $("form-status").textContent = "URL pendek dan QR anda sedia.";
     $("result").scrollIntoView({ behavior: "smooth", block: "start" });
