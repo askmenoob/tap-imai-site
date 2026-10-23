@@ -1,7 +1,9 @@
 import QRCode from 'qrcode';
 import {malaysiaPhone,whatsappFromPhone} from '../import-service/contacts.mjs';
+import {googleLogin} from './google-login.mjs';
 
 const $=id=>document.getElementById(id);
+const customer=document.body.dataset.role==='user',base=customer?'/api/user':'/api/admin';
 const endpoint=location.hostname==='127.0.0.1'?location.origin:window.SMARTTAP_IMPORT_CONFIG?.endpoint;
 const fields={name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web'};
 let credential='',records=[],cursor=null,selected=null,expiryTimer,session=0,busy=false,saving=false;
@@ -9,6 +11,8 @@ function logout(message='Anda telah log keluar.'){
   credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
   $('dashboard').hidden=true;$('editor').hidden=true;$('login-panel').hidden=false;$('records').replaceChildren();
   for(const field of Object.keys(fields))$('field-'+field).value='';
+  if($('owner-email'))$('owner-email').value='';
+  $('share').value='';$('qr').removeAttribute('src');$('download').removeAttribute('href');$('open').removeAttribute('href');
   $('login-status').textContent=message;window.google?.accounts?.id?.disableAutoSelect();
 }
 async function api(path,{method='GET',body,authenticated=true}={}){
@@ -26,27 +30,31 @@ function render(){
     const row=document.createElement('article');row.className='record';const info=document.createElement('div');info.className='record-info';
     const title=document.createElement('h3');title.textContent=item.profile.name;
     const link=document.createElement('a');link.href=item.url;link.textContent=item.url;link.target='_blank';link.rel='noopener noreferrer';
-    const meta=document.createElement('p');meta.textContent='Dicipta '+date(item.createdAt)+' · Dikemas kini '+date(item.updatedAt);
+    const meta=document.createElement('p');meta.textContent='Dicipta '+date(item.createdAt)+' · Dikemas kini '+date(item.updatedAt)+(!customer?' · '+(item.ownerEmail||'Gmail pemilik belum didaftarkan'):'');
     const button=document.createElement('button');button.type='button';button.textContent='Urus halaman';button.setAttribute('aria-label','Urus '+item.profile.name);button.addEventListener('click',()=>edit(item));
     info.append(title,link,meta);row.append(info,button);$('records').append(row);
   }
   $('list-status').textContent=records.length+' halaman dimuatkan'+(query?' · '+shown.length+' padanan':'')+'.';
-  if(!shown.length){const empty=document.createElement('p');empty.textContent=query?'Tiada padanan dalam senarai yang dimuatkan.':'Belum ada pautan dijana.';$('records').append(empty);}
+  if(!shown.length){const empty=document.createElement('p');empty.textContent=query?'Tiada padanan dalam senarai yang dimuatkan.':customer?'Tiada halaman didaftarkan untuk Gmail ini. Hubungi super admin untuk mendaftarkan Gmail yang betul.':'Belum ada pautan dijana.';$('records').append(empty);}
   $('more').hidden=!cursor;$('list-hint').textContent=cursor?'Ada rekod lain. Tekan Muatkan lagi untuk melihat dan mencari dalam rekod berikutnya.':'Semua rekod telah dimuatkan.';
 }
 async function load(reset=false){
   if(busy||saving)return;busy=true;const current=session;$('refresh').disabled=true;$('more').disabled=true;$('list-status').textContent='Memuatkan rekod…';
   try{
-    const page=await api('/api/admin/links'+(!reset&&cursor?'?cursor='+encodeURIComponent(cursor):''));if(current!==session)return;
+    const page=await api(base+'/links'+(!reset&&cursor?'?cursor='+encodeURIComponent(cursor):''));if(current!==session)return;
     records=reset?page.items:[...records,...page.items.filter(item=>!records.some(old=>old.id===item.id))];cursor=page.cursor;render();
-    if(reset){selected=null;$('editor').hidden=true;}
+    if(reset){selected=null;$('editor').hidden=true;
+      const focus=new URLSearchParams(location.search).get(customer?'s':'page');
+      if(focus&&/^[A-Za-z0-9_-]{16}$/.test(focus)){const item=await api(base+'/links/'+focus);if(current===session)await edit(item);}
+      else if(customer&&records.length===1&&!cursor)await edit(records[0]);
+    }
   }catch(error){$('list-status').textContent=error.message;}
   finally{busy=false;$('refresh').disabled=false;$('more').disabled=false;}
 }
 async function login(token){
   credential=token;const current=++session;$('login-status').textContent='Mengesahkan akaun Google…';
   try{
-    const actor=await api('/api/admin/self');if(current!==session)return;
+    const actor=await api(base+'/self');if(current!==session)return;
     clearTimeout(expiryTimer);expiryTimer=setTimeout(()=>logout('Sesi tamat. Log masuk semula.'),Math.max(0,actor.expiresAt-Date.now()));
     $('identity').textContent=actor.email;$('login-panel').hidden=true;$('dashboard').hidden=false;await load(true);
   }catch(error){credential='';$('login-status').textContent=error.message;}
@@ -55,6 +63,7 @@ async function edit(item){
   if(saving)return;
   selected=item;$('edit-title').textContent=item.profile.name;$('share').value=item.url;$('open').href=item.url;$('copy-status').textContent='';$('save-status').textContent='';
   for(const field of Object.keys(fields))$('field-'+field).value=item.profile[field]||'';
+  if($('owner-email')){$('owner-email').value=item.ownerEmail||'';$('owner-status').textContent=item.ownerEmail?'Pemilik boleh login di tap.imai.my/edit dengan Gmail ini.':'Daftarkan Gmail supaya pelanggan boleh menyunting halaman ini.';}
   $('editor').hidden=false;$('download').removeAttribute('href');$('qr').removeAttribute('src');
   try{const png=await QRCode.toDataURL(item.url,{width:1024,margin:4,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}});if(selected?.id===item.id){$('qr').src=png;$('download').href=png;}}
   catch{$('copy-status').textContent='QR belum dapat disediakan. URL pelanggan masih sama.';}
@@ -72,28 +81,37 @@ $('edit-form').addEventListener('submit',async event=>{
   event.preventDefault();if(!selected)return;const item=selected,current=session;const profile={v:1};
   for(const key of Object.keys(fields))profile[key]=$('field-'+key).value.normalize('NFC').trim();
   if(malaysiaPhone(profile.phone))profile.phone=malaysiaPhone(profile.phone);
-  saving=true;$('save').disabled=true;$('cancel').disabled=true;$('refresh').disabled=true;$('more').disabled=true;
+  saving=true;$('save').disabled=true;$('cancel').disabled=true;$('refresh').disabled=true;$('more').disabled=true;if($('save-owner'))$('save-owner').disabled=true;
   for(const field of Object.keys(fields))$('field-'+field).disabled=true;
   $('save-status').textContent='Menyimpan pada URL yang sama…';
   try{
-    const updated=await api('/api/admin/links/'+item.id,{method:'PUT',body:{profile,revision:item.revision}});if(current!==session)return;
+    const updated=await api(base+'/links/'+item.id,{method:'PUT',body:{profile,revision:item.revision}});if(current!==session)return;
     records=records.map(record=>record.id===updated.id?updated:record);selected=updated;render();$('edit-title').textContent=updated.profile.name;
     for(const key of Object.keys(fields))$('field-'+key).value=updated.profile[key]||'';
     $('save-status').textContent='Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.';
   }catch(error){$('save-status').textContent=error.message+(error.status===409?' Salin perubahan anda sebelum memuat semula senarai.':'');}
-  finally{saving=false;$('save').disabled=false;$('cancel').disabled=false;$('refresh').disabled=false;$('more').disabled=false;for(const field of Object.keys(fields))$('field-'+field).disabled=false;}
+  finally{saving=false;$('save').disabled=false;$('cancel').disabled=false;$('refresh').disabled=false;$('more').disabled=false;if($('save-owner'))$('save-owner').disabled=false;for(const field of Object.keys(fields))$('field-'+field).disabled=false;}
+});
+$('owner-form')?.addEventListener('submit',async event=>{
+  event.preventDefault();if(!selected||saving)return;const item=selected,current=session;const email=$('owner-email').value.trim().toLowerCase();
+  saving=true;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])$(id).disabled=true;
+  $('owner-status').textContent='Mendaftarkan Gmail pemilik…';
+  try{const updated=await api(base+'/links/'+item.id+'/owner',{method:'PUT',body:{email,revision:item.revision}});if(current!==session)return;
+    selected=updated;records=records.map(record=>record.id===updated.id?updated:record);render();$('owner-email').value=updated.ownerEmail;
+    $('owner-status').textContent='Gmail didaftarkan. Pemilik boleh login di tap.imai.my/edit. URL dan QR kekal sama.';
+  }catch(error){$('owner-status').textContent=error.message;}
+  finally{saving=false;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])$(id).disabled=false;}
 });
 $('filter').addEventListener('input',render);$('refresh').addEventListener('click',()=>load(true));$('more').addEventListener('click',()=>load());
 $('cancel').addEventListener('click',()=>{selected=null;$('editor').hidden=true;});$('logout').addEventListener('click',()=>logout());
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('share').value);$('copy-status').textContent='Pautan disalin.';}catch{$('share').focus();$('share').select();$('copy-status').textContent='Pilih dan salin pautan secara manual.';}});
 try{
-  const config=await api('/api/admin/config',{authenticated:false});
+  const config=await api(base+'/config',{authenticated:false});
   if(config.demo&&location.hostname==='127.0.0.1'){
     $('demo').hidden=false;$('demo-login').hidden=false;$('login-status').textContent='Demo hanya pada komputer ini.';$('demo-login').addEventListener('click',()=>login('localhost-demo'));
   }else if(!config.configured||!config.clientId){$('login-status').textContent='Login Google belum diaktifkan oleh pemilik SmartTap. Rekod kekal dilindungi.';}
   else{
-    const script=document.createElement('script');script.src='https://accounts.google.com/gsi/client';script.async=true;
-    script.onload=()=>{window.google.accounts.id.initialize({client_id:config.clientId,callback:result=>login(result.credential),auto_select:false});window.google.accounts.id.renderButton($('google-login'),{type:'standard',theme:'outline',size:'large',text:'signin_with',shape:'rectangular'});$('login-status').textContent='Pilih akaun Google super admin untuk teruskan.';};
-    script.onerror=()=>{$('login-status').textContent='Butang Google tidak dapat dimuatkan. Semak sambungan dan muat semula.';};document.head.append(script);
+    $('login-status').textContent=customer?'Log masuk menggunakan Gmail yang didaftarkan oleh super admin.':'Pilih akaun Google super admin untuk teruskan.';
+    googleLogin({clientId:config.clientId,container:$('google-login'),onCredential:login,onError:message=>$('login-status').textContent=message,prompt:customer});
   }
 }catch(error){$('login-status').textContent=error.message;}
