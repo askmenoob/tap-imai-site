@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import {generateKeyPair,SignJWT} from 'jose';
+import {createGoogleUserAuth,ownerKey} from './identity.mjs';
+import {createGoogleAdminAuth,createAdminService} from './admin.mjs';
+import {createCustomerService} from './customers.mjs';
+import {createMemoryLinkStore,createCloudLinkStore,createShortLinks} from './short-links.mjs';
+import {createAccountRoutes} from './account-routes.mjs';
+const clientId='test.apps.googleusercontent.com',origin='https://tap.imai.my';
+const pair=await generateKeyPair('RS256');
+const token=async(email,overrides={})=>new SignJWT({email,email_verified:true,role:'admin',...overrides}).setProtectedHeader({alg:'RS256'}).setSubject(email).setAudience(clientId).setIssuer('https://accounts.google.com').setIssuedAt().setExpirationTime('5m').sign(pair.privateKey);
+const profile={v:1,name:'QA Customer',google:'https://search.google.com/local/writereview?placeid=ChIJTest123456'};
+const url=origin+'/?p='+Buffer.from(JSON.stringify(profile)).toString('base64url');
+test('HTTP signed Google identities enforce customer boundaries, role and private email',async t=>{
+  const store=createMemoryLinkStore(),customers=createCustomerService({store}),admin=createAdminService({store});
+  const reply=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
+  const body=async req=>{const chunks=[];for await(const chunk of req)chunks.push(chunk);return JSON.parse(Buffer.concat(chunks));};
+  const routes=createAccountRoutes({adminAuth:createGoogleAdminAuth({clientId,emails:['owner@gmail.com'],keySet:pair.publicKey}),userAuth:createGoogleUserAuth({clientId,keySet:pair.publicKey}),admin,customers,clientId,adminConfigured:true,reply,body});
+  const server=http.createServer(async(req,res)=>{try{await routes(req,res,{path:new URL(req.url,origin).pathname,origin:req.headers.origin===origin?origin:null});}catch(e){reply(res,e.status||500,{error:e.message});}});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>server.close());
+  const base='http://127.0.0.1:'+server.address().port;
+  const call=async(path,email,method='GET',data,requestOrigin=origin)=>{
+    const response=await fetch(base+path,{method,headers:{Origin:requestOrigin,...(email?{Authorization:'Bearer '+await token(email)}:{}),...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});return {status:response.status,data:await response.json()};
+  };
+  const alice=(await call('/api/admin/register','owner@gmail.com','POST',{url,email:'alice@gmail.com'})).data;
+  const bob=(await call('/api/admin/register','owner@gmail.com','POST',{url,email:'bob@gmail.com'})).data;
+  assert.ok(alice.id);assert.notEqual(alice.id,bob.id);
+  const list=await call('/api/user/links?email=bob@gmail.com&role=admin','alice@gmail.com');assert.equal(list.status,200);assert.deepEqual(list.data.items.map(x=>x.id),[alice.id]);assert.equal('ownerEmail' in list.data.items[0],false);
+  assert.equal((await call('/api/user/links/'+bob.id,'alice@gmail.com')).status,404);
+  assert.equal((await call('/api/user/links/'+bob.id,'alice@gmail.com','PUT',{profile,revision:bob.revision})).status,404);
+  assert.equal((await call('/api/user/links/'+alice.id+'/owner','alice@gmail.com','PUT',{email:'bob@gmail.com',revision:alice.revision})).status,403);
+  assert.equal((await call('/api/admin/links','alice@gmail.com')).status,403);
+  assert.equal((await call('/api/user/links','outsider@gmail.com')).data.items.length,0);
+  assert.equal((await call('/api/user/links',null)).status,401);
+  assert.equal((await call('/api/user/links','alice@gmail.com','GET',null,'https://evil.test')).status,403);
+  const saved=await call('/api/user/links/'+alice.id,'alice@gmail.com','PUT',{profile:{...profile,name:'Alice Edited'},revision:alice.revision});assert.equal(saved.status,200);assert.equal(saved.data.url,alice.url);
+  assert.equal((await call('/api/user/links/'+alice.id,'alice@gmail.com','PUT',{profile,revision:alice.revision})).status,409);
+  const publicLink=await createShortLinks({store,secret:'s'.repeat(32)}).resolve(alice.id);assert.equal(Object.keys(publicLink).join(),'url');assert.ok(!JSON.stringify(publicLink).includes('alice@gmail.com'));
+});
+test('customer verifier rejects non Gmail, unverified identities and client mismatch; ignores token roles',async()=>{
+  const verify=createGoogleUserAuth({clientId,keySet:pair.publicKey});
+  assert.equal((await verify('Bearer '+await token('alice@gmail.com'))).role,'user');
+  for(const [email,overrides] of [['alice@example.com',{}],['alice@gmail.com',{email_verified:false}],['alice+tag@gmail.com',{}]])await assert.rejects(verify('Bearer '+await token(email,overrides)),e=>e.status===403);
+  await assert.rejects(createGoogleUserAuth({clientId:'wrong',keySet:pair.publicKey})('Bearer '+await token('alice@gmail.com')),e=>e.status===401);
+});
+test('Cloud membership uses private hashed prefix, bounded pagination and create only writes',async()=>{
+  const calls=[],key=ownerKey('a.lice@gmail.com');
+  const store=createCloudLinkStore({bucket:'test-bucket',getToken:async()=> 'test-token',fetcher:async(url,options)=>{calls.push({url:new URL(url),options});return new Response(JSON.stringify(options.method==='POST'?{}:{items:[{name:'owners/'+key+'/abcdefghijklmnop.json'},{name:'owners/other/xxxxxxxxxxxxxxxx.json'}],nextPageToken:'next'}),{status:200});}});
+  await store.grantOwner(key,'abcdefghijklmnop');const write=calls[0];assert.equal(write.url.searchParams.get('ifGenerationMatch'),'0');assert.ok(!write.url.href.includes('gmail'));assert.equal(write.url.searchParams.get('name'),'owners/'+key+'/abcdefghijklmnop.json');
+  assert.deepEqual(await store.listOwner(key,'cursor'),{ids:['abcdefghijklmnop'],cursor:'next'});const read=calls[1].url;assert.equal(read.searchParams.get('maxResults'),'25');assert.equal(read.searchParams.get('prefix'),'owners/'+key+'/');assert.equal(read.searchParams.get('pageToken'),'cursor');
+});
