@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#fffaf4"><meta name="referrer" content="no-referrer">
+  <title>Cari perniagaan — SmartTap</title>
+  <meta name="description" content="Cari perniagaan, semak maklumat automatik dan cipta halaman SmartTap anda.">
+  <link rel="stylesheet" href="business-import.css">
+  <script src="import-config.js"></script><script type="module" src="business-import.js"></script>
+</head>
+<body>
+  <header><a class="brand" href="./">◈ SMART<span>TAP</span></a><a href="./">Borang manual ↗</a></header>
+  <main>
+    <section class="intro"><p class="eyebrow">1 CARI · 2 SEMAK · 3 KONGSI</p><h1>Nama perniagaan anda.<br><em>Maklumatnya kami bantu cari.</em></h1><p>Cari lokasi yang betul. Semak logo, penerangan dan pautan yang ditemui sebelum menjana halaman anda.</p></section>
+    <p id="demo" class="notice" hidden>MOD DEMO TEMPATAN — semua hasil di sini ialah data contoh, bukan carian Google sebenar.</p>
+    <section class="panel" aria-labelledby="search-heading">
+      <h2 id="search-heading">Cari perniagaan</h2>
+      <form id="search-form"><label for="query">Nama perniagaan <span class="optional">Tambahkan bandar jika perlu</span></label><div class="search-row"><input id="query" name="query" placeholder="Contoh: Loffee Coffee Shah Alam" minlength="2" maxlength="160" required autocomplete="organization"><button id="search-button">Cari perniagaan ↗</button></div></form>
+      <p id="search-status" role="status" aria-live="polite"></p><div id="choices"></div>
+      <div id="google-attribution" hidden><span class="gmp" translate="no">Google Maps</span><div id="third-party-attribution"></div></div>
+      <p class="help">Logo dan sosial diambil daripada laman rasmi apabila tersedia. Maklumat yang tidak ditemui atau mempunyai beberapa padanan memerlukan semakan anda.</p>
+    </section>
+    <section id="editor" class="panel" aria-labelledby="edit-heading" hidden>
+      <p class="eyebrow">SEMAK SEBELUM KONGSI</p><h2 id="edit-heading">Maklumat perniagaan</h2>
+      <div id="warnings" class="notice"></div>
+      <form id="profile-form" novalidate>
+        <div class="logo-preview"><img id="logo-preview" alt="Pratonton logo perniagaan" referrerpolicy="no-referrer" hidden><span id="logo-fallback">◈</span><p>Gunakan logo yang tepat untuk perniagaan anda.</p></div>
+        <div id="fields"></div>
+        <button id="generate">Jana halaman & QR ↗</button><p id="form-status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <section id="result" class="panel" hidden><p class="eyebrow">SEDIA DIKONGSI</p><h2>Pautan SmartTap anda</h2><img id="qr" alt="Kod QR halaman SmartTap"><label for="share">Pautan halaman</label><textarea id="share" readonly rows="3"></textarea><div class="actions"><button id="copy">Salin pautan</button><a id="open" class="button secondary" target="_blank" rel="noopener noreferrer">Buka halaman ↗</a><a id="download" class="button secondary" download="smarttap-qr.png">Muat turun QR PNG</a></div><p class="notice">Versi ini menggunakan pautan statik. Suntingan menghasilkan pautan baharu. QR yang telah dicetak dan NFC yang telah ditulis perlu dikemas kini.</p><p id="copy-status" role="status"></p></section>
+    <footer><a href="./">◈ SMARTTAP</a><span><a href="./privacy.html">Privasi</a> · <a href="./terms.html">Maklumat penggunaan</a></span></footer>
+  </main>
+</body></html>
