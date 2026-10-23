@@ -53,6 +53,7 @@ export function createShortLinks({store,secret,origin='https://tap.imai.my',now=
 export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
   if(!/^[a-z0-9][a-z0-9.-]{2,62}$/.test(bucket||'')) throw new Error('Invalid short link bucket.');
   const object=id=>'links/'+id+'.json';
+  function ownerPrefix(key){if(!/^[A-Za-z0-9_-]{43}$/.test(key||''))throw new Error('Invalid owner key.');return 'owners/'+key+'/';}
   const base='https://storage.googleapis.com/storage/v1/b/'+bucket+'/o/';
   async function request(url,options={}) {
     const response=await fetcher(url,{...options,headers:{Authorization:'Bearer '+await getToken(),...options.headers},signal:AbortSignal.timeout(10000)});
@@ -106,5 +107,31 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
     },
     archive:(id,revision,record)=>write('history/'+id+'/'+revision+'.json',record),
     update:(id,record,revision)=>write(object(id),record,revision),
+    grantOwner:(key,id)=>{
+      if(!/^[A-Za-z0-9_-]{16}$/.test(id||''))throw new Error('Invalid link ID.');
+      return write(ownerPrefix(key)+id+'.json',{v:1,id});
+    },
+    async listOwner(key,cursor){
+      const prefix=ownerPrefix(key);const url=new URL(base);url.searchParams.set('prefix',prefix);url.searchParams.set('maxResults','25');url.searchParams.set('fields','items(name),nextPageToken');
+      if(cursor)url.searchParams.set('pageToken',cursor);
+      const page=await request(url);
+      return {ids:(page.items||[]).map(item=>item.name.startsWith(prefix)?item.name.slice(prefix.length):'').filter(name=>/^[A-Za-z0-9_-]{16}\.json$/.test(name)).map(name=>name.slice(0,-5)),cursor:page.nextPageToken||null};
+    },
+  };
+}
+
+// Used only by the explicitly enabled localhost preview and isolated tests.
+export function createMemoryLinkStore(){
+  const records=new Map(),history=new Map(),memberships=new Map();let generation=0;
+  const clone=value=>structuredClone(value);
+  return {records,history,memberships,
+    create:async(id,record)=>{if(records.has(id))return false;records.set(id,{record:clone(record),revision:String(++generation)});return true;},
+    get:async id=>clone(records.get(id)?.record||null),
+    getVersion:async id=>clone(records.get(id)||null),
+    list:async cursor=>{const offset=Number(cursor||0),all=[...records].map(([id,item])=>({id,...clone(item)}));return {items:all.slice(offset,offset+25),cursor:all.length>offset+25?String(offset+25):null};},
+    archive:async(id,revision,record)=>{const key=id+'/'+revision;if(history.has(key))return false;history.set(key,clone(record));return true;},
+    update:async(id,record,revision)=>{if(records.get(id)?.revision!==revision)return false;records.set(id,{record:clone(record),revision:String(++generation)});return true;},
+    grantOwner:async(key,id)=>{if(!memberships.has(key))memberships.set(key,new Set());memberships.get(key).add(id);return true;},
+    listOwner:async(key,cursor)=>{const offset=Number(cursor||0),all=[...(memberships.get(key)||[])];return {ids:all.slice(offset,offset+25),cursor:all.length>offset+25?String(offset+25):null};},
   };
 }
