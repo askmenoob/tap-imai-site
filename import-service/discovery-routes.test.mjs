@@ -4,10 +4,17 @@ import http from 'node:http';
 import {generateKeyPair,SignJWT} from 'jose';
 import {createGoogleAdminAuth} from './admin.mjs';
 import {createImportService} from './service.mjs';
-import {createDiscoveryRoutes} from './discovery-routes.mjs';
+import {createDiscoveryRoutes,publicDiscovery} from './discovery-routes.mjs';
 import {createShortLinks,createMemoryLinkStore} from './short-links.mjs';
 const id='ChIJPrivateSearch123456',origin='https://tap.imai.my',secret='s'.repeat(32);
 function fixture(now){let calls=0;const google={suggest:async()=>[{id,name:'Test Business',address:'Shah Alam'}],search:async()=>[{id,name:'Test Business',address:'Shah Alam'}],details:async value=>{calls++;return {id:value,name:'Test Business',phone:'0122258950'};}};return {service:createImportService({google,secret,now}),calls:()=>calls};}
+
+test('public results preserve Google Search attribution while removing review identifiers from any field',()=>{
+  const html='<a href="https://www.google.com/search?q=Test+Business">Test Business</a>';
+  const result=publicDiscovery({profile:{name:'Test Business',google:'https://search.google.com/local/writereview?placeid='+id},sources:{google:'Google Place ID: '+id},searchSuggestionsHtml:html});
+  assert.equal(result.searchSuggestionsHtml,html);assert.equal(result.profile.google,undefined);
+  assert.equal(publicDiscovery({profile:{google:'https://search.google.com/local/writereview?placeid='+id},searchSuggestionsHtml:'<a href="https://maps.google.com/?placeid='+id+'">Review</a>'}).searchSuggestionsHtml,undefined);
+});
 
 test('encrypted discovery grants resist decoding, tampering, expiry and cross-purpose reuse',async()=>{
   let now=100000;const {service,calls}=fixture(()=>now);
