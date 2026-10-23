@@ -2,7 +2,32 @@
 .language-picker label{margin:0!important;font-size:12px!important;font-weight:500!important}
 .language-picker select{width:auto!important;min-width:126px;max-width:170px;margin:0!important;padding:8px 28px 8px 10px!important;border:1px solid #cbd8cf!important;border-radius:10px!important;background:#fff!important;color:#153e35!important;font:600 13px/1.4 system-ui,sans-serif!important}
 body>.language-picker{max-width:1100px;margin:16px auto;padding:0 20px}
-body>header .language-picker{margin:0 0 0 auto}
+body>header .language-picker{margin:0}
 .business-page>.language-picker{width:min(100%,460px);margin:0 auto 12px;position:relative;z-index:1}
 .business-page[data-theme="dark"]>.language-picker{color:#edf4ef}
-@media(max-width:520px){.language-picker{gap:6px;flex-wrap:wrap}.language-picker label{font-size:11px!important}body>header{flex-wrap:wrap;gap:12px}body>header .language-picker{order:5;flex-basis:100%}.business-page>.language-picker{margin-bottom:10px}}
+.app-header{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:28px;row-gap:16px;padding-top:22px;padding-bottom:22px}
+.app-header>.brand{justify-self:start;white-space:nowrap;line-height:1.2}
+.app-nav{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:10px 20px;font-size:13px;line-height:1.4!important}
+.app-nav a{text-decoration:none;font-weight:550;text-underline-offset:5px}
+.app-nav a:hover{text-decoration:underline}
+.app-tools{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+.app-tools .language-picker{position:relative;flex-shrink:0}
+.app-tools .language-picker label{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.app-tools .language-picker select{min-width:122px;max-width:148px;min-height:40px;padding-top:9px!important;padding-bottom:9px!important;background:#fffdf9!important;border-color:#dce2d9!important}
+.app-tools .pwa-install{margin:0;min-height:40px;padding:9px 14px;border-radius:10px;font-size:13px}
+.search-page .intro{padding-top:44px;padding-bottom:12px}
+.search-page .intro>p:last-child{max-width:700px;margin-bottom:8px}
+.search-page [aria-labelledby="search-heading"]{margin-top:24px}
+@media(max-width:760px){
+  .app-header{grid-template-columns:minmax(0,1fr) auto;column-gap:16px;row-gap:18px;padding-top:20px;padding-bottom:20px}
+  .app-header>.brand{grid-column:1;grid-row:1}
+  .app-tools{display:contents}
+  .app-tools .language-picker{grid-column:2;grid-row:1;justify-self:end}
+  .app-tools .pwa-install{grid-column:2;grid-row:2;justify-self:end}
+  .app-header .app-nav{grid-column:1;grid-row:2;justify-content:flex-start;gap:8px 16px;font-size:12px}
+  .app-tools .language-picker select{min-width:122px;max-width:148px}
+  .search-page .intro{padding-top:32px;padding-bottom:8px}
+}
+@media(max-width:520px){.language-picker{gap:6px}.language-picker label{font-size:11px!important}.business-page>.language-picker{margin-bottom:10px}}
+
+@media(max-width:380px){.app-header>.brand{font-size:20px}.app-tools .language-picker select{min-width:132px;max-width:132px;width:132px!important;font-size:12px!important;padding-left:8px!important;padding-right:18px!important}.app-header .app-nav{gap:8px 12px}}

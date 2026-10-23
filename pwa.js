@@ -11,7 +11,7 @@
   const install = document.createElement('button');
   install.type = 'button'; install.className = 'pwa-install'; install.textContent = 'Pasang aplikasi';
   header.classList.add('pwa-header');
-  (header.querySelector('nav') || header).append(install);
+  (header.querySelector('.app-tools') || header.querySelector('nav') || header).append(install);
 
   const dialog = document.createElement('dialog');
   dialog.className = 'pwa-dialog'; dialog.setAttribute('aria-labelledby', 'pwa-heading');
