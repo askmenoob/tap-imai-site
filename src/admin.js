@@ -1,3 +1,4 @@
+import {appearanceFields} from '../import-service/appearance.mjs';
 import QRCode from 'qrcode';
 import {malaysiaPhone,whatsappFromPhone} from '../import-service/contacts.mjs';
 import {googleLogin} from './google-login.mjs';
@@ -6,15 +7,16 @@ import {createManagementUI,stateLabels} from './management-ui.mjs';
 const $=id=>document.getElementById(id);
 const customer=document.body.dataset.role==='user',base=customer?'/api/user':'/api/admin';
 const endpoint=location.hostname==='127.0.0.1'?location.origin:window.SMARTTAP_IMPORT_CONFIG?.endpoint;
-const fields={name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web'};
+const fields={name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web',...Object.fromEntries(Object.entries(appearanceFields).map(([key,spec])=>[key,spec.label]))};
 let credential='',records=[],cursor=null,selected=null,expiryTimer,session=0,busy=false,saving=false;
 function lockControls(value){
   saving=value;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])if($(id))$(id).disabled=value||(id==='save'&&customer&&selected?.state!=='active');
   for(const field of Object.keys(fields))if($('field-'+field))$('field-'+field).disabled=value||(customer&&selected?.state!=='active');
+  for(const id of ['cover-file','remove-cover'])if($(id))$(id).disabled=value||(customer&&selected?.state!=='active');
 }
 const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
 function logout(message='Anda telah log keluar.'){
-  credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
+  coverPreview.hidden=true;coverStatus.textContent='';if(previewURL){URL.revokeObjectURL(previewURL);previewURL=null;}credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
   management.clear();
   $('dashboard').hidden=true;$('editor').hidden=true;$('login-panel').hidden=false;$('records').replaceChildren();
   for(const field of Object.keys(fields))$('field-'+field).value='';
@@ -68,9 +70,9 @@ async function login(token){
 }
 async function edit(item){
   if(saving)return;
-  selected=item;$('edit-title').textContent=item.profile.name;$('share').value=item.url;$('open').href=item.url;$('copy-status').textContent='';$('save-status').textContent='';
+  coverPreview.hidden=!item.profile.cover;if(item.profile.cover)coverPreview.src=item.profile.cover;coverStatus.textContent='';selected=item;$('edit-title').textContent=item.profile.name;$('share').value=item.url;$('open').href=item.url;$('copy-status').textContent='';$('save-status').textContent='';
   if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';
-  for(const field of Object.keys(fields))$('field-'+field).value=item.profile[field]||'';
+  for(const field of Object.keys(fields))$('field-'+field).value=item.profile[field]||(field==='theme'?'classic':field==='accent'?'#20543e':'');
   if($('owner-email')){$('owner-email').value=item.ownerEmail||'';$('owner-status').textContent=item.ownerEmail?'Pemilik boleh login di tap.imai.my/edit dengan Gmail ini.':'Daftarkan Gmail supaya pelanggan boleh menyunting halaman ini.';}
   $('editor').hidden=false;$('download').removeAttribute('href');$('qr').removeAttribute('src');
   try{const png=await QRCode.toDataURL(item.url,{width:1024,margin:4,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}});if(selected?.id===item.id){$('qr').src=png;$('download').href=png;}}
@@ -80,12 +82,38 @@ async function edit(item){
 }
 for(const [key,text] of Object.entries(fields)){
   const label=document.createElement('label');label.htmlFor='field-'+key;label.textContent=text+(['name','google'].includes(key)?' *':'');
-  const input=document.createElement('input');input.id='field-'+key;input.name=key;input.maxLength=key==='name'?80:key==='tagline'?140:key==='phone'?30:500;
+  const spec=appearanceFields[key];const input=document.createElement(spec?.options?'select':'input');input.id='field-'+key;input.name=key;input.maxLength=spec?.max|| (key==='name'?80:key==='tagline'?140:key==='phone'?30:500);
+  if(spec?.options)for(const [value,text] of Object.entries(spec.options)){const option=document.createElement('option');option.value=value;option.textContent=text;input.append(option);}
   if(['name','google'].includes(key))input.required=true;
-  if(!['name','tagline','phone'].includes(key)){input.type='url';input.placeholder='https://';}
+  if(!spec&&!['name','tagline','phone'].includes(key)){input.type='url';input.placeholder='https://';}
+  if(spec&&!spec.options){input.type=spec.type||'text';if(spec.type==='url')input.placeholder='https://';}
+  if(key==='cover'){input.readOnly=true;input.type='hidden';label.hidden=true;}
   if(key==='phone'){input.type='tel';input.addEventListener('input',()=>{const link=whatsappFromPhone(input.value);if(link)$('field-whatsapp').value=link;});}
+  if(key==='theme')input.addEventListener('change',()=>{$('field-accent').value=({classic:'#20543e',dark:'#91c8ad',bright:'#7040bb'})[input.value];});
   input.addEventListener('input',()=>{$('save-status').textContent='Ada perubahan yang belum disimpan.';});$('fields').append(label,input);
 }
+const coverLabel=document.createElement('label');coverLabel.htmlFor='cover-file';coverLabel.textContent='Muat naik cover daripada peranti';
+const coverFile=document.createElement('input');coverFile.id='cover-file';coverFile.type='file';coverFile.accept='image/jpeg,image/png,image/webp';
+const coverHelp=document.createElement('p');coverHelp.className='help';coverHelp.textContent='JPG, PNG atau WebP. Had asal 5 MB / 25 megapiksel. Pelayan mengecilkan kepada maksimum 1600 piksel dan 500 KB. Cover disimpan terus; maklumat lain gunakan butang Simpan.';
+const coverStatus=document.createElement('p');coverStatus.setAttribute('role','status');
+const coverPreview=document.createElement('img');coverPreview.className='cover-upload-preview';coverPreview.alt='Pratonton cover pilihan';coverPreview.hidden=true;
+const removeCover=document.createElement('button');removeCover.type='button';removeCover.id='remove-cover';removeCover.className='secondary';removeCover.textContent='Guna latar tema tanpa cover';removeCover.addEventListener('click',()=>{$('field-cover').value='';coverPreview.hidden=true;coverStatus.textContent='Tekan Simpan untuk membuang cover dan menggunakan latar tema.';});
+$('field-cover').after(coverLabel,coverFile,coverHelp,coverPreview,removeCover,coverStatus);
+let previewURL;
+coverFile.addEventListener('change',async()=>{
+  const file=coverFile.files[0];if(!file||!selected||saving)return;
+  if(file.size>5*1024*1024){coverStatus.textContent='Gambar melebihi 5 MB. Pilih fail lebih kecil.';coverFile.value='';return;}
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type)){coverStatus.textContent='Gunakan JPG, PNG atau WebP.';return;}
+  const item=selected,current=session;lockControls(true);coverFile.disabled=true;coverStatus.textContent='Memproses dan menyimpan cover…';
+  try{
+    const response=await fetch(new URL(base+'/links/'+item.id+'/cover',endpoint),{method:'POST',headers:{Authorization:'Bearer '+credential,'Content-Type':file.type,'If-Match':item.revision},body:file,credentials:'omit',cache:'no-store'});
+    const updated=await response.json();if(!response.ok)throw new Error(updated.error||'Cover belum dapat disimpan.');if(current!==session||selected?.id!==item.id)return;
+    selected=updated;records=records.map(record=>record.id===updated.id?updated:record);render();$('field-cover').value=updated.profile.cover;
+    if(previewURL)URL.revokeObjectURL(previewURL);previewURL=URL.createObjectURL(file);coverPreview.src=previewURL;coverPreview.hidden=false;
+    coverStatus.textContent='Cover telah disimpan. URL pendek dan QR kekal sama.';
+  }catch(error){coverStatus.textContent=error.message;}
+  finally{lockControls(false);coverFile.value='';}
+});
 $('edit-form').addEventListener('submit',async event=>{
   event.preventDefault();if(!selected)return;const item=selected,current=session;const profile={v:1};
   for(const key of Object.keys(fields))profile[key]=$('field-'+key).value.normalize('NFC').trim();
@@ -96,7 +124,7 @@ $('edit-form').addEventListener('submit',async event=>{
   try{
     const updated=await api(base+'/links/'+item.id,{method:'PUT',body:{profile,revision:item.revision}});if(current!==session)return;
     records=records.map(record=>record.id===updated.id?updated:record);selected=updated;render();$('edit-title').textContent=updated.profile.name;
-    for(const key of Object.keys(fields))$('field-'+key).value=updated.profile[key]||'';
+    for(const key of Object.keys(fields))$('field-'+key).value=updated.profile[key]||(key==='theme'?'classic':key==='accent'?'#20543e':'');
     $('save-status').textContent='Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.';
   }catch(error){$('save-status').textContent=error.message+(error.status===409?' Salin perubahan anda sebelum memuat semula senarai.':'');}
   finally{saving=false;$('save').disabled=false;$('cancel').disabled=false;$('refresh').disabled=false;$('more').disabled=false;if($('save-owner'))$('save-owner').disabled=false;for(const field of Object.keys(fields))$('field-'+field).disabled=false;}

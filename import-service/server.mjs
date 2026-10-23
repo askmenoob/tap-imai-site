@@ -1,3 +1,4 @@
+import {createCoverMedia,createCloudMediaStore,MAX_COVER_INPUT} from './cover-media.mjs';
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -36,6 +37,10 @@ const admin=linkStore?createAdminService({store:linkStore,origin:preview?'http:/
 const customers=linkStore?createCustomerService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription}):null;
 const management=linkStore?createManagementService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',enabled:paymentsEnabled,qrPayload:paymentQR}):null;
 const accountRoutes=createAccountRoutes({adminAuth,userAuth,admin,customers,management,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
+const mediaOrigin=preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app';
+const demoMedia=new Map();
+const mediaStore=demo?{put:async(name,bytes)=>demoMedia.set(name,bytes),get:async name=>demoMedia.get(name)}:process.env.SHORT_LINK_BUCKET?createCloudMediaStore({bucket:process.env.SHORT_LINK_BUCKET,getToken:runtimeToken}):null;
+const coverMedia=linkStore&&mediaStore?createCoverMedia({store:linkStore,mediaStore,mediaOrigin,origin:preview?mediaOrigin:'https://tap.imai.my'}):null;
 const demoLogo = 'https://placehold.co/160x160/173b33/ffffff.png?text=DEMO';
 const fixture = {
   suggest:async query => query.toLowerCase().includes('tiada') ? [] : [
@@ -76,6 +81,21 @@ const server = http.createServer(async (req,res) => {
   const origin = origins.has(req.headers.origin) ? req.headers.origin : null;
   try {
     if (path === '/health') return reply(res, 200, { ready:!!key, demo, shortLinks:!!shortLinks }, origin);
+    const upload=/^\/api\/(admin|user)\/links\/([A-Za-z0-9_-]{16})\/cover$/.exec(path);
+    if(upload&&req.method==='POST'){
+      if(!origin)return reply(res,403,{error:'Akses tidak dibenarkan.'});
+      const actor=demo?{email:upload[1]==='admin'?'demo@localhost':'preview.owner@gmail.com',role:upload[1]==='admin'?'admin':'user'}:await (upload[1]==='admin'?adminAuth:userAuth)(req.headers.authorization);
+      if(!coverMedia)return reply(res,503,{error:'Simpanan cover belum tersedia.'},origin);
+      if(!/^image\/(jpeg|png|webp)$/.test(req.headers['content-type']||''))return reply(res,415,{error:'Gunakan JPG, PNG atau WebP.'},origin);
+      if(Number(req.headers['content-length'])>MAX_COVER_INPUT)return reply(res,413,{error:'Had gambar ialah 5 MB.'},origin);
+      const item=await coverMedia.upload(upload[2],actor,async()=>{let length=0;const chunks=[];for await(const chunk of req){length+=chunk.length;if(length>MAX_COVER_INPUT)throw Object.assign(new Error('Had gambar ialah 5 MB.'),{status:413});chunks.push(chunk);}return Buffer.concat(chunks);},req.headers['if-match']);
+      return reply(res,200,item,origin);
+    }
+    if(path.startsWith('/api/media/')&&['GET','HEAD'].includes(req.method)){
+      if(!coverMedia)return reply(res,404,{error:'Gambar tidak ditemui.'},origin);
+      const bytes=await coverMedia.read(path.slice('/api/media/'.length));
+      res.writeHead(200,{'content-type':'image/webp','content-length':bytes.length,'cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'",...(origin?{'access-control-allow-origin':origin,vary:'Origin'}:{})});res.end(req.method==='HEAD'?undefined:bytes);return;
+    }
     if(await accountRoutes(req,res,{path,origin}))return;
     if(path.startsWith('/api/links/')&&req.method==='GET') {
       if(req.headers.origin&&!origin) return reply(res,403,{error:'Akses tidak dibenarkan.'});
@@ -88,7 +108,7 @@ const server = http.createServer(async (req,res) => {
       if (req.method !== 'POST') return reply(res, 405, { error:'Kaedah tidak dibenarkan.' }, origin);
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return reply(res, 415, { error:'Gunakan JSON.' }, origin);
       if (!allow(req.socket.remoteAddress, path === '/api/suggest')) return reply(res, 429, { error:'Had carian dicapai. Cuba sebentar lagi.' }, origin);
-      const data = await body(req,path==='/api/shorten'?8192:4096);
+      const data = await body(req,path==='/api/shorten'?24576:4096);
       if(path==='/api/shorten') {
         if(!shortLinks) return reply(res,503,{error:'Pautan pendek belum tersedia. Cuba lagi sebentar.'},origin);
         return reply(res,200,await shortLinks.shorten(data.url),origin);
@@ -103,7 +123,7 @@ const server = http.createServer(async (req,res) => {
       if(path==='/edit/')req.url='/edit/index.html';
       const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path==='/subscribe/'?'/subscribe/index.html':path).slice(1);
       const file = resolve(root, relative);
-      if (!file.startsWith(root + sep) || !/^(?:index\.html|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|manifest\.webmanifest|pwa\.(?:js|css)|sw\.js|offline\.html|business-(?:import|logo|entry|admin|subscribe)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
+      if (!file.startsWith(root + sep) || !/^(?:index\.html|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|manifest\.webmanifest|pwa\.(?:js|css)|sw\.js|offline\.html|business-(?:import|logo|entry|admin|subscribe|page)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
       const bytes = await readFile(file);
       res.writeHead(200, { 'content-type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.png':'image/png','.jpeg':'image/jpeg'})[extname(file)] || 'application/octet-stream', 'cache-control':'no-store' });
       res.end(req.method === 'HEAD' ? undefined : bytes); return;
