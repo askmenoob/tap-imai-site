@@ -1,13 +1,13 @@
 # SmartTap business import
 
-The existing GitHub Pages site is a compiled static MVP. This addition keeps that creator and its v1 public profile URLs, adds `setup.html` for business search/import, and supports an optional logo on public profiles. It adds optional first-party short URLs backed by a private Cloud Storage mapping. It does not add user accounts, analytics or editable permanent profile URLs.
+The existing GitHub Pages site is a compiled static MVP. This addition keeps that creator and its v1 public profile URLs, adds `setup.html` for business search/import, and supports an optional logo on public profiles. It adds mandatory first-party short URLs backed by a private Cloud Storage mapping. It does not add user accounts, analytics or editable permanent profile URLs.
 
 ## Data flow
 
 1. The user enters a business name and optional city. After 3 characters and a 600 ms typing pause, Google Places Autocomplete (New) suggests businesses by name/address. Arrow keys, Enter, mouse and touch can select a result; the full-search button remains available. Outdated requests are cancelled/ignored and repeated queries are cached only within the current session. A selection uses the same session token for Place Details and starts a fresh token for the next search.
 2. A private server credential calls Places Text Search (New) and Place Details (New). Only the selected Place ID is used to derive the direct review URL.
 3. The server reads the public HTTPS website listed for that business. Legacy HTTP website links are upgraded to HTTPS. It extracts Organization/LocalBusiness structured data, explicitly marked header logos, metadata descriptions and actual social profile links. It does not invent usernames or label a generic storefront photo as a logo. Multiple social accounts require a user choice.
-4. The user can edit every field. Publishing encodes the confirmed profile in a v1 URL; QR generation must succeed before output is displayed. Existing static public URLs still work. A changed profile requires a new URL/QR and NFC reprogramming.
+4. The user can edit every field. Publishing stores an internal v1 profile mapping and returns only a short URL; storage and QR generation must both succeed before output is displayed. Existing static public URLs still work. A changed profile requires a new URL/QR and NFC reprogramming.
 
 Google search results are transient and attributed. The service does not copy Google editorial summaries or photo URLs into long-lived profile URLs. Name comes from the selected Google business; an official site title does not replace the chosen branch name. Place IDs and derived review links persist in the output.
 
@@ -53,9 +53,9 @@ Social profile suggestions must match the business handle and be supported by Go
 
 Place Details also returns the selected branch phone. Malaysian formats such as `012-2258950`, `+60 12-225 8950` and `0060122258950` normalize to `60122258950`. If no explicit WhatsApp URL exists on the official site, the service generates `https://wa.me/60122258950` with a verification warning. This conversion does not check WhatsApp registration. Editing the phone updates the WhatsApp URL; the user can edit that URL separately. The public page supports Threads while preserving existing v1 profile links.
 
-## Optional short URLs
+## Short URLs only
 
-After generating a page, the user may select **Jadikan pautan pendek**. The shared URL, open-page button and downloaded QR all switch together to `https://tap.imai.my/?s=<16-character-id>`. **Gunakan pautan asal** restores the original URL and QR. The UI keeps the original usable if storage fails and ignores pending responses when the profile changes. Changing a profile creates a new destination; previously printed links are not retargeted.
+The generate button always creates `https://tap.imai.my/?s=<16-character-id>` before generating any QR. Only that URL is shown, copied, opened and encoded in the downloaded QR. There is no original-URL toggle or fallback to a dense QR if storage fails. Failed generation leaves the result hidden and lets the user retry. Changing a profile creates a new destination; previously printed links are not retargeted. The public renderer reads the stored profile without navigating to its encoded URL, so the browser address stays short. The homepage routes creators to setup.html; the manual form uses setup.html?manual=1 and the same short-only generator.
 
 `POST /api/shorten` accepts only a validated v1 SmartTap profile URL on the exact `https://tap.imai.my/` origin, with a required Google Review URL. It cannot shorten arbitrary external websites or nested short URLs. The existing creation request limits apply. `GET /api/links/<id>` returns the saved original URL to the public resolver; profile URLs and short URLs are public to anyone receiving the link. Public resolution does not consume the creator's daily request allowance.
 
@@ -63,4 +63,4 @@ Storage is `gs://cedar-kiln-502614-h5-tap-links` in `asia-southeast1`, configure
 
 IDs use a 96-bit HMAC-derived opaque value. Repeated generation of an identical original URL reuses its mapping, including simultaneous requests. A process restart or future signing-secret rotation does not invalidate saved mappings. There is no automatic expiration policy. Removing the bucket or its objects would break the corresponding short links. No storage access key is sent to the browser.
 
-The localhost demo uses an explicitly labelled in-memory mapping solely for UI verification. Production fails with a visible error and retains the original URL if durable storage has not been configured. To test resolution independently after a restart, create a production mapping, start a new Cloud Run revision, and resolve the same ID again.
+The localhost demo uses an explicitly labelled in-memory mapping solely for UI verification. Production fails with a visible error and displays no URL or QR if durable storage has not been configured. To test resolution independently after a restart, create a production mapping, start a new Cloud Run revision, and resolve the same ID again.
