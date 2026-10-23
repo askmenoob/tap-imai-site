@@ -6,7 +6,7 @@ const params=new URLSearchParams(location.search);
 function element(tag,className,text) {const node=document.createElement(tag);if(className)node.className=className;if(text)node.textContent=text;return node;}
 function status(message,error=false) {
   const box=element('p','',message);box.setAttribute('role',error?'alert':'status');box.style.cssText='margin:15vh auto;padding:24px;max-width:640px;text-align:center;font:16px/1.7 system-ui';
-  if(error){const link=element('a','','Buka SmartTap');link.href='./setup.html';link.style.display='block';box.append(link);}
+  if(error){const id=params.get('s'),owned=/^[A-Za-z0-9_-]{16}$/.test(id||'');const link=element('a','',owned?'Login pemilik halaman':'Buka SmartTap');link.href=owned?'/edit/?s='+encodeURIComponent(id):'./setup.html';link.style.display='block';box.append(link);}
   root.replaceChildren(box);
 }
 function render(profile) {
