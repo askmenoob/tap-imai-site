@@ -4,3 +4,4 @@ node_modules/
 !.env.example
 work/
 dist/
+assets/duitnow-original.jpeg
