@@ -1,5 +1,5 @@
 // All identities come from the server's Google verifiers, never request fields.
-export function createAccountRoutes({adminAuth,userAuth,admin,customers,clientId,adminConfigured,demo=false,reply,body}){
+export function createAccountRoutes({adminAuth,userAuth,admin,customers,management,clientId,adminConfigured,demo=false,reply,body}){
   return async(req,res,{path,origin})=>{
     const customer=path.startsWith('/api/user/');
     if(!customer&&!path.startsWith('/api/admin/'))return false;
@@ -12,7 +12,18 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,clientId
     const actor=demo?{sub:'localhost-demo-only',email:customer?'preview.owner@gmail.com':'demo@localhost',role:customer?'user':'admin',expiresAt:Date.now()+3600000}:await (customer?userAuth:adminAuth)(req.headers.authorization);
     if(!admin||!customers){reply(res,503,{error:'Simpanan pautan belum tersedia.'},origin);return true;}
     if(path===base+'/self'&&req.method==='GET'){reply(res,200,actor,origin);return true;}
+    if(path===base+'/plan'&&req.method==='GET'&&management){reply(res,200,management.config(),origin);return true;}
     const query=new URL(req.url,'http://localhost').searchParams;
+    const operation=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/(state|quote|renewal|decision)$').exec(path);
+    if(operation&&management){
+      const [,id,action]=operation;
+      if(customer&&['state','decision'].includes(action)){reply(res,403,{error:'Hanya super admin boleh mengurus status dan mengesahkan bayaran.'},origin);return true;}
+      if(req.method==='POST'){
+        if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){reply(res,415,{error:'Gunakan JSON.'},origin);return true;}
+        const data=await body(req,4096);const result=action==='state'?await management.state(id,data,actor):action==='quote'?await management.quote(id,data,actor):action==='renewal'?await management.request(id,data,actor):await management.decide(id,data,actor);
+        reply(res,200,result,origin);return true;
+      }
+    }
     if(path===base+'/links'&&req.method==='GET'){
       reply(res,200,customer?await customers.list(actor,query.get('cursor')):await admin.list(query.get('cursor')),origin);return true;
     }
