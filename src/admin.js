@@ -1,14 +1,21 @@
 import QRCode from 'qrcode';
 import {malaysiaPhone,whatsappFromPhone} from '../import-service/contacts.mjs';
 import {googleLogin} from './google-login.mjs';
+import {createManagementUI,stateLabels} from './management-ui.mjs';
 
 const $=id=>document.getElementById(id);
 const customer=document.body.dataset.role==='user',base=customer?'/api/user':'/api/admin';
 const endpoint=location.hostname==='127.0.0.1'?location.origin:window.SMARTTAP_IMPORT_CONFIG?.endpoint;
 const fields={name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web'};
 let credential='',records=[],cursor=null,selected=null,expiryTimer,session=0,busy=false,saving=false;
+function lockControls(value){
+  saving=value;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])if($(id))$(id).disabled=value||(id==='save'&&customer&&selected?.state!=='active');
+  for(const field of Object.keys(fields))if($('field-'+field))$('field-'+field).disabled=value||(customer&&selected?.state!=='active');
+}
+const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();$('edit-title').textContent=item.profile.name;}});
 function logout(message='Anda telah log keluar.'){
   credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
+  management.clear();
   $('dashboard').hidden=true;$('editor').hidden=true;$('login-panel').hidden=false;$('records').replaceChildren();
   for(const field of Object.keys(fields))$('field-'+field).value='';
   if($('owner-email'))$('owner-email').value='';
@@ -30,7 +37,7 @@ function render(){
     const row=document.createElement('article');row.className='record';const info=document.createElement('div');info.className='record-info';
     const title=document.createElement('h3');title.textContent=item.profile.name;
     const link=document.createElement('a');link.href=item.url;link.textContent=item.url;link.target='_blank';link.rel='noopener noreferrer';
-    const meta=document.createElement('p');meta.textContent='Dicipta '+date(item.createdAt)+' · Dikemas kini '+date(item.updatedAt)+(!customer?' · '+(item.ownerEmail||'Gmail pemilik belum didaftarkan'):'');
+    const meta=document.createElement('p');meta.textContent=(stateLabels[item.state]||'Aktif')+(item.renewal?.status==='pending'?' · Bayaran menunggu semakan':'')+' · Dicipta '+date(item.createdAt)+' · Dikemas kini '+date(item.updatedAt)+(!customer?' · '+(item.ownerEmail||'Gmail pemilik belum didaftarkan'):'');
     const button=document.createElement('button');button.type='button';button.textContent='Urus halaman';button.setAttribute('aria-label','Urus '+item.profile.name);button.addEventListener('click',()=>edit(item));
     info.append(title,link,meta);row.append(info,button);$('records').append(row);
   }
@@ -68,6 +75,7 @@ async function edit(item){
   try{const png=await QRCode.toDataURL(item.url,{width:1024,margin:4,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}});if(selected?.id===item.id){$('qr').src=png;$('download').href=png;}}
   catch{$('copy-status').textContent='QR belum dapat disediakan. URL pelanggan masih sama.';}
   $('editor').scrollIntoView({behavior:'smooth',block:'start'});
+  lockControls(false);await management.show(item);
 }
 for(const [key,text] of Object.entries(fields)){
   const label=document.createElement('label');label.htmlFor='field-'+key;label.textContent=text+(['name','google'].includes(key)?' *':'');
