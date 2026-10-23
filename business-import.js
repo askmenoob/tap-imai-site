@@ -2359,14 +2359,8 @@ $("logo-preview").onerror = () => {
   $("logo-preview").hidden = true;
   $("logo-fallback").hidden = false;
 };
-if (new URLSearchParams(location.search).get("manual") === "1") {
-  $("editor").hidden = false;
-  $("warnings").hidden = true;
-  $("field-name").focus({ preventScroll: true });
-  $("editor").scrollIntoView({ block: "start" });
-}
 async function api(path, body, signal) {
-  if (!endpoint) throw new Error("Carian automatik belum diaktifkan. Gunakan borang manual sementara pentadbir melengkapkan sambungan.");
+  if (!endpoint) throw new Error("Carian automatik belum tersedia. Cuba lagi kemudian atau hubungi pentadbir.");
   const base = new URL(endpoint);
   if (base.protocol !== "https:" && !(base.protocol === "http:" && base.hostname === "127.0.0.1")) throw new Error("Sambungan carian tidak sah.");
   const response = await fetch(new URL(path, base), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
