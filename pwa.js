@@ -4,7 +4,7 @@
       .catch(error => console.warn('SmartTap offline fallback unavailable:', error.message));
   }
   const standalone = matchMedia('(display-mode: standalone)');
-  const header = document.querySelector('header');
+  const header = document.querySelector('body > header');
   if (!header || standalone.matches || navigator.standalone) return;
 
   let pendingInstall;

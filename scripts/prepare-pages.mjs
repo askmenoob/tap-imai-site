@@ -9,7 +9,7 @@ const output = join(root, 'dist');
 const publicFiles = [
   'index.html', 'setup.html', 'admin.html', 'privacy.html', 'terms.html',
   'import-config.js', 'subscribe.css', 'subscribe/index.html', 'edit/index.html',
-  'business-admin.js', 'business-entry.js', 'business-import.js',
+  'business-admin.js', 'business-entry.js', 'business-import.js', 'business-page.css',
   'business-subscribe.js', 'business-admin.css', 'business-import.css',
   'assets/index-CjwyeWEp.js', 'assets/index-vlpK9gB_.css',
   'assets/duitnow-original.jpeg',

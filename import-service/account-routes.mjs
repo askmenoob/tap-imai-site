@@ -5,7 +5,7 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
     if(!customer&&!path.startsWith('/api/admin/'))return false;
     if((req.headers.origin&&!origin)||(!origin&&!['GET','HEAD'].includes(req.method))){reply(res,403,{error:'Akses tidak dibenarkan.'});return true;}
     if(req.method==='OPTIONS'){
-      res.writeHead(204,{'access-control-allow-origin':origin,'access-control-allow-methods':'GET, PUT, POST','access-control-allow-headers':'Content-Type, Authorization',vary:'Origin'});res.end();return true;
+      res.writeHead(204,{'access-control-allow-origin':origin,'access-control-allow-methods':'GET, PUT, POST','access-control-allow-headers':'Content-Type, Authorization, If-Match',vary:'Origin'});res.end();return true;
     }
     const base=customer?'/api/user':'/api/admin';
     if(path===base+'/config'&&req.method==='GET'){reply(res,200,{clientId,configured:customer?!!clientId:adminConfigured,...(demo?{demo:true}:{})},origin);return true;}

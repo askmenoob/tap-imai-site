@@ -1,8 +1,162 @@
+// import-service/appearance.mjs
+var appearanceFields = {
+  theme: { label: "Tema halaman", options: { classic: "Klasik \xB7 krim & hijau", dark: "Gelap \xB7 arang & putih", bright: "Ceria \xB7 putih & warna jenama" } },
+  accent: { label: "Warna utama", type: "color" },
+  cover: { label: "Cover tersimpan", type: "url", max: 500 },
+  menu: { label: "Pautan menu / katalog", type: "url", max: 500 },
+  directions: { label: "Pautan lokasi Google Maps", type: "url", max: 500 },
+  address: { label: "Alamat perniagaan", max: 240 },
+  hours: { label: "Waktu operasi", max: 240 },
+  promoTitle: { label: "Tajuk promosi", max: 70 },
+  promoText: { label: "Penerangan promosi", max: 180 },
+  promoURL: { label: "Pautan promosi", type: "url", max: 500 },
+  promoStart: { label: "Promosi bermula (waktu Malaysia)", type: "datetime-local" },
+  promoEnd: { label: "Promosi tamat (waktu Malaysia)", type: "datetime-local" }
+};
+function promotionVisible(profile, now = Date.now()) {
+  if (!profile.promoTitle) return false;
+  const start = profile.promoStart ? Date.parse(profile.promoStart + "+08:00") : -Infinity;
+  const end = profile.promoEnd ? Date.parse(profile.promoEnd + "+08:00") : Infinity;
+  return now >= start && now < end;
+}
+function validateAppearance(profile) {
+  for (const [key, spec] of Object.entries(appearanceFields)) {
+    const value = profile[key];
+    if (value === void 0 || value === "") continue;
+    if (typeof value !== "string" || value.length > (spec.max || 40)) throw new Error("Medan paparan tidak sah: " + spec.label);
+    if (spec.options && !Object.hasOwn(spec.options, value)) throw new Error("Tema tidak sah.");
+    if (key === "accent" && !/^#[a-fA-F0-9]{6}$/.test(value)) throw new Error("Warna tidak sah.");
+    if (spec.type === "datetime-local" && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) || !Number.isFinite(Date.parse(value + "+08:00")) || new Date(Date.parse(value + "+08:00") + 8 * 36e5).toISOString().slice(0, 16) !== value)) throw new Error("Tarikh promosi tidak sah.");
+  }
+  if (profile.promoStart && profile.promoEnd && profile.promoEnd <= profile.promoStart) throw new Error("Tarikh tamat mesti selepas tarikh mula.");
+}
+
+// import-service/contacts.mjs
+function threadsProfile(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && ["threads.net", "www.threads.net", "threads.com", "www.threads.com"].includes(url.hostname) && /^\/@[\w.]+\/?$/.test(url.pathname) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+// src/public-card.mjs
+var paths = { star: "m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z", arrow: "M7 17 17 7M7 7h10v10", menu: "M6 3h12v18H6zM9 8h6M9 12h6M9 16h4", pin: "M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0", clock: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M12 7v5l3 2", chevron: "m6 9 6 6 6-6", website: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18", whatsapp: "M21 11.5a9 9 0 0 1-13 8L3 21l1.5-5a9 9 0 1 1 16.5-4.5ZM8 7c0 5 4 9 9 9l1-3-3-1-1 1-3-3 1-1-1-3Z", instagram: "M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0M17 7h.01", facebook: "M14 21v-8h3l1-4h-4V7c0-1 1-2 2-2h2V2h-3c-4 0-5 2-5 5v2H7v4h3v8", tiktok: "M14 3v12a4 4 0 1 1-4-4M14 3c1 4 3 5 7 5", threads: "M18 7C16 1 5 2 4 11c-1 11 16 14 17 4 1-7-13-8-12-1 1 5 9 3 8-3 0-4-3-5-6-4" };
+function renderCard(document2, profile, now = Date.now()) {
+  const el = (tag, cls, text) => {
+    const node = document2.createElement(tag);
+    if (cls) node.className = cls;
+    if (text) node.textContent = text;
+    return node;
+  };
+  const icon = (name) => {
+    const svg = document2.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", name === "star" ? "currentColor" : "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document2.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute("d", paths[name] || paths.arrow);
+    svg.append(path);
+    return svg;
+  };
+  const link = (url, text, cls, mark) => {
+    const a = el("a", cls);
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    if (mark) a.append(icon(mark));
+    a.append(el("span", "", text));
+    return a;
+  };
+  const main = el("main", "business-page");
+  main.dataset.theme = profile.theme || "classic";
+  if (profile.accent) {
+    main.style.setProperty("--accent", profile.accent);
+    const rgb = profile.accent.slice(1).match(/../g).map((x) => parseInt(x, 16) / 255).map((x) => x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+    const light = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    main.style.setProperty("--on-accent", light > 0.179 ? "#14281f" : "#ffffff");
+  }
+  const card = el("article", "business-card"), cover = el("div", "business-cover");
+  if (profile.cover) {
+    const img = el("img");
+    img.src = profile.cover;
+    img.alt = "Gambar cover " + profile.name;
+    img.referrerPolicy = "no-referrer";
+    img.fetchPriority = "high";
+    img.onerror = () => img.remove();
+    cover.append(img);
+  }
+  const content = el("div", "business-content"), avatar = el("div", "business-avatar", profile.name.trim().split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase());
+  if (profile.logo) {
+    const img = el("img");
+    img.alt = "Logo " + profile.name;
+    img.referrerPolicy = "no-referrer";
+    img.onload = () => avatar.replaceChildren(img);
+    img.src = profile.logo;
+  }
+  const identity = el("header", "business-identity");
+  identity.append(avatar, el("h1", "", profile.name));
+  if (profile.tagline) identity.append(el("p", "business-tagline", profile.tagline));
+  content.append(identity);
+  const review = el("section", "business-review");
+  review.setAttribute("aria-label", "Ulasan Google");
+  review.append(el("h2", "", "Pernah singgah di sini?"), el("p", "", "Kongsikan pengalaman anda di Google."), link(profile.google, "Tulis ulasan di Google", "business-action review-action", "star"));
+  content.append(review);
+  if (profile.whatsapp) content.append(link(profile.whatsapp, "Hubungi melalui WhatsApp", "business-action whatsapp-action", "whatsapp"));
+  const quick = el("div", "business-quick");
+  if (profile.menu) quick.append(link(profile.menu, "Lihat menu / katalog", "business-action outline-action", "menu"));
+  if (profile.directions) quick.append(link(profile.directions, "Arah ke lokasi", "business-action outline-action", "pin"));
+  if (quick.childElementCount) content.append(quick);
+  if (promotionVisible(profile, now)) {
+    const promo = el("section", "business-promo");
+    promo.append(el("h2", "", profile.promoTitle));
+    if (profile.promoText) promo.append(el("p", "", profile.promoText));
+    if (profile.promoURL) {
+      const a = link(profile.promoURL, "Lihat promosi", "promo-link");
+      a.append(icon("arrow"));
+      promo.append(a);
+    }
+    content.append(promo);
+  }
+  const social = el("nav", "business-social");
+  social.setAttribute("aria-label", "Media sosial");
+  for (const name of ["facebook", "instagram", "tiktok", "threads"]) if (profile[name] && (name !== "threads" || threadsProfile(profile[name]))) {
+    const a = link(profile[name], name[0].toUpperCase() + name.slice(1), "social-link", name);
+    a.title = name;
+    a.setAttribute("aria-label", name);
+    social.append(a);
+  }
+  if (social.childElementCount) content.append(social);
+  if (profile.website) content.append(link(profile.website, "Lawati laman web", "business-action website-action", "website"));
+  if (profile.address || profile.hours) {
+    const details = el("details", "business-details"), summary = el("summary");
+    summary.append(icon("clock"), el("span", "", "Alamat & waktu operasi"), icon("chevron"));
+    details.append(summary);
+    if (profile.address) details.append(el("p", "", profile.address));
+    if (profile.hours) details.append(el("p", "", profile.hours));
+    content.append(details);
+  }
+  const footer = el("footer", "business-footer");
+  footer.append(el("span", "", "POWERED BY SMARTTAP"));
+  const create = el("a", "", "Cipta halaman anda");
+  create.href = "/subscribe/";
+  footer.append(create);
+  content.append(footer);
+  card.append(cover, content);
+  main.append(card);
+  return main;
+}
+
 // src/public-profile.mjs
 function profileURL(value) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password && (!url.port || url.port === "443") && url.href.length <= 500 ? url.href : null;
+    return (url.protocol === "https:" || globalThis.location?.hostname === "127.0.0.1" && url.origin === globalThis.location.origin) && !url.username && !url.password && (!url.port || url.port === "443" || globalThis.location?.hostname === "127.0.0.1" && url.origin === globalThis.location.origin) && url.href.length <= 500 ? url.href : null;
   } catch {
     return null;
   }
@@ -14,7 +168,9 @@ function decodeProfilePayload(payload) {
     const raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     if (raw?.v !== 1 || typeof raw.name !== "string" || !raw.name.trim() || [...raw.name].length > 80) throw 0;
     const profile = { v: 1, name: raw.name.trim(), tagline: typeof raw.tagline === "string" ? raw.tagline.slice(0, 140) : "" };
-    for (const key of ["google", "instagram", "facebook", "tiktok", "whatsapp", "website", "logo", "threads"]) {
+    validateAppearance(raw);
+    for (const key of Object.keys(appearanceFields)) if (raw[key]) profile[key] = raw[key];
+    for (const key of ["google", "instagram", "facebook", "tiktok", "whatsapp", "website", "logo", "threads", "cover", "menu", "directions", "promoURL"]) {
       if (raw[key] && (!profileURL(raw[key]) || typeof raw[key] !== "string")) throw 0;
       if (raw[key]) profile[key] = profileURL(raw[key]);
     }
@@ -24,16 +180,6 @@ function decodeProfilePayload(payload) {
     return profile;
   } catch {
     throw new Error("Pautan profil ini tidak sah. Sila dapatkan pautan baharu daripada perniagaan.");
-  }
-}
-
-// import-service/contacts.mjs
-function threadsProfile(value) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password && ["threads.net", "www.threads.net", "threads.com", "www.threads.com"].includes(url.hostname) && /^\/@[\w.]+\/?$/.test(url.pathname) ? url.href : null;
-  } catch {
-    return null;
   }
 }
 
@@ -61,40 +207,7 @@ function status(message, error = false) {
   root.replaceChildren(box);
 }
 function render(profile) {
-  const main = element("main", "public-body");
-  main.append(element("div", "public-bg"));
-  const card = element("section", "public-card");
-  const avatar = element("div", "avatar", profile.name.charAt(0).toLocaleUpperCase());
-  if (profile.logo) {
-    const image = element("img");
-    image.alt = "Logo " + profile.name;
-    image.referrerPolicy = "no-referrer";
-    image.style.cssText = "width:100%;height:100%;object-fit:contain;border-radius:inherit;background:white";
-    image.onload = () => avatar.replaceChildren(image);
-    image.src = profile.logo;
-  }
-  card.append(avatar, element("div", "eyebrow", "WELCOME TO"), element("h1", "", profile.name));
-  if (profile.tagline) card.append(element("p", "public-tagline", profile.tagline));
-  const links = element("div", "public-links");
-  const platforms = [["google", "Google Review", "\u2605"], ["instagram", "Instagram", "\u25CE"], ["facebook", "Facebook", "f"], ["tiktok", "TikTok", "\u266A"], ["whatsapp", "WhatsApp", "\u2197"], ["website", "Website", "\u2301"], ["threads", "Threads", "@"]];
-  for (const [key, label, mark] of platforms) {
-    if (!profile[key] || key === "threads" && !threadsProfile(profile[key])) continue;
-    const link = element("a", "public-link" + (key === "google" ? " primary" : ""));
-    link.href = profile[key];
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.append(element("span", "link-icon", mark), element("span", "", key === "google" ? "Leave us a Google Review" : "Follow us on " + label), element("span", "link-arrow", "\u2197"));
-    links.append(link);
-  }
-  card.append(links, element("p", "small-note", "Every review and follow means the world to us. Thank you for your support."));
-  const footer = element("footer", "public-footer");
-  const brand = element("span", "", "POWERED BY ");
-  brand.append(element("b", "", "SMARTTAP"));
-  const create = element("a", "", "Create your own page \u2197");
-  create.href = "./setup.html";
-  footer.append(brand, create);
-  main.append(card, footer);
-  root.replaceChildren(main);
+  root.replaceChildren(renderCard(document, profile));
   document.title = profile.name + " \u2014 SmartTap";
 }
 async function openPage() {

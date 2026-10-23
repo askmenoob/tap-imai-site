@@ -1,8 +1,9 @@
 import {createHmac} from 'node:crypto';
 import {requirePublicPage} from './page-state.mjs';
+import {appearanceFields,validateAppearance} from './appearance.mjs';
 
-const urlFields=['logo','google','instagram','facebook','tiktok','threads','whatsapp','website'];
-const fields=new Set(['v','name','tagline','phone',...urlFields]);
+const urlFields=['logo','google','instagram','facebook','tiktok','threads','whatsapp','website','cover','menu','directions','promoURL'];
+const fields=new Set(['v','name','tagline','phone',...urlFields,...Object.keys(appearanceFields)]);
 const invalid=()=>Object.assign(new Error('Gunakan pautan halaman SmartTap yang telah dijana.'),{status:400});
 export function validateSmartTapURL(value,origin='https://tap.imai.my') {
   try {
@@ -17,9 +18,10 @@ export function validateSmartTapURL(value,origin='https://tap.imai.my') {
     if(!profile||typeof profile!=='object'||Array.isArray(profile)||profile.v!==1||typeof profile.name!=='string'||!profile.name.trim()||[...profile.name].length>80) throw 0;
     for(const [key,field] of Object.entries(profile)) if(!fields.has(key)||(key!=='v'&&typeof field!=='string')) throw 0;
     if((profile.tagline||'').length>140||(profile.phone||'').length>30) throw 0;
+    validateAppearance(profile);
     for(const key of urlFields) if(profile[key]) {
       const link=new URL(profile[key]);
-      if(link.protocol!=='https:'||link.username||link.password||(link.port&&link.port!=='443')||link.href.length>500) throw 0;
+      if((link.protocol!=='https:'&&!(key==='cover'&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.username||link.password||(link.port&&link.port!=='443'&&!(key==='cover'&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.href.length>500) throw 0;
     }
     const review=new URL(profile.google);const host=review.hostname;
     const google=(host==='google.com'||host.endsWith('.google.com')||host==='google.com.my'||host.endsWith('.google.com.my'))&&review.pathname.includes('/local/writereview')&&review.searchParams.get('placeid');

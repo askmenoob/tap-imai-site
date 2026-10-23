@@ -2102,6 +2102,22 @@ var require_browser = __commonJS({
   }
 });
 
+// import-service/appearance.mjs
+var appearanceFields = {
+  theme: { label: "Tema halaman", options: { classic: "Klasik \xB7 krim & hijau", dark: "Gelap \xB7 arang & putih", bright: "Ceria \xB7 putih & warna jenama" } },
+  accent: { label: "Warna utama", type: "color" },
+  cover: { label: "Cover tersimpan", type: "url", max: 500 },
+  menu: { label: "Pautan menu / katalog", type: "url", max: 500 },
+  directions: { label: "Pautan lokasi Google Maps", type: "url", max: 500 },
+  address: { label: "Alamat perniagaan", max: 240 },
+  hours: { label: "Waktu operasi", max: 240 },
+  promoTitle: { label: "Tajuk promosi", max: 70 },
+  promoText: { label: "Penerangan promosi", max: 180 },
+  promoURL: { label: "Pautan promosi", type: "url", max: 500 },
+  promoStart: { label: "Promosi bermula (waktu Malaysia)", type: "datetime-local" },
+  promoEnd: { label: "Promosi tamat (waktu Malaysia)", type: "datetime-local" }
+};
+
 // src/admin.js
 var import_qrcode = __toESM(require_browser(), 1);
 
@@ -2333,7 +2349,7 @@ var $ = (id) => document.getElementById(id);
 var customer = document.body.dataset.role === "user";
 var base = customer ? "/api/user" : "/api/admin";
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : window.SMARTTAP_IMPORT_CONFIG?.endpoint;
-var fields = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web" };
+var fields = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web", ...Object.fromEntries(Object.entries(appearanceFields).map(([key, spec]) => [key, spec.label])) };
 var credential = "";
 var records = [];
 var cursor = null;
@@ -2346,6 +2362,7 @@ function lockControls(value) {
   saving = value;
   for (const id of ["save", "cancel", "refresh", "more", "save-owner", "owner-email"]) if ($(id)) $(id).disabled = value || id === "save" && customer && selected?.state !== "active";
   for (const field of Object.keys(fields)) if ($("field-" + field)) $("field-" + field).disabled = value || customer && selected?.state !== "active";
+  for (const id of ["cover-file", "remove-cover"]) if ($(id)) $(id).disabled = value || customer && selected?.state !== "active";
 }
 var management = createManagementUI({ customer, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
   selected = item;
@@ -2355,6 +2372,12 @@ var management = createManagementUI({ customer, api: (path, options) => api(base
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
 } });
 function logout(message = "Anda telah log keluar.") {
+  coverPreview.hidden = true;
+  coverStatus.textContent = "";
+  if (previewURL) {
+    URL.revokeObjectURL(previewURL);
+    previewURL = null;
+  }
   credential = "";
   records = [];
   cursor = null;
@@ -2472,6 +2495,9 @@ async function login(token) {
 }
 async function edit(item) {
   if (saving) return;
+  coverPreview.hidden = !item.profile.cover;
+  if (item.profile.cover) coverPreview.src = item.profile.cover;
+  coverStatus.textContent = "";
   selected = item;
   $("edit-title").textContent = item.profile.name;
   $("share").value = item.url;
@@ -2479,7 +2505,7 @@ async function edit(item) {
   $("copy-status").textContent = "";
   $("save-status").textContent = "";
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
-  for (const field of Object.keys(fields)) $("field-" + field).value = item.profile[field] || "";
+  for (const field of Object.keys(fields)) $("field-" + field).value = item.profile[field] || (field === "theme" ? "classic" : field === "accent" ? "#20543e" : "");
   if ($("owner-email")) {
     $("owner-email").value = item.ownerEmail || "";
     $("owner-status").textContent = item.ownerEmail ? "Pemilik boleh login di tap.imai.my/edit dengan Gmail ini." : "Daftarkan Gmail supaya pelanggan boleh menyunting halaman ini.";
@@ -2504,14 +2530,30 @@ for (const [key, text] of Object.entries(fields)) {
   const label = document.createElement("label");
   label.htmlFor = "field-" + key;
   label.textContent = text + (["name", "google"].includes(key) ? " *" : "");
-  const input = document.createElement("input");
+  const spec = appearanceFields[key];
+  const input = document.createElement(spec?.options ? "select" : "input");
   input.id = "field-" + key;
   input.name = key;
-  input.maxLength = key === "name" ? 80 : key === "tagline" ? 140 : key === "phone" ? 30 : 500;
+  input.maxLength = spec?.max || (key === "name" ? 80 : key === "tagline" ? 140 : key === "phone" ? 30 : 500);
+  if (spec?.options) for (const [value, text2] of Object.entries(spec.options)) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text2;
+    input.append(option);
+  }
   if (["name", "google"].includes(key)) input.required = true;
-  if (!["name", "tagline", "phone"].includes(key)) {
+  if (!spec && !["name", "tagline", "phone"].includes(key)) {
     input.type = "url";
     input.placeholder = "https://";
+  }
+  if (spec && !spec.options) {
+    input.type = spec.type || "text";
+    if (spec.type === "url") input.placeholder = "https://";
+  }
+  if (key === "cover") {
+    input.readOnly = true;
+    input.type = "hidden";
+    label.hidden = true;
   }
   if (key === "phone") {
     input.type = "tel";
@@ -2520,11 +2562,79 @@ for (const [key, text] of Object.entries(fields)) {
       if (link) $("field-whatsapp").value = link;
     });
   }
+  if (key === "theme") input.addEventListener("change", () => {
+    $("field-accent").value = { classic: "#20543e", dark: "#91c8ad", bright: "#7040bb" }[input.value];
+  });
   input.addEventListener("input", () => {
     $("save-status").textContent = "Ada perubahan yang belum disimpan.";
   });
   $("fields").append(label, input);
 }
+var coverLabel = document.createElement("label");
+coverLabel.htmlFor = "cover-file";
+coverLabel.textContent = "Muat naik cover daripada peranti";
+var coverFile = document.createElement("input");
+coverFile.id = "cover-file";
+coverFile.type = "file";
+coverFile.accept = "image/jpeg,image/png,image/webp";
+var coverHelp = document.createElement("p");
+coverHelp.className = "help";
+coverHelp.textContent = "JPG, PNG atau WebP. Had asal 5 MB / 25 megapiksel. Pelayan mengecilkan kepada maksimum 1600 piksel dan 500 KB. Cover disimpan terus; maklumat lain gunakan butang Simpan.";
+var coverStatus = document.createElement("p");
+coverStatus.setAttribute("role", "status");
+var coverPreview = document.createElement("img");
+coverPreview.className = "cover-upload-preview";
+coverPreview.alt = "Pratonton cover pilihan";
+coverPreview.hidden = true;
+var removeCover = document.createElement("button");
+removeCover.type = "button";
+removeCover.id = "remove-cover";
+removeCover.className = "secondary";
+removeCover.textContent = "Guna latar tema tanpa cover";
+removeCover.addEventListener("click", () => {
+  $("field-cover").value = "";
+  coverPreview.hidden = true;
+  coverStatus.textContent = "Tekan Simpan untuk membuang cover dan menggunakan latar tema.";
+});
+$("field-cover").after(coverLabel, coverFile, coverHelp, coverPreview, removeCover, coverStatus);
+var previewURL;
+coverFile.addEventListener("change", async () => {
+  const file = coverFile.files[0];
+  if (!file || !selected || saving) return;
+  if (file.size > 5 * 1024 * 1024) {
+    coverStatus.textContent = "Gambar melebihi 5 MB. Pilih fail lebih kecil.";
+    coverFile.value = "";
+    return;
+  }
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    coverStatus.textContent = "Gunakan JPG, PNG atau WebP.";
+    return;
+  }
+  const item = selected, current = session;
+  lockControls(true);
+  coverFile.disabled = true;
+  coverStatus.textContent = "Memproses dan menyimpan cover\u2026";
+  try {
+    const response = await fetch(new URL(base + "/links/" + item.id + "/cover", endpoint), { method: "POST", headers: { Authorization: "Bearer " + credential, "Content-Type": file.type, "If-Match": item.revision }, body: file, credentials: "omit", cache: "no-store" });
+    const updated = await response.json();
+    if (!response.ok) throw new Error(updated.error || "Cover belum dapat disimpan.");
+    if (current !== session || selected?.id !== item.id) return;
+    selected = updated;
+    records = records.map((record) => record.id === updated.id ? updated : record);
+    render();
+    $("field-cover").value = updated.profile.cover;
+    if (previewURL) URL.revokeObjectURL(previewURL);
+    previewURL = URL.createObjectURL(file);
+    coverPreview.src = previewURL;
+    coverPreview.hidden = false;
+    coverStatus.textContent = "Cover telah disimpan. URL pendek dan QR kekal sama.";
+  } catch (error) {
+    coverStatus.textContent = error.message;
+  } finally {
+    lockControls(false);
+    coverFile.value = "";
+  }
+});
 $("edit-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selected) return;
@@ -2547,7 +2657,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     selected = updated;
     render();
     $("edit-title").textContent = updated.profile.name;
-    for (const key of Object.keys(fields)) $("field-" + key).value = updated.profile[key] || "";
+    for (const key of Object.keys(fields)) $("field-" + key).value = updated.profile[key] || (key === "theme" ? "classic" : key === "accent" ? "#20543e" : "");
     $("save-status").textContent = "Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.";
   } catch (error) {
     $("save-status").textContent = error.message + (error.status === 409 ? " Salin perubahan anda sebelum memuat semula senarai." : "");
