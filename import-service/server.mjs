@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
 import { createGoogleProvider } from './google.mjs';
 import { createImportService } from './service.mjs';
-import { createGoogleWebSearch } from './google-web.mjs';
+import { createGoogleWebSearch, runtimeToken } from './google-web.mjs';
+import { createShortLinks, createCloudLinkStore } from './short-links.mjs';
 
 const preview = process.argv.includes('--preview');
 const demo = preview && process.env.PREVIEW_DEMO === '1';
@@ -16,6 +17,10 @@ const secret = (process.env.IMPORT_SIGNING_SECRET || (preview ? randomBytes(32).
 if (!preview && (!key || secret.length < 32)) throw new Error('Configure GOOGLE_PLACES_API_KEY and IMPORT_SIGNING_SECRET before starting.');
 const origins = new Set((process.env.ALLOWED_ORIGINS || 'https://tap.imai.my').split(',').map(s => s.trim()));
 if (preview) origins.add('http://127.0.0.1:' + port);
+const localLinks=new Map();
+const linkStore=demo?{create:async(id,value)=>{if(localLinks.has(id))return false;localLinks.set(id,value);return true;},get:async id=>localLinks.get(id)||null}:
+  process.env.SHORT_LINK_BUCKET?createCloudLinkStore({bucket:process.env.SHORT_LINK_BUCKET,getToken:runtimeToken}):null;
+const shortLinks=linkStore?createShortLinks({store:linkStore,secret,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
 const demoLogo = 'https://placehold.co/160x160/173b33/ffffff.png?text=DEMO';
 const fixture = {
   suggest:async query => query.toLowerCase().includes('tiada') ? [] : [
@@ -45,9 +50,9 @@ function reply(res, status, data, origin) {
     'x-content-type-options':'nosniff', ...(origin ? { 'access-control-allow-origin':origin, vary:'Origin' } : {}) });
   res.end(JSON.stringify({ ...data, ...(demo ? { demo:true } : {}) }));
 }
-async function body(req) {
+async function body(req,limit=4096) {
   let length = 0; const chunks = [];
-  for await (const chunk of req) { length += chunk.length; if (length > 4096) throw Object.assign(new Error('Permintaan terlalu besar.'),{status:413}); chunks.push(chunk); }
+  for await (const chunk of req) { length += chunk.length; if (length > limit) throw Object.assign(new Error('Permintaan terlalu besar.'),{status:413}); chunks.push(chunk); }
   try { const value=JSON.parse(Buffer.concat(chunks).toString('utf8')); if(!value || typeof value!=='object' || Array.isArray(value)) throw 0; return value; }
   catch { throw Object.assign(new Error('Permintaan tidak sah.'),{status:400}); }
 }
@@ -55,14 +60,23 @@ const server = http.createServer(async (req,res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
   const origin = origins.has(req.headers.origin) ? req.headers.origin : null;
   try {
-    if (path === '/health') return reply(res, 200, { ready:!!key, demo }, origin);
+    if (path === '/health') return reply(res, 200, { ready:!!key, demo, shortLinks:!!shortLinks }, origin);
+    if(path.startsWith('/api/links/')&&req.method==='GET') {
+      if(req.headers.origin&&!origin) return reply(res,403,{error:'Akses tidak dibenarkan.'});
+      if(!shortLinks) return reply(res,503,{error:'Pautan pendek belum tersedia.'},origin);
+      return reply(res,200,await shortLinks.resolve(path.slice('/api/links/'.length)),origin);
+    }
     if (path.startsWith('/api/')) {
       if (!origin) return reply(res, 403, { error:'Akses tidak dibenarkan.' });
       if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin':origin, 'access-control-allow-methods':'POST', 'access-control-allow-headers':'Content-Type', vary:'Origin' }); res.end(); return; }
       if (req.method !== 'POST') return reply(res, 405, { error:'Kaedah tidak dibenarkan.' }, origin);
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return reply(res, 415, { error:'Gunakan JSON.' }, origin);
       if (!allow(req.socket.remoteAddress, path === '/api/suggest')) return reply(res, 429, { error:'Had carian dicapai. Cuba sebentar lagi.' }, origin);
-      const data = await body(req);
+      const data = await body(req,path==='/api/shorten'?8192:4096);
+      if(path==='/api/shorten') {
+        if(!shortLinks) return reply(res,503,{error:'Pautan pendek belum tersedia. Pautan asal masih boleh digunakan.'},origin);
+        return reply(res,200,await shortLinks.shorten(data.url),origin);
+      }
       if (path === '/api/suggest') return reply(res, 200, await service.suggest(data.query, data.sessionToken), origin);
       if (path === '/api/search') return reply(res, 200, await service.search(data.query), origin);
       if (path === '/api/import') return reply(res, 200, await service.import(data.token), origin);
