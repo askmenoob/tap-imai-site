@@ -6,8 +6,11 @@ import { resolve, extname, sep } from 'node:path';
 import { createGoogleProvider } from './google.mjs';
 import { createImportService } from './service.mjs';
 import { createGoogleWebSearch, runtimeToken } from './google-web.mjs';
-import { createShortLinks, createCloudLinkStore } from './short-links.mjs';
+import { createShortLinks, createCloudLinkStore, createMemoryLinkStore } from './short-links.mjs';
 import { createGoogleAdminAuth, createAdminService } from './admin.mjs';
+import { createGoogleUserAuth } from './identity.mjs';
+import { createCustomerService } from './customers.mjs';
+import { createAccountRoutes } from './account-routes.mjs';
 
 const preview = process.argv.includes('--preview');
 const demo = preview && process.env.PREVIEW_DEMO === '1';
@@ -18,22 +21,16 @@ const secret = (process.env.IMPORT_SIGNING_SECRET || (preview ? randomBytes(32).
 if (!preview && (!key || secret.length < 32)) throw new Error('Configure GOOGLE_PLACES_API_KEY and IMPORT_SIGNING_SECRET before starting.');
 const origins = new Set((process.env.ALLOWED_ORIGINS || 'https://tap.imai.my').split(',').map(s => s.trim()));
 if (preview) origins.add('http://127.0.0.1:' + port);
-const localLinks=new Map();
-let localRevision=0;
-const linkStore=demo?{
-  create:async(id,record)=>{if(localLinks.has(id))return false;localLinks.set(id,{record,revision:String(++localRevision)});return true;},
-  get:async id=>localLinks.get(id)?.record||null,
-  getVersion:async id=>localLinks.get(id)||null,
-  list:async()=>({items:[...localLinks].map(([id,item])=>({id,...item})),cursor:null}),
-  archive:async()=>true,
-  update:async(id,record,revision)=>{if(localLinks.get(id)?.revision!==revision)return false;localLinks.set(id,{record,revision:String(++localRevision)});return true;},
-}:
+const linkStore=demo?createMemoryLinkStore():
   process.env.SHORT_LINK_BUCKET?createCloudLinkStore({bucket:process.env.SHORT_LINK_BUCKET,getToken:runtimeToken}):null;
 const shortLinks=linkStore?createShortLinks({store:linkStore,secret,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
 const adminClientId=(process.env.ADMIN_GOOGLE_CLIENT_ID||'').trim();
 const adminEmails=(process.env.ADMIN_EMAILS||'').split(',');
 const adminAuth=createGoogleAdminAuth({clientId:adminClientId,emails:adminEmails});
+const userAuth=createGoogleUserAuth({clientId:adminClientId});
 const admin=linkStore?createAdminService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
+const customers=linkStore?createCustomerService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
+const accountRoutes=createAccountRoutes({adminAuth,userAuth,admin,customers,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
 const demoLogo = 'https://placehold.co/160x160/173b33/ffffff.png?text=DEMO';
 const fixture = {
   suggest:async query => query.toLowerCase().includes('tiada') ? [] : [
@@ -74,23 +71,7 @@ const server = http.createServer(async (req,res) => {
   const origin = origins.has(req.headers.origin) ? req.headers.origin : null;
   try {
     if (path === '/health') return reply(res, 200, { ready:!!key, demo, shortLinks:!!shortLinks }, origin);
-    if(path.startsWith('/api/admin/')) {
-      if((req.headers.origin&&!origin)||(!origin&&!['GET','HEAD'].includes(req.method)))return reply(res,403,{error:'Akses tidak dibenarkan.'});
-      if(req.method==='OPTIONS') {
-        res.writeHead(204,{'access-control-allow-origin':origin,'access-control-allow-methods':'GET, PUT','access-control-allow-headers':'Content-Type, Authorization',vary:'Origin'});res.end();return;
-      }
-      if(path==='/api/admin/config'&&req.method==='GET')return reply(res,200,{clientId:adminClientId,configured:!!adminClientId&&adminEmails.some(email=>email.trim())},origin);
-      const actor=demo?{sub:'localhost-demo-only',email:'demo@localhost',expiresAt:Date.now()+3600000}:await adminAuth(req.headers.authorization);
-      if(!admin)return reply(res,503,{error:'Simpanan pautan belum tersedia.'},origin);
-      if(path==='/api/admin/self'&&req.method==='GET')return reply(res,200,actor,origin);
-      if(path==='/api/admin/links'&&req.method==='GET')return reply(res,200,await admin.list(new URL(req.url,'http://localhost').searchParams.get('cursor')),origin);
-      const match=/^\/api\/admin\/links\/([A-Za-z0-9_-]{16})$/.exec(path);
-      if(match&&req.method==='PUT') {
-        if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))return reply(res,415,{error:'Gunakan JSON.'},origin);
-        return reply(res,200,await admin.update(match[1],await body(req,8192),actor),origin);
-      }
-      return reply(res,404,{error:'Tidak ditemui.'},origin);
-    }
+    if(await accountRoutes(req,res,{path,origin}))return;
     if(path.startsWith('/api/links/')&&req.method==='GET') {
       if(req.headers.origin&&!origin) return reply(res,403,{error:'Akses tidak dibenarkan.'});
       if(!shortLinks) return reply(res,503,{error:'Pautan pendek belum tersedia.'},origin);
@@ -113,9 +94,11 @@ const server = http.createServer(async (req,res) => {
       return reply(res, 404, { error:'Tidak ditemui.' }, origin);
     }
     if (preview && ['GET','HEAD'].includes(req.method)) {
-      const relative = decodeURIComponent(path === '/' ? '/index.html' : path).slice(1);
+      if(path==='/edit'){res.writeHead(301,{location:'/edit/'});res.end();return;}
+      if(path==='/edit/')req.url='/edit/index.html';
+      const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path).slice(1);
       const file = resolve(root, relative);
-      if (!file.startsWith(root + sep) || !/^(?:index\.html|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|business-(?:import|logo|entry|admin)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
+      if (!file.startsWith(root + sep) || !/^(?:index\.html|edit\/index\.html|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|business-(?:import|logo|entry|admin)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
       const bytes = await readFile(file);
       res.writeHead(200, { 'content-type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml'})[extname(file)] || 'application/octet-stream', 'cache-control':'no-store' });
       res.end(req.method === 'HEAD' ? undefined : bytes); return;
