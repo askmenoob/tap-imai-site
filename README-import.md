@@ -1,6 +1,6 @@
 # SmartTap business import
 
-The existing GitHub Pages site is a compiled static MVP. This addition keeps that creator and its v1 public profile URLs, adds `setup.html` for business search/import, and supports an optional logo on public profiles. It does not add accounts, analytics, a database or editable permanent profile URLs.
+The existing GitHub Pages site is a compiled static MVP. This addition keeps that creator and its v1 public profile URLs, adds `setup.html` for business search/import, and supports an optional logo on public profiles. It adds optional first-party short URLs backed by a private Cloud Storage mapping. It does not add user accounts, analytics or editable permanent profile URLs.
 
 ## Data flow
 
@@ -9,7 +9,7 @@ The existing GitHub Pages site is a compiled static MVP. This addition keeps tha
 3. The server reads the public HTTPS website listed for that business. Legacy HTTP website links are upgraded to HTTPS. It extracts Organization/LocalBusiness structured data, explicitly marked header logos, metadata descriptions and actual social profile links. It does not invent usernames or label a generic storefront photo as a logo. Multiple social accounts require a user choice.
 4. The user can edit every field. Publishing encodes the confirmed profile in a v1 URL; QR generation must succeed before output is displayed. Existing static public URLs still work. A changed profile requires a new URL/QR and NFC reprogramming.
 
-Google search results are transient and attributed. The service does not copy Google editorial summaries or photo URLs into long-lived profile URLs. Name defaults to the user's query unless the official site supplies its own name. Place IDs and derived review links persist in the output.
+Google search results are transient and attributed. The service does not copy Google editorial summaries or photo URLs into long-lived profile URLs. Name comes from the selected Google business; an official site title does not replace the chosen branch name. Place IDs and derived review links persist in the output.
 
 ## Local verification
 
@@ -30,7 +30,7 @@ Frontend hosting: `askmenoob/tap-imai-site`, GitHub Pages custom domain `tap.ima
 Backend: Cloud Run `tap-business-import`, project `cedar-kiln-502614-h5` (project name PROJECT), region `asia-southeast1`.
 Endpoint: `https://tap-business-import-262870839474.asia-southeast1.run.app`.
 
-Dedicated runtime identity: `tap-business-import@cedar-kiln-502614-h5.iam.gserviceaccount.com`. It can read only the two named Secret Manager secrets needed by this service. Dedicated builder identity has the Cloud Run Builder role.
+Dedicated runtime identity: `tap-business-import@cedar-kiln-502614-h5.iam.gserviceaccount.com`. Its secret access is limited to the two named Secret Manager secrets needed by this service. Model calls and short-link storage use the separately documented restricted roles. Dedicated builder identity has the Cloud Run Builder role.
 
 Required environment: `GOOGLE_PLACES_API_KEY` (Places-only API key, stored in `tap-import-places-key`), `IMPORT_SIGNING_SECRET` (at least 32 characters, stored in `tap-import-signing-key`), `ALLOWED_ORIGINS=https://tap.imai.my`, `MAX_DAILY_REQUESTS=300`.
 No secret value belongs in GitHub, HTML or import-config.js. Secret versions are pinned at deployment. The initial temporary key was revoked; the active key is `tap-imai-import-server-v2`, using secret version 2.
@@ -52,3 +52,15 @@ Approved Google Search enrichment uses Vertex AI `gemini-3.8-flash` with Google 
 Social profile suggestions must match the business handle and be supported by Google source citations. Search suggestion HTML is displayed in a sandboxed iframe. Profiles that cannot be matched are left blank; reviewers are excluded. Available platforms: Instagram, Facebook, TikTok, Threads. All fields remain editable. Search is not a guarantee of account ownership or discovery of every platform.
 
 Place Details also returns the selected branch phone. Malaysian formats such as `012-2258950`, `+60 12-225 8950` and `0060122258950` normalize to `60122258950`. If no explicit WhatsApp URL exists on the official site, the service generates `https://wa.me/60122258950` with a verification warning. This conversion does not check WhatsApp registration. Editing the phone updates the WhatsApp URL; the user can edit that URL separately. The public page supports Threads while preserving existing v1 profile links.
+
+## Optional short URLs
+
+After generating a page, the user may select **Jadikan pautan pendek**. The shared URL, open-page button and downloaded QR all switch together to `https://tap.imai.my/?s=<16-character-id>`. **Gunakan pautan asal** restores the original URL and QR. The UI keeps the original usable if storage fails and ignores pending responses when the profile changes. Changing a profile creates a new destination; previously printed links are not retargeted.
+
+`POST /api/shorten` accepts only a validated v1 SmartTap profile URL on the exact `https://tap.imai.my/` origin, with a required Google Review URL. It cannot shorten arbitrary external websites or nested short URLs. The existing creation request limits apply. `GET /api/links/<id>` returns the saved original URL to the public resolver; profile URLs and short URLs are public to anyone receiving the link. Public resolution does not consume the creator's daily request allowance.
+
+Storage is `gs://cedar-kiln-502614-h5-tap-links` in `asia-southeast1`, configured through `SHORT_LINK_BUCKET`. Uniform bucket access and public-access prevention are enforced. The existing Cloud Run runtime identity has a bucket-level custom role with only `storage.objects.create` and `storage.objects.get`; it cannot list, update, overwrite or delete mappings. Conditional object creation (`ifGenerationMatch=0`) prevents replacement of an existing mapping. Cloud Storage and resolution requests can incur charges under the existing Google Cloud project. Firebase Hosting remains disabled.
+
+IDs use a 96-bit HMAC-derived opaque value. Repeated generation of an identical original URL reuses its mapping, including simultaneous requests. A process restart or future signing-secret rotation does not invalidate saved mappings. There is no automatic expiration policy. Removing the bucket or its objects would break the corresponding short links. No storage access key is sent to the browser.
+
+The localhost demo uses an explicitly labelled in-memory mapping solely for UI verification. Production fails with a visible error and retains the original URL if durable storage has not been configured. To test resolution independently after a restart, create a production mapping, start a new Cloud Run revision, and resolve the same ID again.
