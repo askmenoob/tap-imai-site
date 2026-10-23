@@ -2209,7 +2209,7 @@ var endpoint = location.hostname === "127.0.0.1" ? location.origin : config.endp
 $("shorten")?.remove();
 $("short-status")?.remove();
 $("share").rows = 1;
-$("result").querySelector(".notice").textContent = "URL pendek dan QR dijana bersama. Suntingan menghasilkan pautan baharu; kemas kini QR atau NFC selepas menyunting.";
+$("result").querySelector(".notice").textContent = "Simpan URL pendek ini. Super admin boleh mengemas kini maklumat pada URL dan QR yang sama. Menjana semula melalui borang ini menghasilkan pautan baharu.";
 function httpsURL(value) {
   try {
     const u = new URL(value);
