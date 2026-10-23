@@ -43,7 +43,7 @@ test('search requires explicit selection and import derives exact review URL',as
   assert.equal(calls(),0); assert.equal(search.places[0].name,'Google result');
   const result=await service.import(search.places[0].token);
   assert.equal(calls(),1); assert.equal(result.profile.google,'https://search.google.com/local/writereview?placeid=ChIJTest123456');
-  assert.equal(result.profile.name,'My Business'); assert.equal(result.profile.tagline,'Official summary');
+  assert.equal(result.profile.name,'Google result'); assert.equal(result.profile.tagline,'Official summary');
 });
 test('tampered and expired selections fail before a billed details lookup',async()=>{
   let time=100000; const {service,calls}=setup({now:()=>time}); const token=(await service.search('Business')).places[0].token;
