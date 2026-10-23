@@ -7,6 +7,7 @@ import { createAppIcon } from '../assets-src/pwa-icons.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = join(root, 'dist');
 const publicFiles = [
+  'language.js', 'language.css', 'language-catalog.mjs',
   'index.html', 'setup.html', 'admin.html', 'privacy.html', 'terms.html',
   'import-config.js', 'subscribe.css', 'subscribe/index.html', 'edit/index.html',
   'business-admin.js', 'business-entry.js', 'business-import.js', 'business-page.css',
