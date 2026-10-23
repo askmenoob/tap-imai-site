@@ -161,7 +161,7 @@ async function choose(place,current) {
     const data=await api('/api/import',{token:place.token},activeSearch.signal);
     if(current!==sequence) return;
     invalidate(); sources=data.sources || {};
-    searchSuggestions.hidden=!data.searchSuggestionsHtml;searchSuggestions.srcdoc=data.searchSuggestionsHtml || '';
+    searchSuggestions.hidden=!data.searchSuggestionsHtml;searchSuggestions.srcdoc=data.searchSuggestionsHtml ? '<base target="_blank"><meta name="referrer" content="no-referrer">'+data.searchSuggestionsHtml : '';
     $('editor').hidden=false;
     $('fields').querySelectorAll('select').forEach(select=>select.remove());
     for (const key of Object.keys(fieldNames)) {
