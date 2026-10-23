@@ -2184,12 +2184,29 @@ var activeSearch;
 var sequence = 0;
 var resultSequence = 0;
 var sources = {};
+var generatedLink = null;
+var activeShortening;
 var sessionToken = crypto.randomUUID();
 var places = [];
 var activePlace = -1;
 var placesFromDemo = false;
 var config = window.SMARTTAP_IMPORT_CONFIG || {};
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : config.endpoint || "";
+if (!$("shorten")) {
+  const button = document.createElement("button");
+  button.id = "shorten";
+  button.type = "button";
+  button.className = "secondary";
+  button.textContent = "Jadikan pautan pendek";
+  $("result").querySelector(".actions").append(button);
+}
+if (!$("short-status")) {
+  const status = document.createElement("p");
+  status.id = "short-status";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  $("copy-status").before(status);
+}
 function httpsURL(value) {
   try {
     const u = new URL(value);
@@ -2217,8 +2234,14 @@ function sourceLine(key, value) {
 }
 function invalidate() {
   resultSequence++;
+  activeShortening?.abort();
+  generatedLink = null;
   $("result").hidden = true;
   $("form-status").textContent = "";
+  $("shorten").disabled = false;
+  $("shorten").textContent = "Jadikan pautan pendek";
+  $("short-status").textContent = "";
+  $("copy-status").textContent = "";
 }
 function previewLogo() {
   const value = httpsURL($("field-logo").value.trim());
@@ -2556,10 +2579,8 @@ $("profile-form").addEventListener("submit", async (event) => {
       throw new Error("Pautan terlalu panjang untuk QR. Pendekkan URL atau penerangan dan cuba lagi.");
     }
     if (current !== resultSequence) return;
-    $("share").value = url.href;
-    $("qr").src = png;
-    $("open").href = url.href;
-    $("download").href = png;
+    generatedLink = { original: url.href, short: null, mode: "original" };
+    showShareURL(url.href, png);
     $("result").hidden = false;
     $("form-status").textContent = "Halaman dan QR anda sedia.";
     $("result").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2567,6 +2588,44 @@ $("profile-form").addEventListener("submit", async (event) => {
     $("form-status").textContent = error.message;
   } finally {
     $("generate").disabled = false;
+  }
+});
+function showShareURL(url, png) {
+  $("share").value = url;
+  $("qr").src = png;
+  $("open").href = url;
+  $("download").href = png;
+  $("copy-status").textContent = "";
+}
+$("shorten").addEventListener("click", async () => {
+  const record = generatedLink;
+  const current = resultSequence;
+  if (!record) return;
+  $("shorten").disabled = true;
+  $("short-status").textContent = record.mode === "short" ? "Menukar kepada pautan asal\u2026" : "Menyediakan pautan pendek\u2026";
+  activeShortening = new AbortController();
+  try {
+    const mode = record.mode === "short" ? "original" : "short";
+    let target = record.original;
+    if (mode === "short") {
+      if (!record.short) {
+        const data = await api("/api/shorten", { url: record.original }, activeShortening.signal);
+        const link = new URL(data.url);
+        if (link.origin !== location.origin || link.pathname !== "/" || link.hash || !/^[A-Za-z0-9_-]{16}$/.test(link.searchParams.get("s") || "") || [...link.searchParams.keys()].join() !== "s") throw new Error("Pautan pendek yang diterima tidak sah. Gunakan pautan asal.");
+        record.short = link.href;
+      }
+      target = record.short;
+    }
+    const png = await import_qrcode.default.toDataURL(target, { width: 1024, margin: 3, errorCorrectionLevel: "M", color: { dark: "#173b33", light: "#ffffff" } });
+    if (current !== resultSequence || record !== generatedLink) return;
+    record.mode = mode;
+    showShareURL(target, png);
+    $("shorten").textContent = mode === "short" ? "Gunakan pautan asal" : "Jadikan pautan pendek";
+    $("short-status").textContent = mode === "short" ? "Pautan pendek dan QR sedia dikongsi." : "Pautan asal dan QR sedia dikongsi.";
+  } catch (error) {
+    if (error.name !== "AbortError" && current === resultSequence) $("short-status").textContent = "Pautan pendek belum dapat disediakan. Pautan yang dipaparkan masih boleh digunakan. " + error.message;
+  } finally {
+    if (current === resultSequence && record === generatedLink) $("shorten").disabled = false;
   }
 });
 $("copy").addEventListener("click", async () => {
