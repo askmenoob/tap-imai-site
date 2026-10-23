@@ -5,7 +5,7 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
-    "build": "esbuild src/import.js --bundle --format=esm --outfile=business-import.js",
+    "build": "esbuild src/import.js --bundle --format=esm --outfile=business-import.js && esbuild src/public.js --bundle --format=esm --outfile=business-entry.js",
     "test": "node --test import-service/*.test.mjs",
     "start": "node import-service/server.mjs",
     "preview": "node import-service/server.mjs --preview"
