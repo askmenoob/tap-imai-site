@@ -2148,6 +2148,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
   <p id="management-status" role="status" aria-live="polite"></p>
   <div id="billing-section"><h3>Langganan & bayaran DuitNow</h3><p id="billing-availability"></p><p id="payment-summary"></p>
+  <div id="order-support" class="notice" hidden><h4>Pertanyaan pesanan</h4><p>Hubungi super admin tentang pesanan yang telah disahkan, termasuk penyediaan NFC dan penghantaran.</p><a id="order-whatsapp" class="button" target="_blank" rel="noopener noreferrer">WhatsApp super admin tentang pesanan \u2197</a><p class="help">Draf mesej disediakan dengan nama perniagaan dan ID pesanan. Semak dan hantar sendiri dalam WhatsApp.</p></div>
   <form id="payment-form" hidden><label for="payment-package">Pakej</label><select id="payment-package"></select><div class="quantity-grid"><div><label for="payment-nfc">NFC tambahan \xB7 RM30/unit</label><input id="payment-nfc" type="number" min="0" max="10" step="1" value="0"></div><div><label for="payment-stickers">NFC table sticker \xB7 kuantiti</label><input id="payment-stickers" type="number" min="0" max="200" step="1" value="0"></div></div><p class="help">Sticker: RM20/unit untuk 1\u201319 unit; RM15/unit untuk 20 unit atau lebih.</p><div id="payment-quote" role="status"></div><p class="help">Harga produk tidak termasuk penghantaran. Urus penghantaran dan cajnya secara berasingan dengan super admin.</p>
   <div id="payment-instructions" hidden><p>Bayar jumlah di atas menggunakan QR DuitNow ini. Semak nama penerima sebelum mengesahkan bayaran dalam aplikasi bank.</p><img id="payment-qr" alt="QR DuitNow bayaran kepada NIK AZFAR BIN NIK ZAINAL"><strong id="payment-payee"></strong><p><a id="payment-download" download="smarttap-duitnow.png">Muat turun QR bayaran</a></p></div>
   <p class="notice">Selepas membayar, hantar rujukan transaksi. Langganan dilanjutkan selepas super admin mengesahkan wang diterima. Jangan bayar semasa menggunakan demo tempatan.</p><label for="payment-reference">Rujukan transaksi bank</label><input id="payment-reference" required minlength="3" maxlength="80" autocomplete="off"><label for="payment-date">Tarikh bayaran</label><input id="payment-date" type="date" required><button id="payment-submit">Hantar untuk semakan bayaran</button></form>
@@ -2166,6 +2167,21 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("payment-qr").removeAttribute("src");
     $2("payment-download").removeAttribute("href");
     $2("delete-form").hidden = true;
+    $2("order-support").hidden = true;
+    $2("order-whatsapp").removeAttribute("href");
+  }
+  function orderSupport(item) {
+    const approved = item.renewal?.status === "approved" ? item.renewal : null, orderId = approved?.id || item.subscription?.lastPaymentId;
+    const visible = customer2 && typeof orderId === "string" && !!orderId && item.manualState !== "deleted";
+    $2("order-support").hidden = !visible;
+    $2("order-whatsapp").removeAttribute("href");
+    if (!visible) return;
+    const lines = ["Salam super admin SmartTap, saya ingin bertanya tentang pesanan yang telah disahkan.", "Perniagaan: " + item.profile.name, "ID pesanan: " + orderId];
+    if (approved?.items?.length) lines.push("Pesanan: " + approved.items.map((line) => line.name + " \xD7 " + line.quantity).join(", "));
+    lines.push("Pautan halaman: " + item.url);
+    const link = new URL("https://wa.me/60103250032");
+    link.searchParams.set("text", lines.join("\n"));
+    $2("order-whatsapp").href = link.href;
   }
   async function cart() {
     quote = null;
@@ -2201,6 +2217,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   async function show(item) {
     const changed = current?.id !== item.id, oldStatus = current?.renewal?.status;
     current = item;
+    orderSupport(item);
     $2("page-state").textContent = stateLabels[item.state] || item.state;
     $2("subscription-summary").textContent = item.subscription?.plan === "annual" ? "Halaman tahunan \xB7 tamat " + date(item.subscription.expiresAt) : item.subscription?.plan === "nfc_only" ? "NFC terus ke Google Review. Tiada langganan halaman QR." : "Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.";
     $2("direct-review-wrap").hidden = item.subscription?.plan !== "nfc_only";
