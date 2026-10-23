@@ -67,7 +67,7 @@ The localhost demo uses an explicitly labelled in-memory mapping solely for UI v
 
 ## Super admin
 
-`/admin.html` uses Google Identity Services with a dedicated web OAuth client whose only authorized JavaScript origin is `https://tap.imai.my`. Backend environment variables `ADMIN_GOOGLE_CLIENT_ID` and `ADMIN_EMAILS` configure the exact audience and verified-email allowlist. Only basic Google identity is used; no Gmail, Drive or Maps access is requested by this login. The owner remains the sole test user of the private OAuth app. Missing configuration fails closed.
+`/admin.html` uses Google Identity Services with a dedicated web OAuth client whose only authorized JavaScript origin is `https://tap.imai.my`. Backend environment variables `ADMIN_GOOGLE_CLIENT_ID` and `ADMIN_EMAILS` configure the exact audience and verified-email allowlist. Only basic Google identity is used; no Gmail, Drive or Maps access is requested by this login. OAuth publication status must allow customer sign-in; basic identity scopes only. Publishing does not grant access to any page without server-side registration. Missing configuration fails closed.
 
 The browser keeps its ID token only in memory and sends it as an HTTPS Bearer header. Every protected request checks Google's RS256 signature using the rotating Google JWK set, issuer, client audience, expiry, issued time, subject, verified email and exact allowlist. All write requests also require an approved Origin and JSON content type; the admin API has no cookie authentication. Login tokens and actor emails are not returned by the public resolver. The dashboard clears local session data on logout and token expiry. Demo login is possible only when BOTH `--preview` and `PREVIEW_DEMO=1` are set, and that server binds to localhost.
 
@@ -78,3 +78,16 @@ An admin save validates the same v1 profile contract, normalizes Malaysian phone
 The existing bucket-only role `smarttapShortLinkStore` now has `storage.objects.create/get/list/delete`: GCS requires delete permission for a conditional overwrite. Only the existing runtime identity holds this custom bucket role; the bucket is not public. No API supports arbitrary object keys or object deletion. Seven-day bucket soft delete complements the permanent before-edit snapshots. Do not remove the bucket or its records.
 
 The super admin feature does not activate billing, payment collection, annual expiry or customer subscriptions. Prices are a separate business decision. GitHub Pages' current usage limits prohibit hosting a commercial SaaS; retain GitHub for source but decide appropriate commercial hosting before taking subscriptions. No hosting/DNS migration is included in this admin release.
+
+
+## Registered Gmail customer editing
+
+`/edit` redirects to the static `/edit/` customer login page. Google Identity Services offers One Tap where the browser permits it, plus a standard Google sign-in button. After verified login, a sole owned page opens automatically; multiple owned pages can be selected. Tokens stay in memory and expire with the Google session.
+
+Super admin uses `setup.html?register=1` to register a new business and its primary `@gmail.com` address together. Existing pages can be assigned or reassigned in `/admin.html`; this preserves the printed short URL and QR. Legacy records remain unassigned until the admin chooses their real owner. There is no self-registration or client-side ownership claim. Only the configured admin allowlist can register ownership.
+
+Protected admin endpoints: `POST /api/admin/register` with `{url,email}`, `GET /api/admin/links/<id>`, and `PUT /api/admin/links/<id>/owner` with `{email,revision}`. Protected customer endpoints: `GET /api/user/self`, `GET /api/user/links?cursor=...`, `GET /api/user/links/<id>`, `PUT /api/user/links/<id>` with `{profile,revision}`. `/api/user/config` exposes only public OAuth configuration. Customers cannot call admin endpoints or set owner, role or email in updates. Unknown or foreign page IDs return a generic 404.
+
+The private primary record stores `ownerEmail` and registration metadata outside the public profile. Gmail dot aliases resolve to the same ownership identity; plus aliases and non-Gmail addresses are rejected. Private `owners/<sha256-canonical-Gmail>/<id>.json` entries enable bounded 25-item owner listing. They are discoverability only: every list, read and write rechecks ownership in the current primary record. Membership is written before the conditional primary assignment. Stale membership entries are retained to avoid concurrent reassignment cleanup races, but confer no access. Conditional edits prevent an old owner from overwriting an admin reassignment. Public resolution returns only the public profile URL, never ownership or audit metadata.
+
+Verification includes signed RS256 HTTP integration for two distinct Gmail identities, known foreign-ID read/write denial, role spoofing, unregistered Gmail, admin-only assignment, bad origins, non-Gmail identity, stale writes, assignment races and private GCS membership pagination. The explicitly enabled localhost demo has fixed sample identities and cannot run in production mode.
