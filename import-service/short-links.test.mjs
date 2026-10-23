@@ -41,3 +41,18 @@ test('Cloud Storage adapter creates only new objects and reads durable JSON by e
   assert.equal(calls[0].url.searchParams.get('ifGenerationMatch'),'0');assert.equal(calls[0].url.searchParams.get('name'),'links/abcdefghijklmnop.json');
   assert.equal((await store.get('abcdefghijklmnop')).url,encode());assert.match(calls[1].url.pathname,/links%2Fabcdefghijklmnop\.json$/);
 });
+
+test('Cloud Storage admin reads pinned generations, lists only mappings and conditionally updates',async()=>{
+  const calls=[];const replies=[{generation:'123'},profile,{items:[{name:'links/abcdefghijklmnop.json',generation:'123'},{name:'links/unrelated.txt',generation:'456'}],nextPageToken:'next-page'},profile,{},false];
+  const fetcher=async(url,options)=>{calls.push({url:new URL(url),...options});const data=replies.shift();return new Response(JSON.stringify(data),{status:data===false?412:200});};
+  const store=createCloudLinkStore({bucket:'smarttap-test-links',getToken:async()=>'test-token',fetcher});
+  assert.equal((await store.getVersion('abcdefghijklmnop')).revision,'123');assert.equal(calls[1].url.searchParams.get('generation'),'123');
+  const page=await store.list('previous');assert.equal(page.items.length,1);assert.equal(page.cursor,'next-page');assert.equal(calls[2].url.searchParams.get('prefix'),'links/');assert.equal(calls[2].url.searchParams.get('pageToken'),'previous');
+  assert.equal(await store.archive('abcdefghijklmnop','123',{url:encode()}),true);assert.equal(calls[4].url.searchParams.get('name'),'history/abcdefghijklmnop/123.json');assert.equal(calls[4].url.searchParams.get('ifGenerationMatch'),'0');
+  assert.equal(await store.update('abcdefghijklmnop',{url:encode()},'123'),false);assert.equal(calls[5].url.searchParams.get('ifGenerationMatch'),'123');
+});
+
+test('an archive storage failure prevents proceeding as though a backup was saved',async()=>{
+  const store=createCloudLinkStore({bucket:'smarttap-test-links',getToken:async()=>'test-token',fetcher:async()=>new Response('{}',{status:404})});
+  await assert.rejects(store.archive('abcdefghijklmnop','123',{url:encode()}),/unavailable/);
+});
