@@ -1,6 +1,6 @@
 # SmartTap business import
 
-The existing GitHub Pages site is a compiled static MVP. This addition keeps that creator and its v1 public profile URLs, adds `setup.html` for business search/import, and supports an optional logo on public profiles. It adds mandatory first-party short URLs backed by a private Cloud Storage mapping. It does not add user accounts, analytics or editable permanent profile URLs.
+SmartTap is a static frontend backed by the existing Cloud Run service and private Cloud Storage records. It supports business search/import, stable first-party short URLs and QR codes, super-admin management, registered Gmail owner editing, and manually verified annual QR subscriptions. Public encoded-profile URLs no longer render directly.
 
 ## Data flow
 
@@ -25,7 +25,7 @@ For a clearly labelled, localhost-only fixture preview, set `PREVIEW_DEMO=1` the
 
 ## Deployment
 
-Frontend hosting: `askmenoob/tap-imai-site`, GitHub Pages custom domain `tap.imai.my`. Static release files are `index.html`, `business-entry.js`, `setup.html`, `business-import.js`, `business-import.css`, `import-config.js`, `privacy.html`, `terms.html`; existing assets and CNAME stay in place. Source is also provided in the accompanying source archive.
+Frontend hosting: Cloudflare Pages Free project `tap-imai-site`, custom domain `tap.imai.my`, with source in `askmenoob/tap-imai-site`. The Pages build command is `npm run build && node scripts/prepare-pages.mjs`; output directory is `dist`. The preparation script allows exactly 17 public release files, including `/subscribe/`, `/edit/`, the admin page and existing assets. Backend source, environment files and the old GitHub Pages CNAME file are excluded from the published directory. The main branch remains the canonical source after the launch branch is merged.
 
 Backend: Cloud Run `tap-business-import`, project `cedar-kiln-502614-h5` (project name PROJECT), region `asia-southeast1`.
 Endpoint: `https://tap-business-import-262870839474.asia-southeast1.run.app`.
@@ -43,7 +43,7 @@ The importer accepts no arbitrary target URL from callers: websites come from th
 
 Only the public homepage and its server-rendered metadata are read. A business without a website, a social-only page, a JavaScript-only site or an anti-bot block may provide only a review link and partial fields. Missing data stays blank with a visible explanation; users can edit it manually. No claim is made that every business has a discoverable logo or every social profile.
 
-Firebase Hosting remains disabled. This feature uses GitHub Pages plus Cloud Run and does not reactivate Firebase Hosting.
+Firebase Hosting remains disabled. This feature uses Cloudflare Pages plus the existing Cloud Run backend and does not reactivate Firebase Hosting.
 
 ## Google web profiles and phone links
 
@@ -61,7 +61,7 @@ The generate button always creates `https://tap.imai.my/?s=<16-character-id>` be
 
 Storage is `gs://cedar-kiln-502614-h5-tap-links` in `asia-southeast1`, configured through `SHORT_LINK_BUCKET`. Uniform bucket access and public-access prevention are enforced. Conditional object creation (`ifGenerationMatch=0`) prevents public creation from replacing an existing mapping. Public resolution reads the durable object on every request so a separate admin instance's changes appear on the next page load. Cloud Storage and resolution requests can incur charges. Firebase Hosting remains disabled.
 
-IDs use a 96-bit HMAC-derived opaque value. Repeated generation of an identical original URL reuses its mapping, including simultaneous requests. A process restart or future signing-secret rotation does not invalidate saved mappings. There is no automatic expiration policy. Removing the bucket or its objects would break the corresponding short links. No storage access key is sent to the browser.
+IDs use a 96-bit HMAC-derived opaque value. Repeated generation of an identical original URL reuses its mapping, including simultaneous requests. A process restart or future signing-secret rotation does not invalidate saved mappings. IDs and records are not automatically removed when a subscription expires; public resolution is gated by page lifecycle and annual entitlement as described below. Removing the bucket or its objects would break the corresponding short links. No storage access key is sent to the browser.
 
 The localhost demo uses an explicitly labelled in-memory mapping solely for UI verification. Production fails with a visible error and displays no URL or QR if durable storage has not been configured. To test resolution independently after a restart, create a production mapping, start a new Cloud Run revision, and resolve the same ID again.
 
@@ -77,7 +77,7 @@ An admin save validates the same v1 profile contract, normalizes Malaysian phone
 
 The existing bucket-only role `smarttapShortLinkStore` now has `storage.objects.create/get/list/delete`: GCS requires delete permission for a conditional overwrite. Only the existing runtime identity holds this custom bucket role; the bucket is not public. No API supports arbitrary object keys or object deletion. Seven-day bucket soft delete complements the permanent before-edit snapshots. Do not remove the bucket or its records.
 
-Manual payment collection is controlled by PAYMENTS_ENABLED and stays off until commercial hosting is approved. Approved packages and annual expiry behavior are documented below. GitHub Pages' current usage limits prohibit hosting a commercial SaaS; retain GitHub for source but decide appropriate commercial hosting before taking subscriptions. No hosting/DNS migration is included in this admin release.
+Manual payment collection is controlled by PAYMENTS_ENABLED. Enable it only after the approved Cloudflare Pages launch has passed custom-domain HTTPS and live frontend checks. Approved packages and annual expiry behavior are documented below. GitHub remains the source repository; the approved migration changes only the tap.imai.my DNS record from askmenoob.github.io to tap-imai-site.pages.dev. Existing Cloud Run, storage, OAuth and unrelated domains remain in place. The previous DNS target is retained in the local migration record for rollback.
 
 
 ## Registered Gmail customer editing
