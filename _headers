@@ -1,3 +1,11 @@
+/*
+  Strict-Transport-Security: max-age=31536000
+  Content-Security-Policy: default-src 'self'; manifest-src 'self'; worker-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; frame-src 'self' https://accounts.google.com; connect-src 'self' https://tap-business-import-262870839474.asia-southeast1.run.app https://accounts.google.com/gsi/; img-src 'self' data: https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
 /sw.js
   Cache-Control: no-store
   Service-Worker-Allowed: /

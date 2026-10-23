@@ -7,9 +7,9 @@ export async function runtimeToken() {
   const response=await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',{
     headers:{'Metadata-Flavor':'Google'},signal:AbortSignal.timeout(3000),
   });
-  if(!response.ok) throw new Error('Google Search authorization unavailable');
+  if(!response.ok) throw new Error('Google Cloud authorization unavailable');
   const data=await response.json();
-  if(!data.access_token) throw new Error('Google Search authorization unavailable');
+  if(!data.access_token) throw new Error('Google Cloud authorization unavailable');
   credential={token:data.access_token,expires:Date.now()+(Number(data.expires_in)-120)*1000};
   return credential.token;
 }

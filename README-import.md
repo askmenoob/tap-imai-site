@@ -34,10 +34,10 @@ Endpoint: `https://tap-business-import-262870839474.asia-southeast1.run.app`.
 
 Dedicated runtime identity: `tap-business-import@cedar-kiln-502614-h5.iam.gserviceaccount.com`. Its secret access is limited to the two named Secret Manager secrets needed by this service. Model calls and short-link storage use the separately documented restricted roles. Dedicated builder identity has the Cloud Run Builder role.
 
-Required environment: `GOOGLE_PLACES_API_KEY` (Places-only API key, stored in `tap-import-places-key`), `IMPORT_SIGNING_SECRET` (at least 32 characters, stored in `tap-import-signing-key`), `ALLOWED_ORIGINS=https://tap.imai.my`, `MAX_DAILY_REQUESTS=300`.
-No secret value belongs in GitHub, HTML or import-config.js. Secret versions are pinned at deployment. The initial temporary key was revoked; the active key is `tap-imai-import-server-v2`, using secret version 2.
+Required environment: `GOOGLE_PLACES_AUTH=oauth`, `GOOGLE_PLACES_PROJECT=cedar-kiln-502614-h5`, `IMPORT_SIGNING_SECRET` (at least 32 characters, stored in `tap-import-signing-key`), `ALLOWED_ORIGINS=https://tap.imai.my`, `MAX_DAILY_REQUESTS=300`.
+Production Places requests use the Cloud Run runtime service account's short-lived OAuth token. No Places API key is required or exposed. API-key authentication remains available only as an explicit local compatibility option through `GOOGLE_PLACES_API_KEY`.
 
-Cloud Run uses zero minimum instances and a maximum of one, 256 MiB memory, one CPU, concurrency 10, request timeout 60 seconds. Origin checks, signed expiring selections, request size limits, 12 full-search/import requests per minute, 30 suggestion requests per minute, and a shared 300 requests/day per running process reduce abuse. These counters reset when the process restarts and are not a billing cap. Cloud Run and Places usage can incur Google charges. The pre-existing US$10 project budget is an alert, not a spending limit.
+Cloud Run uses zero minimum instances and a maximum of one, 256 MiB memory, one CPU, concurrency 10, request timeout 60 seconds. Every suggestion, search, import and short-link creation request requires a verified super-admin Google bearer token in addition to the Origin check. Signed expiring selections, request size limits, 12 full-search/import requests per minute, 30 suggestion requests per minute, and a shared 300 requests/day per running process provide secondary abuse limits. These counters reset when the process restarts and are not a billing cap. Cloud Run and Places usage can incur Google charges. The pre-existing US$10 project budget is an alert, not a spending limit.
 
 ## Safety and operational limits
 

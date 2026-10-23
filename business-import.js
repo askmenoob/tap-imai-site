@@ -2220,7 +2220,7 @@ var activePlace = -1;
 var placesFromDemo = false;
 var config = window.SMARTTAP_IMPORT_CONFIG || {};
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : config.endpoint || "";
-var registering = new URLSearchParams(location.search).get("register") === "1";
+var registering = true;
 var adminCredential = "";
 var adminExpiry = 0;
 var registrationTimer;
@@ -2232,6 +2232,7 @@ async function registrationAPI(path, { method = "GET", body, signal } = {}) {
 }
 if (registering) {
   $("registration").hidden = false;
+  $("search-panel").hidden = true;
   $("generate").disabled = true;
   const login = async (token) => {
     adminCredential = token;
@@ -2241,13 +2242,16 @@ if (registering) {
       adminExpiry = actor.expiresAt;
       $("register-status").textContent = "Super admin: " + actor.email;
       $("register-email").disabled = false;
+      $("search-panel").hidden = false;
       $("generate").disabled = false;
       clearTimeout(registrationTimer);
       registrationTimer = setTimeout(() => {
         adminCredential = "";
         adminExpiry = 0;
         $("register-email").disabled = true;
+        $("search-panel").hidden = true;
         $("generate").disabled = true;
+        cancelSearch();
         invalidate();
         $("register-status").textContent = "Sesi tamat. Log masuk semula.";
       }, Math.max(0, adminExpiry - Date.now()));
@@ -2255,6 +2259,7 @@ if (registering) {
       adminCredential = "";
       adminExpiry = 0;
       $("register-status").textContent = error.message;
+      $("search-panel").hidden = true;
       $("generate").disabled = true;
     }
   };
@@ -2360,10 +2365,11 @@ $("logo-preview").onerror = () => {
   $("logo-fallback").hidden = false;
 };
 async function api(path, body, signal) {
+  if (!adminCredential || adminExpiry <= Date.now()) throw new Error("Log masuk sebagai super admin untuk mencari dan menjana halaman.");
   if (!endpoint) throw new Error("Carian automatik belum tersedia. Cuba lagi kemudian atau hubungi pentadbir.");
   const base = new URL(endpoint);
   if (base.protocol !== "https:" && !(base.protocol === "http:" && base.hostname === "127.0.0.1")) throw new Error("Sambungan carian tidak sah.");
-  const response = await fetch(new URL(path, base), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
+  const response = await fetch(new URL(path, base), { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + adminCredential }, body: JSON.stringify(body), signal });
   const data = await response.json();
   if (data.demo) $("demo").hidden = false;
   if (!response.ok) throw new Error(data.error || "Carian tidak tersedia sekarang.");

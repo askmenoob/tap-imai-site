@@ -21,8 +21,10 @@ const newSubscription=paymentsEnabled?{plan:'annual',startsAt:null,expiresAt:nul
 const port = Number(process.env.PORT || 8787);
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const key = (process.env.GOOGLE_PLACES_API_KEY || '').trim();
+const placesOAuth = process.env.GOOGLE_PLACES_AUTH === 'oauth';
+const placesProject = (process.env.GOOGLE_PLACES_PROJECT || '').trim();
 const secret = (process.env.IMPORT_SIGNING_SECRET || (preview ? randomBytes(32).toString('hex') : '')).trim();
-if (!preview && (!key || secret.length < 32)) throw new Error('Configure GOOGLE_PLACES_API_KEY and IMPORT_SIGNING_SECRET before starting.');
+if (!preview && ((!key && !placesOAuth) || secret.length < 32)) throw new Error('Configure Google Places authentication and IMPORT_SIGNING_SECRET before starting.');
 const origins = new Set((process.env.ALLOWED_ORIGINS || 'https://tap.imai.my').split(',').map(s => s.trim()));
 if (preview) origins.add('http://127.0.0.1:' + port);
 const linkStore=demo?createMemoryLinkStore():
@@ -45,7 +47,7 @@ const fixture = {
   search: async query => query.toLowerCase().includes('tiada') ? [] : [{ id:'DemoPlaceId1234', name:'Kopi Contoh (DEMO)', address:'Lokasi contoh — bukan hasil Google sebenar', attributions:[] }],
   details: async id => ({ id, website:'https://example.com/',phone:'012-2258950' }),
 };
-const service = createImportService({ google: demo ? fixture : createGoogleProvider(key), secret,
+const service = createImportService({ google: demo ? fixture : createGoogleProvider(placesOAuth ? {getToken:runtimeToken,quotaProject:placesProject} : key), secret,
   ...(!demo && process.env.GOOGLE_SEARCH_ENABLED==='true' ? {webSearch:createGoogleWebSearch({project:process.env.GOOGLE_SEARCH_PROJECT,model:process.env.GOOGLE_SEARCH_MODEL || 'gemini-3.8-flash'})} : {}),
   ...(demo ? { readWebsite: async () => ({ url:'https://example.com/', html:`<script type="application/ld+json">${JSON.stringify({ '@type':'CafeOrCoffeeShop', name:'Kopi Contoh (DEMO)', description:'Kopi dan makanan untuk komuniti setempat. Data contoh untuk menguji aliran sahaja.', logo:demoLogo, sameAs:['https://www.instagram.com/example/','https://www.facebook.com/example/','https://www.tiktok.com/@example','https://wa.me/60123456789'] })}</script>` }) } : {}) });
 const windows = new Map();
@@ -75,7 +77,7 @@ const server = http.createServer(async (req,res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
   const origin = origins.has(req.headers.origin) ? req.headers.origin : null;
   try {
-    if (path === '/health') return reply(res, 200, { ready:!!key, demo, shortLinks:!!shortLinks }, origin);
+    if (path === '/health') return reply(res, 200, { ready:!!key||placesOAuth, demo, shortLinks:!!shortLinks }, origin);
     if(await accountRoutes(req,res,{path,origin}))return;
     if(path.startsWith('/api/links/')&&req.method==='GET') {
       if(req.headers.origin&&!origin) return reply(res,403,{error:'Akses tidak dibenarkan.'});
@@ -84,9 +86,12 @@ const server = http.createServer(async (req,res) => {
     }
     if (path.startsWith('/api/')) {
       if (!origin) return reply(res, 403, { error:'Akses tidak dibenarkan.' });
-      if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin':origin, 'access-control-allow-methods':'POST', 'access-control-allow-headers':'Content-Type', vary:'Origin' }); res.end(); return; }
+      if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin':origin, 'access-control-allow-methods':'POST', 'access-control-allow-headers':'Content-Type, Authorization', vary:'Origin' }); res.end(); return; }
       if (req.method !== 'POST') return reply(res, 405, { error:'Kaedah tidak dibenarkan.' }, origin);
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return reply(res, 415, { error:'Gunakan JSON.' }, origin);
+      if(demo) {
+        if(req.headers.authorization!=='Bearer localhost-demo') return reply(res,401,{error:'Login super admin diperlukan.'},origin);
+      } else await adminAuth(req.headers.authorization);
       if (!allow(req.socket.remoteAddress, path === '/api/suggest')) return reply(res, 429, { error:'Had carian dicapai. Cuba sebentar lagi.' }, origin);
       const data = await body(req,path==='/api/shorten'?8192:4096);
       if(path==='/api/shorten') {
@@ -116,4 +121,4 @@ const server = http.createServer(async (req,res) => {
 });
 server.requestTimeout = 15000;
 server.headersTimeout = 10000;
-server.listen(port, preview ? '127.0.0.1' : '0.0.0.0', () => console.log(JSON.stringify({ port, preview, demo, ready:!!key })));
+server.listen(port, preview ? '127.0.0.1' : '0.0.0.0', () => console.log(JSON.stringify({ port, preview, demo, ready:!!key||placesOAuth })));

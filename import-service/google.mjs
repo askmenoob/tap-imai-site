@@ -1,9 +1,14 @@
-export function createGoogleProvider(key, { fetcher = fetch } = {}) {
+export function createGoogleProvider(auth, { fetcher = fetch } = {}) {
+  const {key='',getToken,quotaProject=''}=typeof auth==='string'?{key:auth}:auth||{};
   async function request(path, fields, body) {
-    if (!key) throw Object.assign(new Error('Carian belum diaktifkan oleh pentadbir.'), { status: 503 });
+    if (!key && !getToken) throw Object.assign(new Error('Carian belum diaktifkan oleh pentadbir.'), { status: 503 });
+    const authorization=key?{}:{Authorization:'Bearer '+await getToken()};
     const response = await fetcher('https://places.googleapis.com/v1/' + path, {
       method: body ? 'POST' : 'GET',
-      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': fields },
+      headers: { 'Content-Type':'application/json', ...authorization,
+        ...(key?{'X-Goog-Api-Key':key}:{}),
+        ...(!key&&quotaProject?{'X-Goog-User-Project':quotaProject}:{}),
+        'X-Goog-FieldMask':fields },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(10000),
     });

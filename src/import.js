@@ -12,18 +12,18 @@ let sessionToken = crypto.randomUUID();
 let places = []; let activePlace = -1; let placesFromDemo = false;
 const config = window.SMARTTAP_IMPORT_CONFIG || {};
 const endpoint = location.hostname === '127.0.0.1' ? location.origin : (config.endpoint || '');
-const registering=new URLSearchParams(location.search).get('register')==='1';
+const registering=true;
 let adminCredential='',adminExpiry=0,registrationTimer;
 async function registrationAPI(path,{method='GET',body,signal}={}){
   const response=await fetch(new URL('/api/admin/'+path,endpoint),{method,headers:{...(adminCredential?{Authorization:'Bearer '+adminCredential}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,cache:'no-store',credentials:'omit',signal});
   const data=await response.json();if(!response.ok)throw new Error(data.error||'Pendaftaran tidak berjaya.');return data;
 }
 if(registering){
-  $('registration').hidden=false;$('generate').disabled=true;
+  $('registration').hidden=false;$('search-panel').hidden=true;$('generate').disabled=true;
   const login=async token=>{adminCredential=token;$('register-status').textContent='Mengesahkan super admin…';
-    try{const actor=await registrationAPI('self');adminExpiry=actor.expiresAt;$('register-status').textContent='Super admin: '+actor.email;$('register-email').disabled=false;$('generate').disabled=false;
-      clearTimeout(registrationTimer);registrationTimer=setTimeout(()=>{adminCredential='';adminExpiry=0;$('register-email').disabled=true;$('generate').disabled=true;invalidate();$('register-status').textContent='Sesi tamat. Log masuk semula.';},Math.max(0,adminExpiry-Date.now()));
-    }catch(error){adminCredential='';adminExpiry=0;$('register-status').textContent=error.message;$('generate').disabled=true;}
+    try{const actor=await registrationAPI('self');adminExpiry=actor.expiresAt;$('register-status').textContent='Super admin: '+actor.email;$('register-email').disabled=false;$('search-panel').hidden=false;$('generate').disabled=false;
+      clearTimeout(registrationTimer);registrationTimer=setTimeout(()=>{adminCredential='';adminExpiry=0;$('register-email').disabled=true;$('search-panel').hidden=true;$('generate').disabled=true;cancelSearch();invalidate();$('register-status').textContent='Sesi tamat. Log masuk semula.';},Math.max(0,adminExpiry-Date.now()));
+    }catch(error){adminCredential='';adminExpiry=0;$('register-status').textContent=error.message;$('search-panel').hidden=true;$('generate').disabled=true;}
   };
   registrationAPI('config').then(settings=>{
     if(settings.demo&&location.hostname==='127.0.0.1'){$('register-demo-login').hidden=false;$('register-demo-login').onclick=()=>login('localhost-demo');}
@@ -70,10 +70,11 @@ for (const [key,label] of Object.entries(fieldNames)) {
 $('logo-preview').onload=()=>{$('logo-preview').hidden=false; $('logo-fallback').hidden=true;};
 $('logo-preview').onerror=()=>{$('logo-preview').hidden=true; $('logo-fallback').hidden=false;};
 async function api(path, body, signal) {
+  if(!adminCredential||adminExpiry<=Date.now()) throw new Error('Log masuk sebagai super admin untuk mencari dan menjana halaman.');
   if (!endpoint) throw new Error('Carian automatik belum tersedia. Cuba lagi kemudian atau hubungi pentadbir.');
   const base = new URL(endpoint);
   if (base.protocol!=='https:' && !(base.protocol==='http:' && base.hostname==='127.0.0.1')) throw new Error('Sambungan carian tidak sah.');
-  const response = await fetch(new URL(path,base),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});
+  const response = await fetch(new URL(path,base),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+adminCredential},body:JSON.stringify(body),signal});
   const data=await response.json();
   if (data.demo) $('demo').hidden=false;
   if (!response.ok) throw new Error(data.error || 'Carian tidak tersedia sekarang.');
