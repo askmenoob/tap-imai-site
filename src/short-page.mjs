@@ -1,7 +1,7 @@
 export async function generateShortPage(profile,{origin,shorten,qr,signal}) {
   const bytes=new TextEncoder().encode(JSON.stringify(profile));
   const encoded=btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
-  if(encoded.length>4096)throw new Error('Maklumat terlalu panjang. Pendekkan penerangan atau pautan.');
+  if(encoded.length>16384)throw new Error('Maklumat terlalu panjang. Pendekkan penerangan atau pautan.');
   const original=new URL('/?p='+encoded,origin);
   const shortened=await shorten(original.href,signal);signal?.throwIfAborted();
   const link=new URL(shortened.url);

@@ -7,11 +7,11 @@ const fields=new Set(['v','name','tagline','phone',...urlFields,...Object.keys(a
 const invalid=()=>Object.assign(new Error('Gunakan pautan halaman SmartTap yang telah dijana.'),{status:400});
 export function validateSmartTapURL(value,origin='https://tap.imai.my') {
   try {
-    if(typeof value!=='string'||value.length>4500) throw 0;
+    if(typeof value!=='string'||value.length>17000) throw 0;
     const url=new URL(value);
     if(url.origin!==origin||url.username||url.password||url.pathname!=='/'||url.hash||[...url.searchParams.keys()].join()!=='p') throw 0;
     const encoded=url.searchParams.get('p');
-    if(!encoded||encoded.length>4096||!/^[A-Za-z0-9_-]+$/.test(encoded)) throw 0;
+    if(!encoded||encoded.length>16384||!/^[A-Za-z0-9_-]+$/.test(encoded)) throw 0;
     const bytes=Buffer.from(encoded,'base64url');
     if(bytes.toString('base64url')!==encoded) throw 0;
     const profile=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));

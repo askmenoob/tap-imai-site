@@ -31,13 +31,13 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
     if(match&&req.method==='GET'&&!match[2]){reply(res,200,customer?await customers.get(match[1],actor):await admin.get(match[1]),origin);return true;}
     if(['POST','PUT'].includes(req.method)){
       if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){reply(res,415,{error:'Gunakan JSON.'},origin);return true;}
-      if(!customer&&path===base+'/register'&&req.method==='POST'){reply(res,200,await customers.register(await body(req,8192),actor),origin);return true;}
+      if(!customer&&path===base+'/register'&&req.method==='POST'){reply(res,200,await customers.register(await body(req,24576),actor),origin);return true;}
       if(match&&req.method==='PUT'){
         if(match[2]){
           if(customer){reply(res,403,{error:'Hanya super admin boleh mendaftarkan Gmail pemilik.'},origin);return true;}
           reply(res,200,await customers.assign(match[1],await body(req,2048),actor),origin);return true;
         }
-        const data=await body(req,8192);
+        const data=await body(req,24576);
         reply(res,200,customer?await customers.update(match[1],data,actor):await admin.update(match[1],data,actor),origin);return true;
       }
     }

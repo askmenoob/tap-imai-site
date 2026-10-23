@@ -108,7 +108,7 @@ const server = http.createServer(async (req,res) => {
       if (req.method !== 'POST') return reply(res, 405, { error:'Kaedah tidak dibenarkan.' }, origin);
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return reply(res, 415, { error:'Gunakan JSON.' }, origin);
       if (!allow(req.socket.remoteAddress, path === '/api/suggest')) return reply(res, 429, { error:'Had carian dicapai. Cuba sebentar lagi.' }, origin);
-      const data = await body(req,path==='/api/shorten'?8192:4096);
+      const data = await body(req,path==='/api/shorten'?24576:4096);
       if(path==='/api/shorten') {
         if(!shortLinks) return reply(res,503,{error:'Pautan pendek belum tersedia. Cuba lagi sebentar.'},origin);
         return reply(res,200,await shortLinks.shorten(data.url),origin);

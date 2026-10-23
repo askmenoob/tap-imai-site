@@ -26,6 +26,13 @@ test('promotion start/end use Malaysia time and hide at exact expiry',()=>{
   assert.equal(promotionVisible(p,Date.parse('2026-10-24T02:00:00Z')),true);
   assert.equal(promotionVisible(p,Date.parse('2026-10-24T04:00:00Z')),false);
 });
+test('a fully populated business profile fits the expanded bounded payload and preserves optional fields',()=>{
+  const long='https://example.com/'+ 'a'.repeat(430);
+  const p={...base,theme:'dark',accent:'#123456',tagline:'Contoh '.repeat(20),address:'a'.repeat(240),hours:'b'.repeat(240),promoTitle:'c'.repeat(70),promoText:'d'.repeat(180),promoStart:'2026-10-01T09:00',promoEnd:'2026-10-31T18:00'};
+  for(const key of ['logo','cover','instagram','facebook','tiktok','threads','whatsapp','website','menu','directions','promoURL'])p[key]=long;
+  assert.ok(encode(p).length>4096);assert.equal(validateSmartTapURL(url(p)),url(p));assert.equal(decodeProfilePayload(encode(p)).promoText,p.promoText);
+  assert.throws(()=>validateSmartTapURL(origin+'/?p='+'a'.repeat(16385)));
+});
 test('cover decoder strips metadata, limits dimensions/bytes and rejects disguised files',async()=>{
   const original=await sharp({create:{width:2500,height:1800,channels:3,background:'#b99c65'}}).jpeg().withMetadata({orientation:6}).toBuffer();
   const bytes=await normalizeCover(original),info=await sharp(bytes).metadata();

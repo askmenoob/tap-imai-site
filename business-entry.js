@@ -163,7 +163,7 @@ function profileURL(value) {
 }
 function decodeProfilePayload(payload) {
   try {
-    if (typeof payload !== "string" || payload.length > 4096 || !/^[A-Za-z0-9_-]+$/.test(payload)) throw 0;
+    if (typeof payload !== "string" || payload.length > 16384 || !/^[A-Za-z0-9_-]+$/.test(payload)) throw 0;
     const bytes = Uint8Array.from(atob(payload.replaceAll("-", "+").replaceAll("_", "/")), (c) => c.charCodeAt(0));
     const raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     if (raw?.v !== 1 || typeof raw.name !== "string" || !raw.name.trim() || [...raw.name].length > 80) throw 0;
