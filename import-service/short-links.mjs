@@ -59,6 +59,7 @@ export function createShortLinks({store,secret,origin='https://tap.imai.my',now=
 export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
   if(!/^[a-z0-9][a-z0-9.-]{2,62}$/.test(bucket||'')) throw new Error('Invalid short link bucket.');
   const object=id=>'links/'+id+'.json';
+  function gatewayObject(id){if(!/^ST[a-f0-9]{24}$/.test(id||''))throw new Error('Invalid checkout ID.');return 'checkout/'+id+'.json';}
   function ownerPrefix(key){if(!/^[A-Za-z0-9_-]{43}$/.test(key||''))throw new Error('Invalid owner key.');return 'owners/'+key+'/';}
   const base='https://storage.googleapis.com/storage/v1/b/'+bucket+'/o/';
   async function request(url,options={}) {
@@ -111,6 +112,14 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
       }));
       return {items,cursor:page.nextPageToken||null};
     },
+    createGatewayOrder:(id,record)=>write(gatewayObject(id),record),
+    async getGatewayOrder(id){
+      const name=gatewayObject(id),metadata=await request(base+encodeURIComponent(name));if(!metadata)return null;
+      const data=await request(base+encodeURIComponent(name)+'?alt=media&generation='+encodeURIComponent(metadata.generation));
+      if(!data)throw Object.assign(new Error('Pesanan telah berubah.'),{status:409});
+      return {record:data,revision:metadata.generation};
+    },
+    updateGatewayOrder:(id,record,revision)=>write(gatewayObject(id),record,revision),
     archive:(id,revision,record)=>write('history/'+id+'/'+revision+'.json',record),
     update:(id,record,revision)=>write(object(id),record,revision),
     claimPayment:(key,record)=>write('payments/'+ownerPrefix(key).slice(7,-1)+'.json',record),
@@ -130,9 +139,12 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
 
 // Used only by the explicitly enabled localhost preview and isolated tests.
 export function createMemoryLinkStore(){
-  const records=new Map(),history=new Map(),memberships=new Map(),payments=new Map();let generation=0;
+  const records=new Map(),history=new Map(),memberships=new Map(),payments=new Map(),gatewayOrders=new Map();let generation=0;
   const clone=value=>structuredClone(value);
   return {records,history,memberships,payments,
+    createGatewayOrder:async(id,record)=>{if(gatewayOrders.has(id))return false;gatewayOrders.set(id,{record:clone(record),revision:String(++generation)});return true;},
+    getGatewayOrder:async id=>clone(gatewayOrders.get(id)||null),
+    updateGatewayOrder:async(id,record,revision)=>{if(gatewayOrders.get(id)?.revision!==revision)return false;gatewayOrders.set(id,{record:clone(record),revision:String(++generation)});return true;},
     claimPayment:async(key,record)=>{if(payments.has(key))return false;payments.set(key,clone(record));return true;},
     getPayment:async key=>clone(payments.get(key)||null),
     create:async(id,record)=>{if(records.has(id))return false;records.set(id,{record:clone(record),revision:String(++generation)});return true;},

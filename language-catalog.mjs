@@ -1,4 +1,26 @@
 export const translations = {
+  'Apabila anda memilih pembayaran ToyyibPay, SmartTap menghantar ID pesanan dan jumlah kepada ToyyibPay untuk menyediakan bil. Anda melengkapkan pembayaran pada halaman ToyyibPay. SmartTap menyimpan kod bil, rujukan transaksi dan status bayaran secara peribadi untuk pemilik rekod dan super admin. Kata laluan bank dan maklumat kad tidak diminta atau disimpan oleh SmartTap. Pembayaran automatik hanya mengaktifkan langganan selepas transaksi dipadankan dan disahkan dengan ToyyibPay.':'When you choose ToyyibPay, SmartTap sends the order ID and amount to create a bill. You complete payment on ToyyibPay. SmartTap privately stores the bill code, transaction reference and payment status for the record owner and super admin. SmartTap does not request or store bank passwords or card details. Automatic activation follows a transaction matched and verified with ToyyibPay.',
+
+  'Pakej halaman ditawarkan setahun sahaja. Bayaran ToyyibPay disahkan secara automatik; bayaran manual disemak oleh super admin.':'Page packages are annual only. ToyyibPay payments are verified automatically; manual payments are reviewed by the super admin.',
+
+  'Pembayaran ToyyibPay':'ToyyibPay payment','Bayar dengan ToyyibPay ↗':'Pay with ToyyibPay ↗',
+  'Jumlah pesanan ditetapkan oleh SmartTap. Status disahkan terus dengan ToyyibPay.':'SmartTap sets the order amount. Payment status is verified directly with ToyyibPay.',
+  'Teruskan pembayaran ↗':'Continue payment ↗','Semak status bayaran':'Check payment status','Batalkan bil belum dibayar':'Cancel unpaid bill',
+  'Bayaran manual (QR DuitNow)':'Manual payment (DuitNow QR)',
+  'SIMULASI TEMPATAN — tiada wang dibayar.':'LOCAL SIMULATION — no money is paid.',
+  'Mod ujian ToyyibPay — bukan pembayaran sebenar.':'ToyyibPay test mode — no real payments.',
+  'Bayar melalui ToyyibPay. Pengaktifan dibuat selepas transaksi disahkan.':'Pay through ToyyibPay. Activation follows verified payment.',
+  'Pembayaran dalam talian belum dibuka. Bayaran manual masih tersedia.':'Online payment is not open yet. Manual payment remains available.',
+  'ToyyibPay disediakan. Pembayaran sebenar ditutup sehingga akaun verified.':'ToyyibPay is configured. Live payments remain closed until the account is verified.',
+  'ToyyibPay belum diaktifkan. Bayaran manual masih tersedia.':'ToyyibPay is not enabled yet. Manual payment remains available.',
+  'Sedang menyediakan bil. Muat semula sebentar lagi.':'Preparing your bill. Refresh shortly.',
+  'Bayaran belum disahkan. Teruskan pembayaran atau semak status.':'Payment is not confirmed yet. Continue paying or check its status.',
+  'Cubaan bayaran tidak berjaya. Anda boleh mencuba semula pada bil yang sama.':'The payment attempt was unsuccessful. You can retry on the same bill.',
+  'Bayaran ToyyibPay disahkan.':'ToyyibPay payment confirmed.','Bil belum dibayar telah dibatalkan.':'The unpaid bill has been cancelled.',
+  'Bil belum dapat disediakan. Anda boleh cuba semula.':'The bill could not be created. You can try again.',
+  'Bayaran diterima dan memerlukan tindakan super admin.':'Payment received; super admin action is required.',
+  'Menyediakan bil ToyyibPay…':'Preparing your ToyyibPay bill…','Menyemak status ToyyibPay…':'Checking ToyyibPay status…',
+
   'Mesej daripada super admin':'Message from the super admin',
   'Menunggu tindakan pelanggan.':'Awaiting action from the customer.',
   'Mesej pelanggan: balasan diterima':'Customer message: reply received',

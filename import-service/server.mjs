@@ -14,6 +14,8 @@ import { createCustomerService } from './customers.mjs';
 import { createAccountRoutes } from './account-routes.mjs';
 import {createDiscoveryRoutes} from './discovery-routes.mjs';
 import {createManagementService} from './management.mjs';
+import {createToyyibCheckout,createToyyibProvider} from './toyyibpay.mjs';
+import {createToyyibDemo} from './toyyib-demo.mjs';
 import {paymentQR} from './payment-qr.mjs';
 
 const preview = process.argv.includes('--preview');
@@ -37,7 +39,14 @@ const userAuth=createGoogleUserAuth({clientId:adminClientId});
 const admin=linkStore?createAdminService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
 const customers=linkStore?createCustomerService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription}):null;
 const management=linkStore?createManagementService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',enabled:paymentsEnabled,qrPayload:paymentQR}):null;
-const accountRoutes=createAccountRoutes({adminAuth,userAuth,admin,customers,management,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
+const toyMode=process.env.TOYYIBPAY_MODE||'live';
+if(!preview&&toyMode!=='live')throw new Error('ToyyibPay sandbox requires an isolated preview environment.');
+const toySecret=demo?'local-simulation-only':(process.env.TOYYIBPAY_SECRET_KEY||'').trim();
+const toyCategory=demo?'local-demo':(process.env.TOYYIBPAY_CATEGORY_CODE||'').trim();
+const toyDemo=demo?createToyyibDemo('http://127.0.0.1:'+port):null;
+const toyProvider=toyDemo?.provider||(toySecret&&toyCategory?createToyyibProvider({secretKey:toySecret,categoryCode:toyCategory,mode:toyMode}):null);
+const gateway=linkStore?createToyyibCheckout({store:linkStore,provider:toyProvider,secretKey:toySecret,categoryCode:toyCategory,enabled:demo||process.env.TOYYIBPAY_ENABLED==='true',accountVerified:process.env.TOYYIBPAY_ACCOUNT_VERIFIED==='true',duitNowQR:demo||process.env.TOYYIBPAY_DUITNOW_QR==='true',origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',apiOrigin:preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app'}):null;
+const accountRoutes=createAccountRoutes({adminAuth,userAuth,admin,customers,management,gateway,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
 const mediaOrigin=preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app';
 const demoMedia=new Map();
 const mediaStore=demo?{put:async(name,bytes)=>demoMedia.set(name,bytes),get:async name=>demoMedia.get(name)}:process.env.SHORT_LINK_BUCKET?createCloudMediaStore({bucket:process.env.SHORT_LINK_BUCKET,getToken:runtimeToken}):null;
@@ -82,6 +91,15 @@ const server = http.createServer(async (req,res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
   const origin = origins.has(req.headers.origin) ? req.headers.origin : null;
   try {
+    if(toyDemo&&await toyDemo.route(req,res,path))return;
+    if(path==='/api/toyyibpay/callback'){
+      if(req.method!=='POST')return reply(res,405,{error:'Gunakan POST.'});
+      if(!gateway)return reply(res,503,{error:'Pembayaran belum tersedia.'});
+      if(!/^application\/x-www-form-urlencoded(?:;|$)/i.test(req.headers['content-type']||''))return reply(res,415,{error:'Format callback tidak sah.'});
+      let raw='',length=0;for await(const chunk of req){length+=chunk.length;if(length>4096)return reply(res,413,{error:'Notifikasi terlalu besar.'});raw+=chunk.toString('utf8');}
+      const params=new URLSearchParams(raw);for(const key of new Set(params.keys()))if(params.getAll(key).length!==1)return reply(res,400,{error:'Notifikasi tidak sah.'});
+      await gateway.callback(Object.fromEntries(params));admin?.invalidatePending();return reply(res,200,{received:true});
+    }
     if (path === '/health') return reply(res, 200, { ready:!!key, demo, shortLinks:!!shortLinks }, origin);
     const upload=/^\/api\/(admin|user)\/links\/([A-Za-z0-9_-]{16})\/cover$/.exec(path);
     if(upload&&req.method==='POST'){

@@ -8,3 +8,6 @@
   Cache-Control: public, max-age=0, must-revalidate
 /business-admin.js
   Cache-Control: public, max-age=0, must-revalidate
+
+/assets/business-admin-checkout.js
+  Cache-Control: no-store
