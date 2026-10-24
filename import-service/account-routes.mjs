@@ -15,6 +15,14 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
     if(path===base+'/plan'&&req.method==='GET'&&management){reply(res,200,management.config(),origin);return true;}
     if(!customer&&path===base+'/pending-payments'&&req.method==='GET'){reply(res,200,await admin.pendingPayments(),origin);return true;}
     const query=new URL(req.url,'http://localhost').searchParams;
+    const messageMatch=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/(message|message-reply)$').exec(path);
+    if(messageMatch&&management&&req.method==='POST'){
+      const [,id,action]=messageMatch;
+      if((customer&&action!=='message-reply')||(!customer&&action!=='message')){reply(res,403,{error:'Tindakan mesej tidak dibenarkan.'},origin);return true;}
+      if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){reply(res,415,{error:'Gunakan JSON.'},origin);return true;}
+      const data=await body(req,8192);
+      reply(res,200,action==='message'?await management.message(id,data,actor):await management.replyMessage(id,data,actor),origin);return true;
+    }
     const operation=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/(state|quote|renewal|decision)$').exec(path);
     if(operation&&management){
       const [,id,action]=operation;

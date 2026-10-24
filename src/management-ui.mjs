@@ -4,7 +4,8 @@ const date=value=>value?new Date(value).toLocaleDateString('ms-MY',{timeZone:'As
 export const stateLabels={active:'Aktif',disabled:'Dinyahaktifkan',deleted:'Dipadam',pending:'Menunggu pengaktifan',expired:'Langganan tamat',nfc_only:'NFC sahaja · sekali bayar'};
 export function createManagementUI({customer,api,onUpdate,onBusy}){
   const panel=document.createElement('section');panel.className='management-panel';
-  panel.innerHTML=`<h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review ↗</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej ↗</a>
+  panel.innerHTML=`<section id="admin-message-box" class="admin-message-box" hidden aria-labelledby="admin-message-title"><h3 id="admin-message-title">Mesej daripada super admin</h3><p id="admin-message-text" data-no-i18n></p><p id="admin-message-time" class="help" data-no-i18n></p><p id="admin-message-state" role="status" aria-live="polite"></p><div id="admin-message-reply" hidden><strong>Balasan pelanggan</strong><p id="admin-message-reply-text" data-no-i18n></p></div><form id="message-reply-form" hidden><label for="message-reply-text">Nombor transaksi / balasan anda</label><textarea id="message-reply-text" required maxlength="500" rows="3"></textarea><button type="submit">Hantar balasan kepada super admin</button></form><button id="message-resolve" type="button" class="secondary" hidden>Tandakan selesai</button><a id="message-whatsapp" class="button secondary" href="https://wa.me/60103250032" target="_blank" rel="noopener noreferrer" hidden>Hubungi super admin di WhatsApp ↗</a></section>
+  <form id="admin-message-form" class="admin-message-compose" ${customer?'hidden':''}><h3>Hantar mesej kepada pelanggan</h3><label for="admin-message-input">Mesej / tindakan yang diperlukan</label><textarea id="admin-message-input" required maxlength="1000" rows="3" placeholder="Contoh: Sila berikan nombor transaksi bank untuk semakan bayaran."></textarea><p class="help">Mesej muncul pada halaman edit pelanggan. Mesej baharu menggantikan mesej semasa; rekod sebelumnya disimpan.</p><button type="submit">Hantar mesej</button></form><h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review ↗</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej ↗</a>
   <div id="lifecycle-actions" class="actions" ${customer?'hidden':''}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button></div>
   <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
   <p id="management-status" role="status" aria-live="polite"></p>
@@ -16,7 +17,7 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
   <p class="notice">Selepas membayar, hantar rujukan transaksi. Langganan dilanjutkan selepas super admin mengesahkan wang diterima. Jangan bayar semasa menggunakan demo tempatan.</p><label for="payment-reference">Rujukan transaksi bank</label><input id="payment-reference" required minlength="3" maxlength="80" autocomplete="off"><label for="payment-date">Tarikh bayaran</label><input id="payment-date" type="date" required><button id="payment-submit">Hantar untuk semakan bayaran</button></form>
   <form id="payment-review" hidden><h4>Semakan super admin</h4><p id="review-details"></p><label class="check-label"><input id="bank-confirm" type="checkbox"> Saya telah menyemak akaun bank dan wang benar-benar diterima untuk transaksi ini.</label><label for="review-note">Nota kepada pelanggan (pilihan)</label><input id="review-note" maxlength="200"><div class="actions"><button id="payment-approve">Sahkan bayaran</button><button type="button" id="payment-reject" class="secondary">Tolak permohonan</button></div></form></div>`;
   document.getElementById('edit-form').before(panel);
-  const $=id=>panel.querySelector('#'+id);let current=null,config=null,quote=null,sequence=0,working=false,paymentOpen=!customer,paymentAvailable=false;
+  const $=id=>panel.querySelector('#'+id);let current=null,config=null,quote=null,sequence=0,messageSequence=0,working=false,paymentOpen=!customer,paymentAvailable=false;
   function paymentVisibility(open){
     paymentOpen=open;sequence++;quote=null;$('payment-form').hidden=!paymentAvailable||(customer&&!open);$('payment-instructions').hidden=true;
     $('payment-toggle').setAttribute('aria-expanded',String(customer&&open));$('payment-toggle').textContent=open?'Tutup borang bayaran':paymentPrompt(current||{}).label;
@@ -24,7 +25,21 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
   }
   const today=()=>new Date(Date.now()+8*3600000).toISOString().slice(0,10);
   const options=()=>({package:$('payment-package').value,extraNfcQty:Number($('payment-nfc').value),stickerQty:Number($('payment-stickers').value)});
-  function clear(){current=null;paymentAvailable=false;paymentVisibility(!customer);$('payment-disclosure').hidden=true;$('renewal-reminder').hidden=true;$('payment-reference').value='';$('review-note').value='';$('delete-form').hidden=true;$('order-support').hidden=true;$('order-whatsapp').removeAttribute('href');}
+  function clear(){messageSequence++;current=null;$('admin-message-box').hidden=true;$('admin-message-text').textContent='';$('admin-message-reply-text').textContent='';$('message-reply-text').value='';$('admin-message-input').value='';paymentAvailable=false;paymentVisibility(!customer);$('payment-disclosure').hidden=true;$('renewal-reminder').hidden=true;$('payment-reference').value='';$('review-note').value='';$('delete-form').hidden=true;$('order-support').hidden=true;$('order-whatsapp').removeAttribute('href');}
+  function showMessage(item){
+    const message=item.adminMessage,note=!message?item.renewal?.note:'';
+    const visible=!!(message&&(!customer||message.status!=='resolved')||note);
+    $('admin-message-box').hidden=!visible;
+    $('admin-message-form').hidden=customer||item.manualState==='deleted'||!item.ownerEmail;
+    $('admin-message-text').textContent=message?.text||note||'';
+    $('admin-message-time').textContent=message?.sentAt?new Date(message.sentAt).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur'}):'';
+    $('admin-message-state').textContent=message?.status==='replied'?'Balasan telah dihantar. Menunggu tindakan super admin.':message?.status==='resolved'?'Mesej telah diselesaikan.':message?(customer?'Tindakan anda diperlukan.':'Menunggu tindakan pelanggan.'):'Nota semakan bayaran daripada super admin.';
+    $('admin-message-box').dataset.status=message?.status||'open';
+    $('admin-message-reply').hidden=!message?.reply;$('admin-message-reply-text').textContent=message?.reply?.text||'';
+    $('message-reply-form').hidden=!customer||message?.status!=='open';
+    $('message-resolve').hidden=customer||!message||message.status==='resolved';
+    $('message-whatsapp').hidden=!customer||!!message;
+  }
   function orderSupport(item){
     const approved=item.renewal?.status==='approved'?item.renewal:null,orderId=approved?.id||item.subscription?.lastPaymentId;
     const visible=customer&&typeof orderId==='string'&&!!orderId&&item.manualState!=='deleted';
@@ -43,7 +58,7 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
     }catch(error){if(version===sequence)$('payment-quote').textContent=error.message;}
   }
   async function show(item){
-    const changed=current?.id!==item.id,oldStatus=current?.renewal?.status;current=item;if(changed){paymentAvailable=false;paymentVisibility(!customer);$('payment-disclosure').hidden=true;$('renewal-reminder').hidden=true;}orderSupport(item);$('page-state').textContent=stateLabels[item.state]||item.state;
+    const changed=current?.id!==item.id,messageChanged=current?.adminMessage?.id!==item.adminMessage?.id,oldStatus=current?.renewal?.status;current=item;if(changed||messageChanged){$('message-reply-text').value='';$('management-status').textContent='';}showMessage(item);if(changed){messageSequence++;$('message-reply-text').value='';$('admin-message-input').value='';paymentAvailable=false;paymentVisibility(!customer);$('payment-disclosure').hidden=true;$('renewal-reminder').hidden=true;}orderSupport(item);$('page-state').textContent=stateLabels[item.state]||item.state;
     for(const id of ['page-state','subscription-summary'])$(id).dataset.state=item.state;
     $('subscription-summary').textContent=item.subscription?.plan==='annual'?'Halaman tahunan · tamat '+date(item.subscription.expiresAt):item.subscription?.plan==='nfc_only'?'NFC terus ke Google Review. Tiada langganan halaman QR.':'Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.';
     $('direct-review-wrap').hidden=item.subscription?.plan!=='nfc_only';$('direct-review').href=item.profile.google;
@@ -66,10 +81,10 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
     if(oldStatus==='pending'&&payment?.status==='approved'){$('payment-reference').value='';$('payment-nfc').value='0';$('payment-stickers').value='0';}if(!$('payment-form').hidden)await cart();
   }
   async function action(path,body,message){
-    if(working||!current)return;working=true;onBusy(true);const id=current.id;$('management-status').textContent='Menyimpan…';for(const node of panel.querySelectorAll('button,input,select'))node.disabled=true;
-    try{const updated=await api('/links/'+id+path,{method:'POST',body});if(current?.id!==id)return;onUpdate(updated);await show(updated);$('management-status').textContent=message;}
+    if(working||!current)return;working=true;onBusy(true);const id=current.id,version=messageSequence;$('management-status').textContent='Menyimpan…';for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=true;
+    try{const updated=await api('/links/'+id+path,{method:'POST',body});if(current?.id!==id||version!==messageSequence)return;onUpdate(updated);await show(updated);if(path==='/message'&&body.action==='send')$('admin-message-input').value='';if(path==='/message-reply')$('message-reply-text').value='';$('management-status').textContent=message;}
     catch(error){$('management-status').textContent=error.message;}
-    finally{working=false;onBusy(false);for(const node of panel.querySelectorAll('button,input,select'))node.disabled=false;if(!quote)$('payment-submit').disabled=true;}
+    finally{working=false;onBusy(false);for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=false;if(!quote)$('payment-submit').disabled=true;}
   }
   $('state-toggle').onclick=()=>action('/state',{state:current.manualState==='disabled'?'active':'disabled',revision:current.revision},'Status halaman dikemas kini. URL dan QR kekal sama.');
   $('state-restore').onclick=()=>action('/state',{state:'disabled',revision:current.revision},'Halaman dipulihkan sebagai nyahaktif. Semak langganan sebelum mengaktifkan.');
@@ -80,5 +95,8 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
   $('payment-form').onsubmit=event=>{event.preventDefault();if(!quote)return;action('/renewal',{...options(),reference:$('payment-reference').value.trim(),paidDate:$('payment-date').value,amountCents:quote.amountCents,revision:current.revision},'Rujukan dihantar. Tunggu semakan bank oleh super admin.');};
   const decide=decision=>action('/decision',{requestId:current.renewal.id,decision,revision:current.revision,confirmBank:$('bank-confirm').checked,note:$('review-note').value},decision==='approve'?'Bayaran disahkan. Tempoh halaman dikemas kini jika pakej mengandungi langganan tahunan.':'Permohonan bayaran ditolak. Pelanggan boleh menghantar rujukan yang betul.');
   $('payment-review').onsubmit=event=>{event.preventDefault();decide('approve');};$('payment-reject').onclick=()=>decide('reject');
+  $('admin-message-form').onsubmit=event=>{event.preventDefault();action('/message',{action:'send',text:$('admin-message-input').value,revision:current.revision},'Mesej telah dihantar kepada pelanggan.');};
+  $('message-reply-form').onsubmit=event=>{event.preventDefault();action('/message-reply',{messageId:current.adminMessage.id,text:$('message-reply-text').value,revision:current.revision},'Balasan telah dihantar kepada super admin.');};
+  $('message-resolve').onclick=()=>action('/message',{action:'resolve',messageId:current.adminMessage.id,revision:current.revision},'Mesej telah diselesaikan.');
   return {show,clear};
 }

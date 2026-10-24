@@ -2,6 +2,7 @@ import {createGoogleIdentityAuth} from './identity.mjs';
 import {validateSmartTapURL} from './short-links.mjs';
 import {malaysiaPhone,whatsappFromPhone,threadsProfile} from './contacts.mjs';
 import {pageState} from './page-state.mjs';
+import {ownerKey} from './identity.mjs';
 
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 export function createGoogleAdminAuth({clientId,emails=[],keySet}) {
@@ -17,7 +18,10 @@ export function createGoogleAdminAuth({clientId,emails=[],keySet}) {
 export function validId(id){if(typeof id!=='string'||!/^[A-Za-z0-9_-]{16}$/.test(id))throw fail(404,'Pautan tidak ditemui.');}
 export function pageView({id,record,revision},origin='https://tap.imai.my',includeOwner=false,now=Date.now()){
   const url=validateSmartTapURL(record.url,origin);
-  return {id,url:origin+'/?s='+id,profile:JSON.parse(Buffer.from(new URL(url).searchParams.get('p'),'base64url').toString('utf8')),
+  const message=record.adminMessage;
+  let recipient=false;try{recipient=!!message&&message.recipientKey===ownerKey(record.ownerEmail);}catch{}
+  const adminMessage=message&&(includeOwner||recipient)?{id:message.id,text:message.text,status:message.status,sentAt:message.sentAt,resolvedAt:message.resolvedAt||null,reply:message.reply?{text:message.reply.text,sentAt:message.reply.sentAt}:null}:null;
+  return {id,url:origin+'/?s='+id,adminMessage,profile:JSON.parse(Buffer.from(new URL(url).searchParams.get('p'),'base64url').toString('utf8')),
     revision,createdAt:record.createdAt||null,updatedAt:record.updatedAt||record.createdAt||null,state:pageState(record,now),manualState:record.lifecycle?.state||'active',subscription:record.subscription||null,
     renewal:record.renewal?Object.fromEntries(Object.entries(record.renewal).filter(([key])=>includeOwner||!['submittedBy','decidedBy'].includes(key))):null,...(includeOwner?{ownerEmail:record.ownerEmail||''}:{})};
 }
