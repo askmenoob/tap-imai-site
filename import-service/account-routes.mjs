@@ -1,5 +1,6 @@
 // All identities come from the server's Google verifiers, never request fields.
-export function createAccountRoutes({adminAuth,userAuth,admin,customers,management,clientId,adminConfigured,demo=false,reply,body}){
+export function createAccountRoutes({adminAuth,userAuth,admin,customers,management,clientId,adminConfigured,gateway,demo=false,reply,body}){
+  const checkoutWindows=new Map();
   return async(req,res,{path,origin})=>{
     const customer=path.startsWith('/api/user/');
     if(!customer&&!path.startsWith('/api/admin/'))return false;
@@ -12,9 +13,23 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
     const actor=demo?{sub:'localhost-demo-only',email:customer?'preview.owner@gmail.com':'demo@localhost',role:customer?'user':'admin',expiresAt:Date.now()+3600000}:await (customer?userAuth:adminAuth)(req.headers.authorization);
     if(!admin||!customers){reply(res,503,{error:'Simpanan pautan belum tersedia.'},origin);return true;}
     if(path===base+'/self'&&req.method==='GET'){reply(res,200,actor,origin);return true;}
-    if(path===base+'/plan'&&req.method==='GET'&&management){reply(res,200,management.config(),origin);return true;}
+    if(path===base+'/plan'&&req.method==='GET'&&management){reply(res,200,{...management.config(),gateway:gateway?.config()||{enabled:false,configured:false}},origin);return true;}
     if(!customer&&path===base+'/pending-payments'&&req.method==='GET'){reply(res,200,await admin.pendingPayments(),origin);return true;}
     const query=new URL(req.url,'http://localhost').searchParams;
+    if(gateway&&req.method==='POST'){
+      const start=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/checkout$').exec(path);
+      const order=new RegExp('^'+base+'/checkout/(ST[a-f0-9]{24})/(status|cancel)$').exec(path);
+      if(start||order){
+        const key=actor.sub||actor.email,time=Date.now();let window=checkoutWindows.get(key);
+        if(!window||time-window.since>=60000){window={since:time,count:0};checkoutWindows.set(key,window);}
+        if(checkoutWindows.size>10000)for(const [id,value] of checkoutWindows)if(time-value.since>=60000)checkoutWindows.delete(id);
+        if(++window.count>30){reply(res,429,{error:'Terlalu banyak semakan pembayaran. Cuba semula sebentar lagi.'},origin);return true;}
+        if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){reply(res,415,{error:'Gunakan JSON.'},origin);return true;}
+        const data=await body(req,2048);
+        const result=start?await gateway.create(start[1],data,actor):order[2]==='status'?await gateway.status(order[1],actor):await gateway.cancel(order[1],actor);
+        admin.invalidatePending();reply(res,200,result,origin);return true;
+      }
+    }
     const messageMatch=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/(message|message-reply)$').exec(path);
     if(messageMatch&&management&&req.method==='POST'){
       const [,id,action]=messageMatch;

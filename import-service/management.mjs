@@ -63,6 +63,7 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
       if(reference.length<3||reference.length>80||!/^[-\p{L}\p{N} ./_]+$/u.test(reference))throw fail(400,'Masukkan rujukan transaksi bank, 3 hingga 80 aksara.');
       if(!/^\d{4}-\d{2}-\d{2}$/.test(data.paidDate||'')||!Number.isFinite(Date.parse(data.paidDate))||new Date(data.paidDate).toISOString().slice(0,10)!==data.paidDate||Date.parse(data.paidDate)>now()+86400000)throw fail(400,'Tarikh bayaran tidak sah.');
       if(data.amountCents!==quote.amountCents)throw fail(409,'Harga pakej telah berubah. Muat semula sebelum menghantar.');
+      if(previous.record.checkout&&!['paid','cancelled','creation_failed'].includes(previous.record.checkout.status))throw fail(409,'Selesaikan atau batalkan bil ToyyibPay sebelum menghantar bayaran manual.');
       const old=previous.record.renewal;
       if(old?.status==='pending'){
         if(old.reference===reference&&old.paidDate===data.paidDate&&old.amountCents===quote.amountCents&&old.package===quote.package&&old.extraNfcQty===quote.extraNfcQty&&old.stickerQty===quote.stickerQty)return view(id,previous,actor);

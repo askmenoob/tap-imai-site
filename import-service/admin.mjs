@@ -21,7 +21,8 @@ export function pageView({id,record,revision},origin='https://tap.imai.my',inclu
   const message=record.adminMessage;
   let recipient=false;try{recipient=!!message&&message.recipientKey===ownerKey(record.ownerEmail);}catch{}
   const adminMessage=message&&(includeOwner||recipient)?{id:message.id,text:message.text,status:message.status,sentAt:message.sentAt,resolvedAt:message.resolvedAt||null,reply:message.reply?{text:message.reply.text,sentAt:message.reply.sentAt}:null}:null;
-  return {id,url:origin+'/?s='+id,adminMessage,profile:JSON.parse(Buffer.from(new URL(url).searchParams.get('p'),'base64url').toString('utf8')),
+  let checkout=null;try{if(record.checkout&&(includeOwner||record.checkout.recipientKey===ownerKey(record.ownerEmail))){const c=record.checkout;checkout={id:c.id,status:c.status,amountCents:c.amountCents,mode:c.mode,createdAt:c.createdAt,invoice:c.invoice||null};}}catch{}
+  return {id,url:origin+'/?s='+id,adminMessage,checkout,profile:JSON.parse(Buffer.from(new URL(url).searchParams.get('p'),'base64url').toString('utf8')),
     revision,createdAt:record.createdAt||null,updatedAt:record.updatedAt||record.createdAt||null,state:pageState(record,now),manualState:record.lifecycle?.state||'active',subscription:record.subscription||null,
     renewal:record.renewal?Object.fromEntries(Object.entries(record.renewal).filter(([key])=>includeOwner||!['submittedBy','decidedBy'].includes(key))):null,...(includeOwner?{ownerEmail:record.ownerEmail||''}:{})};
 }
