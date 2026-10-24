@@ -28,6 +28,17 @@ test('HTTP signed Google identities enforce customer boundaries, role and privat
   const alice=(await call('/api/admin/register','owner@gmail.com','POST',{url,email:'alice@gmail.com'})).data;
   const bob=(await call('/api/admin/register','owner@gmail.com','POST',{url,email:'bob@gmail.com'})).data;
   assert.ok(alice.id);assert.notEqual(alice.id,bob.id);
+  assert.equal((await call('/api/admin/pending-payments',null)).status,401);
+  assert.equal((await call('/api/admin/pending-payments','alice@gmail.com')).status,403);
+  assert.equal((await call('/api/user/pending-payments','alice@gmail.com')).status,404);
+  assert.equal((await call('/api/admin/pending-payments','owner@gmail.com')).data.count,0);
+  const payment=await call('/api/user/links/'+bob.id+'/renewal','bob@gmail.com','POST',{package:'bundle',amountCents:10000,reference:'BELL-TEST',paidDate:new Date().toISOString().slice(0,10),revision:bob.revision});
+  assert.equal(payment.status,200);
+  assert.equal((await call('/api/admin/pending-payments','owner@gmail.com')).data.count,1);
+  const rejected=await call('/api/admin/links/'+bob.id+'/decision','owner@gmail.com','POST',{requestId:payment.data.renewal.id,decision:'reject',revision:payment.data.revision});
+  assert.equal(rejected.status,200);
+  assert.equal((await call('/api/admin/pending-payments','owner@gmail.com')).data.count,0);
+
   const list=await call('/api/user/links?email=bob@gmail.com&role=admin','alice@gmail.com');assert.equal(list.status,200);assert.deepEqual(list.data.items.map(x=>x.id),[alice.id]);assert.equal('ownerEmail' in list.data.items[0],false);
   assert.equal((await call('/api/user/links/'+bob.id,'alice@gmail.com')).status,404);
   assert.equal((await call('/api/user/links/'+bob.id,'alice@gmail.com','PUT',{profile,revision:bob.revision})).status,404);

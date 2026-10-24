@@ -40,7 +40,36 @@ export async function savePage({store,id,previous,revision,changes,actor,now=Dat
 }
 export function createAdminService({store,origin='https://tap.imai.my',now=Date.now}) {
   const view=item=>pageView(item,origin,true,now());
+  let pendingCache=null,pendingFlight=null,epoch=0;
+  const invalidatePending=()=>{epoch++;pendingCache=null;pendingFlight=null;};
+  async function pendingPayments(){
+    if(pendingCache&&now()-pendingCache.at<60000)return pendingCache.result;
+    if(pendingFlight)return pendingFlight;
+    const version=epoch;
+    const flight=(async()=>{
+      const items=[];let cursor=null;const seen=new Set();
+      do{
+        const page=await store.list(cursor);
+        for(const entry of page.items){
+          const r=entry.record;
+          if(r.renewal?.status!=='pending'||r.lifecycle?.state==='deleted')continue;
+          const item=view(entry);
+          items.push({id:item.id,name:item.profile.name,amountCents:item.renewal.amountCents,submittedAt:item.renewal.submittedAt});
+        }
+        cursor=page.cursor;
+        if(cursor&&seen.has(cursor))throw fail(503,'Senarai bayaran belum dapat dimuatkan.');
+        if(cursor)seen.add(cursor);
+      }while(cursor);
+      items.sort((a,b)=>(a.submittedAt||'').localeCompare(b.submittedAt||'')||a.id.localeCompare(b.id));
+      const result={items,count:items.length,checkedAt:new Date(now()).toISOString()};
+      if(version===epoch)pendingCache={at:now(),result};
+      return result;
+    })();
+    pendingFlight=flight;
+    try{return await flight;}finally{if(pendingFlight===flight)pendingFlight=null;}
+  }
   return {
+    pendingPayments,invalidatePending,
     async get(id){validId(id);const item=await store.getVersion(id);if(!item)throw fail(404,'Pautan tidak ditemui.');return view({id,...item});},
     async list(cursor) {
       if(cursor!==undefined&&cursor!==null&&(typeof cursor!=='string'||cursor.length>2048||!/^[-A-Za-z0-9_+/=]*$/.test(cursor))) throw fail(400,'Halaman senarai tidak sah.');
