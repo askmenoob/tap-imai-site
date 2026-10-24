@@ -6,6 +6,7 @@ import { createAppIcon, createBrandMark, createFavicon } from '../assets-src/pwa
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = join(root, 'dist');
 const publicFiles = [
+  'demo/restaurant/index.html', 'demo/restaurant/demo.css', 'demo/restaurant/demo.js', 'demo/restaurant/logo.svg', 'demo/restaurant/cover.webp',
   'admin-entry.js', 'language.js', 'language.css', 'language-catalog.mjs',
   'index.html', 'setup.html', 'admin.html', 'privacy.html', 'terms.html',
   'import-config.js', 'subscribe.css', 'subscribe/index.html', 'edit/index.html',
