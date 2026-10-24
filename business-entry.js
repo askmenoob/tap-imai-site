@@ -103,10 +103,12 @@ function renderCard(document2, profile, now = Date.now()) {
   identity.append(avatar, el("h1", "", profile.name));
   if (profile.tagline) identity.append(el("p", "business-tagline", profile.tagline));
   content.append(identity);
-  const review = el("section", "business-review");
-  review.setAttribute("aria-label", "Ulasan Google");
-  review.append(el("h2", "", "Pernah singgah di sini?"), el("p", "", "Kongsikan pengalaman anda di Google."), link(profile.google, "Tulis ulasan di Google", "business-action review-action", "star"));
-  content.append(review);
+  if (profile.google) {
+    const review = el("section", "business-review");
+    review.setAttribute("aria-label", "Ulasan Google");
+    review.append(el("h2", "", "Pernah singgah di sini?"), el("p", "", "Kongsikan pengalaman anda di Google."), link(profile.google, "Tulis ulasan di Google", "business-action review-action", "star"));
+    content.append(review);
+  }
   if (profile.whatsapp) content.append(link(profile.whatsapp, "Hubungi melalui WhatsApp", "business-action whatsapp-action", "whatsapp"));
   const quick = el("div", "business-quick");
   if (profile.menu) quick.append(link(profile.menu, "Lihat menu / katalog", "business-action outline-action", "menu"));
@@ -170,6 +172,12 @@ function decodeProfilePayload(payload) {
     for (const key of ["google", "instagram", "facebook", "tiktok", "whatsapp", "website", "logo", "threads", "cover", "menu", "directions", "promoURL"]) {
       if (raw[key] && (!profileURL(raw[key]) || typeof raw[key] !== "string")) throw 0;
       if (raw[key]) profile[key] = profileURL(raw[key]);
+    }
+    if (raw.googleStatus !== void 0 && raw.googleStatus !== "pending") throw 0;
+    if (raw.googleStatus === "pending") {
+      if (profile.google) throw 0;
+      profile.googleStatus = "pending";
+      return profile;
     }
     const review = new URL(profile.google);
     const host = review.hostname;

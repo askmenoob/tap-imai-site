@@ -3,7 +3,7 @@ import {requirePublicPage} from './page-state.mjs';
 import {appearanceFields,validateAppearance} from './appearance.mjs';
 
 const urlFields=['logo','google','instagram','facebook','tiktok','threads','whatsapp','website','cover','menu','directions','promoURL'];
-const fields=new Set(['v','name','tagline','phone',...urlFields,...Object.keys(appearanceFields)]);
+const fields=new Set(['v','name','tagline','phone','googleStatus',...urlFields,...Object.keys(appearanceFields)]);
 const invalid=()=>Object.assign(new Error('Gunakan pautan halaman SmartTap yang telah dijana.'),{status:400});
 export function validateSmartTapURL(value,origin='https://tap.imai.my') {
   try {
@@ -23,6 +23,8 @@ export function validateSmartTapURL(value,origin='https://tap.imai.my') {
       const link=new URL(profile[key]);
       if((link.protocol!=='https:'&&!(key==='cover'&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.username||link.password||(link.port&&link.port!=='443'&&!(key==='cover'&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.href.length>500) throw 0;
     }
+    if(profile.googleStatus!==undefined&&profile.googleStatus!=='pending')throw 0;
+    if(profile.googleStatus==='pending'){if(profile.google)throw 0;return url.href;}
     const review=new URL(profile.google);const host=review.hostname;
     const google=(host==='google.com'||host.endsWith('.google.com')||host==='google.com.my'||host.endsWith('.google.com.my'))&&review.pathname.includes('/local/writereview')&&review.searchParams.get('placeid');
     const gpage=host==='g.page'&&/\/r\/[^/]+\/review\/?$/i.test(review.pathname);
@@ -35,6 +37,7 @@ export function createShortLinks({store,secret,origin='https://tap.imai.my',now=
   return {
     async shorten(value) {
       const url=validateSmartTapURL(value,origin);
+      if(JSON.parse(Buffer.from(new URL(url).searchParams.get('p'),'base64url')).googleStatus)throw invalid();
       for(let attempt=0;attempt<3;attempt++) {
         const id=createHmac('sha256',secret).update(`${attempt}:${url}`).digest('base64url').slice(0,16);
         const created=await store.create(id,{v:1,url,createdAt:new Date(now()).toISOString(),...(newSubscription?{subscription:structuredClone(newSubscription)}:{})});

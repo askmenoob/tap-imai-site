@@ -27,7 +27,7 @@ export function createCustomerArea({coverNodes,onSelect}){
  const move=(id,group)=>{if($(id))groups[group].append($(id));};
  // Keep every managed control below the same management root: existing payment handlers own their state.
  const statusHeading=$('page-state').previousElementSibling;groups.overview.append(statusHeading);
- for(const id of ['page-state','subscription-summary','direct-review-wrap','payment-summary','renewal-reminder','payment-disclosure'])move(id,'overview');
+ for(const id of ['page-state','subscription-summary','google-listing-status','direct-review-wrap','payment-summary','renewal-reminder','payment-disclosure'])move(id,'overview');
  move('admin-message-box','messages');move('order-support','delivery');move('gateway-panel','gateway');move('payment-form','buy');
  const packageLink=[...management.querySelectorAll('a')].find(a=>a.getAttribute('href')==='/subscribe/');if(packageLink)groups.overview.append(packageLink);
  $('payment-toggle').addEventListener('click',()=>{sectionName=$('payment-form').hidden?'overview':'buy';render();});
@@ -41,7 +41,7 @@ export function createCustomerArea({coverNodes,onSelect}){
  const pages={business:[],page:[]};
  for(const [view,steps] of Object.entries(fieldGroups))for(const keys of steps){
   const group=document.createElement('div');group.className='customer-field-step';group.dataset.fieldView=view;
-  for(const key of keys){const input=$('field-'+key),label=document.querySelector('label[for="field-'+key+'"]');const unit=document.createElement('div');unit.className='customer-field';unit.append(label,input);if(key==='cover')unit.append(...coverNodes);group.append(unit);}
+  for(const key of keys){const input=$('field-'+key),label=document.querySelector('label[for="field-'+key+'"]');const unit=document.createElement('div');unit.className='customer-field';unit.append(label,input);if(key==='cover')unit.append(...coverNodes);if(key==='google'&&$('google-pending-note'))unit.append($('google-pending-note'));group.append(unit);}
   $('fields').append(group);pages[view].push(group);
  }
  const fieldTabs=document.createElement('nav');fieldTabs.className='customer-subnav customer-field-tabs';fieldTabs.setAttribute('aria-label','Bahagian suntingan');form.prepend(fieldTabs);

@@ -43,7 +43,11 @@ export function createCustomerService({store,origin='https://tap.imai.my',now=Da
       const previous=await owned(id,actor);
       requirePublicPage(previous.record,now());
       if(!data||Object.keys(data).some(key=>!['profile','revision'].includes(key)))throw fail(400,'Anda hanya boleh menyunting maklumat halaman sendiri.');
-      const url=profileURL(data.profile,origin);
+      const original=JSON.parse(Buffer.from(new URL(previous.record.url).searchParams.get('p'),'base64url'));
+      if(data.profile?.googleStatus&&data.profile.googleStatus!==original.googleStatus)throw fail(403,'Hanya super admin boleh menukar status Google Review.');
+      const profile={...data.profile};
+      if(original.googleStatus==='pending'){profile.google='';profile.googleStatus='pending';}
+      const url=profileURL(profile,origin);
       const saved=await savePage({store,id,previous,revision:data.revision,changes:{v:1,url},actor,now});
       // A subsequent admin reassignment must never expose another owner's record in this reply.
       if(!owns(saved.record,userKey(actor)))throw notFound();

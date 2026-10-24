@@ -2105,6 +2105,143 @@ var require_browser = __commonJS({
 // src/import.js
 var import_qrcode = __toESM(require_browser(), 1);
 
+// src/google-listing-tools.mjs
+function createGoogleListingTools({ input, name, onChange, search, lookup }) {
+  const el = (tag, text) => {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    return node;
+  };
+  const panel = el("section");
+  panel.className = "notice google-listing-tools";
+  panel.append(el("h3", "Perniagaan belum ada di Google Maps?"));
+  const label = el("label"), pending = el("input");
+  pending.type = "checkbox";
+  pending.id = "google-listing-pending";
+  label.htmlFor = pending.id;
+  label.append(pending, document.createTextNode(" Google Review belum tersedia"));
+  panel.append(label);
+  const help = el("p", "Simpan halaman tanpa Google Review dahulu. Pin atau alamat sahaja tidak mencipta Place ID. Google menyemak penambahan tempat; pemilik mungkin perlu membuat pengesahan.");
+  panel.append(help);
+  const links = el("div");
+  links.className = "actions";
+  for (const [text, url] of [["Panduan tambah tempat di Google Maps \u2197", "https://support.google.com/maps/answer/6320846?hl=en"], ["Daftar Google Business Profile \u2197", "https://business.google.com/add"]]) {
+    const a = el("a", text);
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    links.append(a);
+  }
+  panel.append(links);
+  const query = el("input");
+  query.type = "search";
+  query.maxLength = 160;
+  query.id = "google-listing-query";
+  const qlabel = el("label", "Nama dan bandar / alamat untuk carian semula");
+  qlabel.htmlFor = query.id;
+  const find = el("button", "Cari semula di Google Maps");
+  find.type = "button";
+  find.className = "secondary";
+  const status = el("p");
+  status.setAttribute("role", "status");
+  const results = el("div");
+  results.className = "google-listing-results";
+  panel.append(qlabel, query, find, status, results);
+  let generation = 0, active = true, backup = "";
+  const sync = () => {
+    input.required = !pending.checked;
+    input.disabled = !active || pending.checked;
+  };
+  pending.onchange = () => {
+    generation++;
+    results.replaceChildren();
+    status.textContent = "";
+    find.disabled = !active;
+    if (pending.checked) {
+      backup = input.value;
+      input.value = "";
+    } else input.value = backup;
+    sync();
+    onChange();
+  };
+  find.onclick = async () => {
+    if (!active) return;
+    const term = query.value.trim() || name();
+    if (term.length < 3) {
+      status.textContent = "Masukkan nama dan lokasi perniagaan.";
+      return;
+    }
+    const current = ++generation;
+    find.disabled = true;
+    results.replaceChildren();
+    status.textContent = "Mencari perniagaan\u2026";
+    try {
+      const data = await search(term);
+      if (current !== generation || !active) return;
+      status.textContent = data.places?.length ? "Google Maps \xB7 Pilih perniagaan dan alamat yang tepat." : "Belum ditemui di Google Maps. Cuba lagi selepas tempat tersedia.";
+      for (const place of data.places || []) {
+        const choose2 = el("button", place.name + (place.address ? " \u2014 " + place.address : ""));
+        choose2.type = "button";
+        choose2.className = "secondary";
+        choose2.onclick = async () => {
+          if (!active || current !== generation) return;
+          find.disabled = true;
+          for (const b of results.children) b.disabled = true;
+          status.textContent = "Mendapatkan pautan Google Review\u2026";
+          try {
+            const result = await lookup(place.token);
+            if (current !== generation || !active) return;
+            if (!result.profile?.google) throw new Error("Pautan Google Review belum tersedia.");
+            input.value = result.profile.google;
+            backup = input.value;
+            pending.checked = false;
+            sync();
+            onChange();
+            results.replaceChildren();
+            status.textContent = "Pautan Google Review dipilih. Tekan Simpan untuk menyambungkan pada URL dan QR yang sama.";
+          } catch (error) {
+            if (current === generation) status.textContent = error.message;
+          } finally {
+            if (current === generation) {
+              find.disabled = !active;
+              for (const b of results.children) b.disabled = !active;
+            }
+          }
+        };
+        results.append(choose2);
+      }
+    } catch (error) {
+      if (current === generation) status.textContent = error.message;
+    } finally {
+      if (current === generation) find.disabled = !active;
+    }
+  };
+  return { panel, isPending: () => pending.checked, set(profile) {
+    generation++;
+    results.replaceChildren();
+    status.textContent = profile.googleStatus === "pending" ? "Google Review belum tersedia" : "Google Review telah disambungkan";
+    pending.checked = profile.googleStatus === "pending";
+    backup = profile.google || "";
+    query.value = profile.name || "";
+    sync();
+  }, lock(value) {
+    active = !value;
+    pending.disabled = value;
+    find.disabled = value;
+    query.disabled = value;
+    for (const b of results.children) b.disabled = value;
+    sync();
+  }, invalidate() {
+    generation++;
+    results.replaceChildren();
+  }, apply(profile) {
+    if (pending.checked) {
+      profile.google = "";
+      profile.googleStatus = "pending";
+    } else delete profile.googleStatus;
+  } };
+}
+
 // src/business-suggestions.mjs
 function createSuggestions({ request, onResult, onState = () => {
 }, delay = 600, minLength = 3 }) {
@@ -2211,6 +2348,9 @@ var $ = (id) => document.getElementById(id);
 var registering = new URLSearchParams(location.search).get("register") === "1";
 var fieldNames = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web" };
 if (!registering) delete fieldNames.google;
+else Object.assign(fieldNames, { address: "Alamat perniagaan", directions: "Pautan lokasi / pin Google Maps" });
+var listingTools = null;
+var pendingStart = null;
 var publicDraftToken = "";
 var activeSearch;
 var sequence = 0;
@@ -2234,6 +2374,8 @@ async function registrationAPI(path, { method = "GET", body, signal } = {}) {
 }
 function searchAccess(allowed) {
   if (!registering) return;
+  listingTools?.lock(!allowed);
+  if (pendingStart) pendingStart.disabled = !allowed;
   $("query").disabled = !allowed;
   $("search-button").disabled = !allowed;
   $("generate").disabled = !allowed;
@@ -2346,7 +2488,7 @@ for (const [key, label] of Object.entries(fieldNames)) {
   input.name = key;
   input.maxLength = key === "name" ? 90 : key === "tagline" ? 150 : 500;
   input.autocomplete = key === "name" ? "organization" : "off";
-  if (!["name", "tagline", "phone"].includes(key)) input.inputMode = "url";
+  if (!["name", "tagline", "phone", "address"].includes(key)) input.inputMode = "url";
   if (key === "phone") {
     input.type = "tel";
     input.placeholder = "Contoh: 012-2258950";
@@ -2377,6 +2519,38 @@ for (const [key, label] of Object.entries(fieldNames)) {
   wrapper.append(caption, input, help, error);
   $("fields").append(wrapper);
   sourceLine(key, "");
+}
+if (registering) {
+  listingTools = createGoogleListingTools({ input: $("field-google"), name: () => $("field-name").value, onChange: invalidate, search: (query) => api("/api/search", { query }), lookup: (token) => api("/api/import", { token }) });
+  $("profile-form").prepend(listingTools.panel);
+  listingTools.lock(true);
+  pendingStart = document.createElement("button");
+  pendingStart.type = "button";
+  pendingStart.className = "secondary";
+  pendingStart.disabled = true;
+  pendingStart.textContent = "Daftar perniagaan yang belum ada di Google Maps";
+  $("registration").append(pendingStart);
+  pendingStart.onclick = () => {
+    if (!adminCredential || adminExpiry <= Date.now()) return;
+    cancelSearch();
+    sequence++;
+    listingTools.invalidate();
+    invalidate();
+    selectedBusiness.hidden = true;
+    searchSuggestions.hidden = true;
+    $("warnings").hidden = true;
+    $("fields").querySelectorAll("select").forEach((node) => node.remove());
+    for (const key of Object.keys(fieldNames)) {
+      $("field-" + key).value = "";
+      $("error-" + key).textContent = "";
+      sourceLine(key, "");
+    }
+    listingTools.set({ name: $("query").value.trim(), googleStatus: "pending" });
+    $("field-name").value = $("query").value.trim();
+    previewLogo();
+    $("editor").hidden = false;
+    $("editor").scrollIntoView({ behavior: "smooth" });
+  };
 }
 $("logo-preview").onload = () => {
   $("logo-preview").hidden = false;
@@ -2621,6 +2795,7 @@ async function choose(place, current) {
         $("field-" + key).after(select);
       }
     }
+    listingTools?.set(data.profile);
     previewLogo();
     $("warnings").textContent = (data.warnings || []).join(" ");
     $("warnings").hidden = !data.warnings?.length;
@@ -2637,11 +2812,12 @@ function validate(profile) {
   const errors = {};
   if (!profile.name) errors.name = "Masukkan nama perniagaan.";
   else if ([...profile.name].length > 80) errors.name = "Gunakan 80 aksara atau kurang.";
+  if ((profile.address || "").length > 300) errors.address = "Gunakan 300 aksara atau kurang.";
   if (profile.tagline.length > 140) errors.tagline = "Gunakan 140 aksara atau kurang.";
-  for (const key of Object.keys(fieldNames).filter((k) => !["name", "tagline", "phone"].includes(k))) if (profile[key] && (!httpsURL(profile[key]) || profile[key].length > 500)) errors[key] = "Gunakan URL https:// penuh, maksimum 500 aksara.";
+  for (const key of Object.keys(fieldNames).filter((k) => !["name", "tagline", "phone", "address"].includes(k))) if (profile[key] && (!httpsURL(profile[key]) || profile[key].length > 500)) errors[key] = "Gunakan URL https:// penuh, maksimum 500 aksara.";
   if (profile.phone && !malaysiaPhone(profile.phone)) errors.phone = "Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.";
   if (profile.threads && !threadsProfile(profile.threads)) errors.threads = "Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.";
-  if (registering) try {
+  if (registering && profile.googleStatus !== "pending") try {
     const review = new URL(profile.google);
     const host = review.hostname.toLowerCase();
     const valid = (host === "google.com" || host.endsWith(".google.com") || host === "google.com.my" || host.endsWith(".google.com.my")) && review.pathname.includes("/local/writereview") && review.searchParams.get("placeid") || host === "g.page" && /\/r\/[^/]+\/review\/?$/i.test(review.pathname);
@@ -2673,6 +2849,7 @@ $("profile-form").addEventListener("submit", async (event) => {
   }
   const profile = { v: 1 };
   for (const key of Object.keys(fieldNames)) profile[key] = $("field-" + key).value.normalize("NFC").trim();
+  listingTools?.apply(profile);
   if (malaysiaPhone(profile.phone)) profile.phone = malaysiaPhone(profile.phone);
   const errors = validate(profile);
   for (const key of Object.keys(fieldNames)) {
