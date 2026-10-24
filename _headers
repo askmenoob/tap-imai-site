@@ -3,3 +3,8 @@
   Service-Worker-Allowed: /
 /manifest.webmanifest
   Cache-Control: public, max-age=3600
+
+/assets/business-admin-messages.js
+  Cache-Control: public, max-age=0, must-revalidate
+/business-admin.js
+  Cache-Control: public, max-age=0, must-revalidate
