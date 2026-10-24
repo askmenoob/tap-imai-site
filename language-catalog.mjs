@@ -1,4 +1,16 @@
 export const translations = {
+  'Bayaran baharu dibuat melalui ToyyibPay. SmartTap menyimpan pakej, kuantiti, jumlah produk, kod bil, rujukan transaksi dan status bayaran secara peribadi untuk pemilik rekod dan super admin. Rekod bayaran manual terdahulu dikekalkan untuk semakan dan audit. Tiada kata laluan bank atau maklumat kad disimpan oleh SmartTap.':'New payments use ToyyibPay. SmartTap privately stores packages, quantities, product totals, bill codes, transaction references and payment status for the record owner and super admin. Earlier manual payment records are retained for review and audit. SmartTap does not store bank passwords or card details.',
+
+  'Langganan & pembayaran':'Subscription & payment',
+  'Bayaran diproses melalui ToyyibPay.':'Payments are processed through ToyyibPay.',
+  'Pembayaran dalam talian belum dibuka. Hubungi super admin.':'Online payment is not open yet. Contact the super admin.',
+  'ToyyibPay belum diaktifkan. Hubungi super admin.':'ToyyibPay is not enabled yet. Contact the super admin.',
+  'Pakej halaman ditawarkan setahun sahaja. Bayar melalui ToyyibPay; status disahkan secara automatik.':'Page packages are annual only. Pay through ToyyibPay; payment status is verified automatically.',
+  'Bayar melalui ToyyibPay.':'Pay through ToyyibPay.',
+  'Lengkapkan pembayaran pada halaman ToyyibPay menggunakan saluran yang tersedia.':'Complete payment on ToyyibPay using an available payment channel.',
+  'Status disahkan secara automatik.':'Payment status is verified automatically.',
+  'Tempoh halaman dikemas kini selepas transaksi dipadankan dan disahkan dengan ToyyibPay. Penyediaan dan penghantaran NFC diuruskan oleh admin.':'The page subscription updates after the transaction is matched and verified with ToyyibPay. NFC preparation and delivery are managed by the admin.',
+
   'Apabila anda memilih pembayaran ToyyibPay, SmartTap menghantar ID pesanan dan jumlah kepada ToyyibPay untuk menyediakan bil. Anda melengkapkan pembayaran pada halaman ToyyibPay. SmartTap menyimpan kod bil, rujukan transaksi dan status bayaran secara peribadi untuk pemilik rekod dan super admin. Kata laluan bank dan maklumat kad tidak diminta atau disimpan oleh SmartTap. Pembayaran automatik hanya mengaktifkan langganan selepas transaksi dipadankan dan disahkan dengan ToyyibPay.':'When you choose ToyyibPay, SmartTap sends the order ID and amount to create a bill. You complete payment on ToyyibPay. SmartTap privately stores the bill code, transaction reference and payment status for the record owner and super admin. SmartTap does not request or store bank passwords or card details. Automatic activation follows a transaction matched and verified with ToyyibPay.',
 
   'Pakej halaman ditawarkan setahun sahaja. Bayaran ToyyibPay disahkan secara automatik; bayaran manual disemak oleh super admin.':'Page packages are annual only. ToyyibPay payments are verified automatically; manual payments are reviewed by the super admin.',

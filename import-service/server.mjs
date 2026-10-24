@@ -38,14 +38,14 @@ const adminAuth=createGoogleAdminAuth({clientId:adminClientId,emails:adminEmails
 const userAuth=createGoogleUserAuth({clientId:adminClientId});
 const admin=linkStore?createAdminService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
 const customers=linkStore?createCustomerService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription}):null;
-const management=linkStore?createManagementService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',enabled:paymentsEnabled,qrPayload:paymentQR}):null;
+const management=linkStore?createManagementService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',enabled:paymentsEnabled,manualEnabled:process.env.MANUAL_PAYMENTS_ENABLED==='true',qrPayload:paymentQR}):null;
 const toyMode=process.env.TOYYIBPAY_MODE||'live';
 if(!preview&&toyMode!=='live')throw new Error('ToyyibPay sandbox requires an isolated preview environment.');
 const toySecret=demo?'local-simulation-only':(process.env.TOYYIBPAY_SECRET_KEY||'').trim();
 const toyCategory=demo?'local-demo':(process.env.TOYYIBPAY_CATEGORY_CODE||'').trim();
 const toyDemo=demo?createToyyibDemo('http://127.0.0.1:'+port):null;
 const toyProvider=toyDemo?.provider||(toySecret&&toyCategory?createToyyibProvider({secretKey:toySecret,categoryCode:toyCategory,mode:toyMode}):null);
-const gateway=linkStore?createToyyibCheckout({store:linkStore,provider:toyProvider,secretKey:toySecret,categoryCode:toyCategory,enabled:demo||process.env.TOYYIBPAY_ENABLED==='true',accountVerified:process.env.TOYYIBPAY_ACCOUNT_VERIFIED==='true',duitNowQR:demo||process.env.TOYYIBPAY_DUITNOW_QR==='true',origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',apiOrigin:preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app'}):null;
+const gateway=linkStore?createToyyibCheckout({store:linkStore,provider:toyProvider,secretKey:toySecret,categoryCode:toyCategory,enabled:demo||process.env.TOYYIBPAY_ENABLED==='true',accountVerified:process.env.TOYYIBPAY_ACCOUNT_VERIFIED==='true',settlementHoldAccepted:process.env.TOYYIBPAY_SETTLEMENT_HOLD_ACCEPTED==='true',duitNowQR:demo||process.env.TOYYIBPAY_DUITNOW_QR==='true',origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',apiOrigin:preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app'}):null;
 const accountRoutes=createAccountRoutes({adminAuth,userAuth,admin,customers,management,gateway,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
 const mediaOrigin=preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app';
 const demoMedia=new Map();

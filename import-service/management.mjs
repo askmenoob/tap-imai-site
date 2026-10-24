@@ -6,10 +6,10 @@ import {createCatalog} from './catalog.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const admin=actor=>{if(actor?.role!=='admin')throw fail(403,'Hanya super admin boleh mengurus status dan mengesahkan bayaran.');};
 const hash=value=>createHash('sha256').update(value).digest('base64url');
-export function createManagementService({store,origin='https://tap.imai.my',now=Date.now,enabled=false,qrPayload='',payee='NIK AZFAR BIN NIK ZAINAL',stickerCents=2000,shippingCents=0}){
+export function createManagementService({store,origin='https://tap.imai.my',now=Date.now,enabled=false,manualEnabled=true,qrPayload='',payee='NIK AZFAR BIN NIK ZAINAL',stickerCents=2000,shippingCents=0}){
   const catalog=createCatalog({stickerCents,shippingCents});
   const view=(id,item,actor)=>pageView({id,...item},origin,actor.role==='admin',now());
-  const ready=()=>{if(!enabled||!qrPayload)throw fail(503,'Pembaharuan bayaran belum dibuka. Hubungi super admin.');};
+  const ready=()=>{if(!enabled)throw fail(503,'Pembaharuan bayaran belum dibuka. Hubungi super admin.');};
   async function load(id,actor){
     validId(id);const item=await store.getVersion(id);if(!item)throw fail(404,'Halaman tidak ditemui.');
     if(actor?.role==='admin')return item;
@@ -45,7 +45,7 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
       await savePage({store,id,previous,revision:data.revision,changes:{adminMessage},actor,now});
       return view(id,await load(id,actor),actor);
     },
-    config(){return {enabled,...catalog.config,payee,...(enabled?{qrPayload}:{})};},
+    config(){return {enabled,manualEnabled,...catalog.config,...(manualEnabled?{payee,...(enabled?{qrPayload}:{})}:{})};},
     async quote(id,options,actor){ready();const item=await load(id,actor);return catalog.quote(item.record,options);},
     async state(id,{state,revision,confirmName}={},actor){
       admin(actor);if(!['active','disabled','deleted'].includes(state))throw fail(400,'Status halaman tidak sah.');
@@ -55,6 +55,7 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
       const saved=await savePage({store,id,previous,revision,changes:{lifecycle:{state,changedAt:new Date(now()).toISOString(),changedBy:actor.email}},actor,now});return view(id,saved,actor);
     },
     async request(id,data={},actor){
+      if(!manualEnabled)throw fail(410,'Bayaran manual telah ditutup. Gunakan ToyyibPay.');if(!qrPayload)throw fail(503,'Bayaran manual belum dikonfigurasi.');
       ready();const previous=await load(id,actor);if(previous.record.lifecycle?.state==='deleted')throw fail(409,'Halaman telah dipadam.');
       if(!previous.record.ownerEmail)throw fail(400,'Daftarkan Gmail pelanggan sebelum merekod bayaran.');
       if(Object.keys(data).some(key=>!['reference','paidDate','amountCents','revision','package','extraNfcQty','stickerQty'].includes(key)))throw fail(400,'Maklumat bayaran tidak sah.');

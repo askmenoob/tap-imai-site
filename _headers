@@ -11,3 +11,6 @@
 
 /assets/business-admin-checkout.js
   Cache-Control: no-store
+
+/assets/business-admin-toyyib-only.js
+  Cache-Control: no-store

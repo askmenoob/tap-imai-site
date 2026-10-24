@@ -2270,9 +2270,9 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   <div id="lifecycle-actions" class="actions" ${customer2 ? "hidden" : ""}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button></div>
   <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
   <p id="management-status" role="status" aria-live="polite"></p>
-  <div id="billing-section"><h3>Langganan & bayaran DuitNow</h3><p id="billing-availability"></p><p id="payment-summary"></p>
+  <div id="billing-section"><h3>Langganan & pembayaran</h3><p id="billing-availability"></p><p id="payment-summary"></p>
   <div id="order-support" class="notice" hidden><h4>Pertanyaan pesanan</h4><p>Hubungi super admin tentang pesanan yang telah disahkan, termasuk penyediaan NFC dan penghantaran.</p><a id="order-whatsapp" class="button" target="_blank" rel="noopener noreferrer">WhatsApp super admin tentang pesanan \u2197</a><p class="help">Draf mesej disediakan dengan nama perniagaan dan ID pesanan. Semak dan hantar sendiri dalam WhatsApp.</p></div>
-  <section id="gateway-panel" class="gateway-panel" hidden><h4>Pembayaran ToyyibPay</h4><p id="gateway-availability"></p><p id="gateway-order" data-no-i18n></p><p id="gateway-status" role="status" aria-live="polite"></p><div class="actions"><a id="gateway-continue" class="button" hidden>Teruskan pembayaran \u2197</a><button type="button" id="gateway-check" class="secondary" hidden>Semak status bayaran</button><button type="button" id="gateway-cancel" class="secondary" hidden>Batalkan bil belum dibayar</button></div></section><p id="renewal-reminder" class="renewal-reminder" hidden></p><div id="payment-disclosure" class="actions" hidden><button id="payment-toggle" type="button" class="secondary" aria-controls="payment-form" aria-expanded="false">Renew / beli add-on</button><span class="help">QR bayaran dipaparkan apabila diperlukan.</span></div>
+  <section id="gateway-panel" class="gateway-panel" hidden><h4>Pembayaran ToyyibPay</h4><p id="gateway-availability"></p><p id="gateway-order" data-no-i18n></p><p id="gateway-status" role="status" aria-live="polite"></p><div class="actions"><a id="gateway-continue" class="button" hidden>Teruskan pembayaran \u2197</a><button type="button" id="gateway-check" class="secondary" hidden>Semak status bayaran</button><button type="button" id="gateway-cancel" class="secondary" hidden>Batalkan bil belum dibayar</button></div></section><p id="renewal-reminder" class="renewal-reminder" hidden></p><div id="payment-disclosure" class="actions" hidden><button id="payment-toggle" type="button" class="secondary" aria-controls="payment-form" aria-expanded="false">Renew / beli add-on</button><span class="help">Bayaran diproses melalui ToyyibPay.</span></div>
   <form id="payment-form" hidden><label for="payment-package">Pakej</label><select id="payment-package"></select><div class="quantity-grid"><div><label for="payment-nfc">NFC tambahan \xB7 RM30/unit</label><input id="payment-nfc" type="number" min="0" max="10" step="1" value="0"></div><div><label for="payment-stickers">NFC table sticker \xB7 kuantiti</label><input id="payment-stickers" type="number" min="0" max="200" step="1" value="0"></div></div><p class="help">Sticker: RM20/unit untuk 1\u201319 unit; RM15/unit untuk 20 unit atau lebih.</p><div id="payment-quote" role="status"></div><button id="gateway-pay" type="button" hidden>Bayar dengan ToyyibPay \u2197</button><p id="gateway-pay-help" class="help" hidden>Jumlah pesanan ditetapkan oleh SmartTap. Status disahkan terus dengan ToyyibPay.</p><p class="help">Harga produk tidak termasuk penghantaran. Urus penghantaran dan cajnya secara berasingan dengan super admin.</p>
   <details id="manual-method" open><summary>Bayaran manual (QR DuitNow)</summary><div id="payment-instructions" hidden><p>Bayar jumlah di atas menggunakan QR DuitNow ini. Semak nama penerima sebelum mengesahkan bayaran dalam aplikasi bank.</p><img id="payment-qr" width="1118" height="1762" alt="Gambar penuh QR DuitNow asal \u2014 NIK AZFAR BIN NIK ZAINAL, MAE Maybank"><strong id="payment-payee"></strong><div class="actions"><a id="payment-open" class="button secondary" target="_blank" rel="noopener noreferrer">Lihat QR penuh \u2197</a><a id="payment-download" class="button secondary" download="smarttap-duitnow-asal.jpeg">Muat turun gambar QR asal</a></div></div>
   <p class="notice">Selepas membayar, hantar rujukan transaksi. Langganan dilanjutkan selepas super admin mengesahkan wang diterima. Jangan bayar semasa menggunakan demo tempatan.</p><label for="payment-reference">Rujukan transaksi bank</label><input id="payment-reference" required minlength="3" maxlength="80" autocomplete="off"><label for="payment-date">Tarikh bayaran</label><input id="payment-date" type="date" required><button id="payment-submit">Hantar untuk semakan bayaran</button></details></form>
@@ -2368,13 +2368,15 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       const total = document.createElement("strong");
       total.textContent = "Jumlah produk: " + money(result.amountCents);
       $2("payment-quote").append(total);
-      const image = "/assets/duitnow-original.jpeg";
-      $2("payment-qr").src = image;
-      $2("payment-download").href = image;
-      $2("payment-open").href = image;
-      $2("payment-payee").textContent = config.payee;
-      $2("payment-instructions").hidden = false;
-      $2("payment-submit").disabled = false;
+      if (config.manualEnabled !== false) {
+        const image = "/assets/duitnow-original.jpeg";
+        $2("payment-qr").src = image;
+        $2("payment-download").href = image;
+        $2("payment-open").href = image;
+        $2("payment-payee").textContent = config.payee;
+        $2("payment-instructions").hidden = false;
+        $2("payment-submit").disabled = false;
+      }
       $2("gateway-pay").disabled = !config.gateway?.enabled;
     } catch (error) {
       if (version === sequence) $2("payment-quote").textContent = error.message;
@@ -2383,7 +2385,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   function gatewayPanel(item) {
     const settings = config?.gateway || {}, checkout = item.checkout;
     $2("gateway-panel").hidden = customer2 && !settings.enabled && !checkout;
-    $2("gateway-availability").textContent = settings.enabled ? location.hostname === "127.0.0.1" ? "SIMULASI TEMPATAN \u2014 tiada wang dibayar." : settings.mode === "sandbox" ? "Mod ujian ToyyibPay \u2014 bukan pembayaran sebenar." : "Bayar melalui ToyyibPay. Pengaktifan dibuat selepas transaksi disahkan." : customer2 ? "Pembayaran dalam talian belum dibuka. Bayaran manual masih tersedia." : settings.reason === "awaiting_verification" ? "ToyyibPay disediakan. Pembayaran sebenar ditutup sehingga akaun verified." : "ToyyibPay belum diaktifkan. Bayaran manual masih tersedia.";
+    $2("gateway-availability").textContent = settings.enabled ? location.hostname === "127.0.0.1" ? "SIMULASI TEMPATAN \u2014 tiada wang dibayar." : settings.mode === "sandbox" ? "Mod ujian ToyyibPay \u2014 bukan pembayaran sebenar." : "Bayar melalui ToyyibPay. Pengaktifan dibuat selepas transaksi disahkan." : customer2 ? "Pembayaran dalam talian belum dibuka. Hubungi super admin." : settings.reason === "awaiting_verification" ? "ToyyibPay disediakan. Pembayaran sebenar ditutup sehingga akaun verified." : "ToyyibPay belum diaktifkan. Hubungi super admin.";
     $2("gateway-pay").hidden = !settings.enabled;
     $2("gateway-pay-help").hidden = !settings.enabled;
     if (changedGatewayId !== item.id) {
@@ -2483,8 +2485,13 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       $2("billing-availability").textContent = error.message;
       return;
     }
+    $2("manual-method").hidden = config.manualEnabled === false;
+    for (const id of ["payment-reference", "payment-date"]) {
+      $2(id).required = config.manualEnabled !== false;
+      $2(id).disabled = config.manualEnabled === false;
+    }
     gatewayPanel(item);
-    $2("billing-availability").textContent = config.enabled ? config.gateway?.enabled ? "Pakej halaman ditawarkan setahun sahaja. Bayaran ToyyibPay disahkan secara automatik; bayaran manual disemak oleh super admin." : "Pakej halaman ditawarkan setahun sahaja. Bayaran disemak secara manual." : "Permohonan bayaran belum dibuka. Hubungi super admin untuk maklumat lanjut.";
+    $2("billing-availability").textContent = config.enabled ? config.gateway?.enabled ? config.manualEnabled === false ? "Pakej halaman ditawarkan setahun sahaja. Bayar melalui ToyyibPay; status disahkan secara automatik." : "Pakej halaman ditawarkan setahun sahaja. Bayaran ToyyibPay disahkan secara automatik; bayaran manual disemak oleh super admin." : "Pakej halaman ditawarkan setahun sahaja. Bayaran disemak secara manual." : "Permohonan bayaran belum dibuka. Hubungi super admin untuk maklumat lanjut.";
     const pending = item.renewal?.status === "pending";
     paymentAvailable = config.enabled && !pending && item.manualState !== "deleted";
     if (!paymentAvailable || oldStatus !== item.renewal?.status && item.renewal?.status === "approved") paymentVisibility(!customer2);
@@ -2582,6 +2589,10 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   };
   $2("payment-form").onsubmit = (event) => {
     event.preventDefault();
+    if (config?.manualEnabled === false) {
+      gatewayAction("create");
+      return;
+    }
     if (!quote) return;
     action("/renewal", { ...options(), reference: $2("payment-reference").value.trim(), paidDate: $2("payment-date").value, amountCents: quote.amountCents, revision: current.revision }, "Rujukan dihantar. Tunggu semakan bank oleh super admin.");
   };
