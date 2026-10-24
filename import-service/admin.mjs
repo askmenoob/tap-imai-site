@@ -1,3 +1,4 @@
+import {applyServiceCatalog} from './service-catalog-schema.mjs';
 import {createGoogleIdentityAuth} from './identity.mjs';
 import {validateSmartTapURL} from './short-links.mjs';
 import {malaysiaPhone,whatsappFromPhone,threadsProfile} from './contacts.mjs';
@@ -23,7 +24,7 @@ export function pageView({id,record,revision},origin='https://tap.imai.my',inclu
   const adminMessage=message&&(includeOwner||recipient)?{id:message.id,text:message.text,status:message.status,sentAt:message.sentAt,resolvedAt:message.resolvedAt||null,reply:message.reply?{text:message.reply.text,sentAt:message.reply.sentAt}:null}:null;
   let checkout=null;try{if(record.checkout&&(includeOwner||record.checkout.recipientKey===ownerKey(record.ownerEmail))){const c=record.checkout;checkout={id:c.id,status:c.status,amountCents:c.amountCents,mode:c.mode,createdAt:c.createdAt,invoice:c.invoice||null};}}catch{}
   return {id,url:origin+'/?s='+id,adminMessage,checkout,profile:JSON.parse(Buffer.from(new URL(url).searchParams.get('p'),'base64url').toString('utf8')),
-    revision,createdAt:record.createdAt||null,updatedAt:record.updatedAt||record.createdAt||null,state:pageState(record,now),manualState:record.lifecycle?.state||'active',subscription:record.subscription||null,
+    revision,catalog:structuredClone(record.catalog||{v:1,enabled:false,kind:'custom',items:[]}),createdAt:record.createdAt||null,updatedAt:record.updatedAt||record.createdAt||null,state:pageState(record,now),manualState:record.lifecycle?.state||'active',subscription:record.subscription||null,
     renewal:record.renewal?Object.fromEntries(Object.entries(record.renewal).filter(([key])=>includeOwner||!['submittedBy','decidedBy'].includes(key))):null,...(includeOwner?{ownerEmail:record.ownerEmail||''}:{})};
 }
 export function profileURL(value,origin='https://tap.imai.my'){
@@ -43,7 +44,7 @@ export async function savePage({store,id,previous,revision,changes,actor,now=Dat
   if(!await store.update(id,record,revision))throw fail(409,'Rekod ini telah disunting. Muat semula senarai sebelum menyimpan.');
   return store.getVersion(id);
 }
-export function createAdminService({store,origin='https://tap.imai.my',now=Date.now}) {
+export function createAdminService({store,origin='https://tap.imai.my',mediaOrigin='https://tap-business-import-262870839474.asia-southeast1.run.app',now=Date.now}) {
   const view=item=>pageView(item,origin,true,now());
   let pendingCache=null,pendingFlight=null,epoch=0;
   const invalidatePending=()=>{epoch++;pendingCache=null;pendingFlight=null;};
@@ -81,14 +82,15 @@ export function createAdminService({store,origin='https://tap.imai.my',now=Date.
       const page=await store.list(cursor);
       return {items:page.items.map(view),cursor:page.cursor};
     },
-    async update(id,{profile,revision}={},actor) {
+    async update(id,{profile,revision,catalog}={},actor) {
       validId(id);
       if(typeof revision!=='string'||!/^\d{1,30}$/.test(revision)||!profile||typeof profile!=='object'||Array.isArray(profile)) throw fail(400,'Maklumat suntingan tidak sah.');
       if(!actor?.email) throw fail(403,'Login super admin diperlukan.');
-      const url=profileURL(profile,origin);
+      const applied=applyServiceCatalog(profile,catalog,{id,origin,mediaOrigin});
+      const url=profileURL(applied.profile,origin);
       const previous=await store.getVersion(id);
       if(!previous)throw fail(404,'Pautan tidak ditemui.');
-      const saved=await savePage({store,id,previous,revision,changes:{v:1,url},actor,now});
+      const saved=await savePage({store,id,previous,revision,changes:{v:1,url,...(applied.catalog?{catalog:applied.catalog}:{})},actor,now});
       return view({id,...saved});
     },
   };

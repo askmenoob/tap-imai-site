@@ -2,6 +2,7 @@ export const appearanceFields = {
   theme:{label:'Tema halaman',options:{classic:'Klasik · krim & hijau',dark:'Gelap · arang & putih',bright:'Ceria · putih & warna jenama'}},
   accent:{label:'Warna utama',type:'color'},
   cover:{label:'Cover tersimpan',type:'url',max:500},
+  menuLabel:{label:'Nama butang menu / katalog',max:40},
   menu:{label:'Pautan menu / katalog',type:'url',max:500},
   directions:{label:'Pautan lokasi Google Maps',type:'url',max:500},
   address:{label:'Alamat perniagaan',max:240},

@@ -8,16 +8,18 @@ sharp.cache({memory:16,files:0,items:20});sharp.concurrency(1);
 let processing=false;
 export const MAX_COVER_INPUT=5*1024*1024,MAX_COVER_STORED=500*1024;
 const fail=(status,message)=>Object.assign(new Error(message),{status});
-export async function normalizeCover(bytes){
-  if(!bytes.length||bytes.length>MAX_COVER_INPUT)throw fail(413,'Saiz gambar mesti 5 MB atau kurang.');
+export const normalizeCover=bytes=>normalizeImage(bytes);
+export const normalizeCatalogImage=bytes=>normalizeImage(bytes,{maxInput:2*1024*1024,maxStored:200*1024,dimension:800,label:2});
+async function normalizeImage(bytes,{maxInput=MAX_COVER_INPUT,maxStored=MAX_COVER_STORED,dimension=1600,label=5}={}){
+  if(!bytes.length||bytes.length>maxInput)throw fail(413,'Saiz gambar mesti '+label+' MB atau kurang.');
   if(processing)throw fail(429,'Satu gambar sedang diproses. Cuba lagi sebentar.');
   processing=true;
   try {
     const image=sharp(bytes,{limitInputPixels:25000000,animated:false,failOn:'warning'});
     const info=await image.metadata();
     if(!['jpeg','png','webp'].includes(info.format)||(info.pages||1)!==1)throw 0;
-    const output=await image.rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).webp({quality:78,effort:4}).toBuffer();
-    if(output.length>MAX_COVER_STORED)throw fail(413,'Gambar terlalu rumit. Cuba gambar dengan resolusi lebih kecil.');
+    const output=await image.rotate().resize({width:dimension,height:dimension,fit:'inside',withoutEnlargement:true}).webp({quality:78,effort:4}).toBuffer();
+    if(output.length>maxStored)throw fail(413,'Gambar terlalu rumit. Cuba gambar dengan resolusi lebih kecil.');
     return output;
   } catch(error){if(error.status)throw error;throw fail(415,'Gunakan gambar JPG, PNG atau WebP yang sah, tanpa animasi, maksimum 25 megapiksel.');}finally{processing=false;}
 }

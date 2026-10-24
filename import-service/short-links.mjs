@@ -21,7 +21,7 @@ export function validateSmartTapURL(value,origin='https://tap.imai.my') {
     validateAppearance(profile);
     for(const key of urlFields) if(profile[key]) {
       const link=new URL(profile[key]);
-      if((link.protocol!=='https:'&&!(key==='cover'&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.username||link.password||(link.port&&link.port!=='443'&&!(key==='cover'&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.href.length>500) throw 0;
+      if((link.protocol!=='https:'&&!(['cover','menu'].includes(key)&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.username||link.password||(link.port&&link.port!=='443'&&!(['cover','menu'].includes(key)&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.href.length>500) throw 0;
     }
     if(profile.googleStatus!==undefined&&profile.googleStatus!=='pending')throw 0;
     if(profile.googleStatus==='pending'){if(profile.google)throw 0;return url.href;}

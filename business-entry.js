@@ -3,6 +3,7 @@ var appearanceFields = {
   theme: { label: "Tema halaman", options: { classic: "Klasik \xB7 krim & hijau", dark: "Gelap \xB7 arang & putih", bright: "Ceria \xB7 putih & warna jenama" } },
   accent: { label: "Warna utama", type: "color" },
   cover: { label: "Cover tersimpan", type: "url", max: 500 },
+  menuLabel: { label: "Nama butang menu / katalog", max: 40 },
   menu: { label: "Pautan menu / katalog", type: "url", max: 500 },
   directions: { label: "Pautan lokasi Google Maps", type: "url", max: 500 },
   address: { label: "Alamat perniagaan", max: 240 },
@@ -111,7 +112,7 @@ function renderCard(document2, profile, now = Date.now()) {
   }
   if (profile.whatsapp) content.append(link(profile.whatsapp, "Hubungi melalui WhatsApp", "business-action whatsapp-action", "whatsapp"));
   const quick = el("div", "business-quick");
-  if (profile.menu) quick.append(link(profile.menu, "Lihat menu / katalog", "business-action outline-action", "menu"));
+  if (profile.menu) quick.append(link(profile.menu, profile.menuLabel || "Lihat menu / katalog", "business-action outline-action", "menu"));
   if (profile.directions) quick.append(link(profile.directions, "Arah ke lokasi", "business-action outline-action", "pin"));
   if (quick.childElementCount) content.append(quick);
   if (promotionVisible(profile, now)) {

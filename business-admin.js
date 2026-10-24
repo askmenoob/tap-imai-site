@@ -2039,7 +2039,7 @@ var require_browser = __commonJS({
     var QRCode2 = require_qrcode();
     var CanvasRenderer = require_canvas();
     var SvgRenderer = require_svg_tag();
-    function renderCanvas(renderFunc, canvas, text, opts, cb) {
+    function renderCanvas(renderFunc, canvas, text2, opts, cb) {
       const args = [].slice.call(arguments, 1);
       const argsNum = args.length;
       const isLastArgCb = typeof args[argsNum - 1] === "function";
@@ -2051,8 +2051,8 @@ var require_browser = __commonJS({
           throw new Error("Too few arguments provided");
         }
         if (argsNum === 2) {
-          cb = text;
-          text = canvas;
+          cb = text2;
+          text2 = canvas;
           canvas = opts = void 0;
         } else if (argsNum === 3) {
           if (canvas.getContext && typeof cb === "undefined") {
@@ -2060,8 +2060,8 @@ var require_browser = __commonJS({
             opts = void 0;
           } else {
             cb = opts;
-            opts = text;
-            text = canvas;
+            opts = text2;
+            text2 = canvas;
             canvas = void 0;
           }
         }
@@ -2070,16 +2070,16 @@ var require_browser = __commonJS({
           throw new Error("Too few arguments provided");
         }
         if (argsNum === 1) {
-          text = canvas;
+          text2 = canvas;
           canvas = opts = void 0;
         } else if (argsNum === 2 && !canvas.getContext) {
-          opts = text;
-          text = canvas;
+          opts = text2;
+          text2 = canvas;
           canvas = void 0;
         }
         return new Promise(function(resolve, reject) {
           try {
-            const data = QRCode2.create(text, opts);
+            const data = QRCode2.create(text2, opts);
             resolve(renderFunc(data, canvas, opts));
           } catch (e) {
             reject(e);
@@ -2087,7 +2087,7 @@ var require_browser = __commonJS({
         });
       }
       try {
-        const data = QRCode2.create(text, opts);
+        const data = QRCode2.create(text2, opts);
         cb(null, renderFunc(data, canvas, opts));
       } catch (e) {
         cb(e);
@@ -2101,6 +2101,480 @@ var require_browser = __commonJS({
     });
   }
 });
+
+// import-service/service-catalog-schema.mjs
+var catalogTemplates = {
+  food: { ms: "Restoran / kafe", en: "Restaurant / cafe", categories: ["Hidangan utama", "Minuman", "Pencuci mulut"], english: ["Main dishes", "Drinks", "Desserts"], button: ["Lihat menu", "View menu"] },
+  automotive: { ms: "Kedai tayar / bengkel", en: "Tyre shop / workshop", categories: ["Tayar", "Servis kenderaan", "Baik pulih", "Aksesori"], english: ["Tyres", "Vehicle service", "Repairs", "Accessories"], button: ["Lihat servis", "View services"] },
+  legal: { ms: "Firma guaman", en: "Law firm", categories: ["Hartanah", "Korporat", "Keluarga", "Perundingan"], english: ["Property", "Corporate", "Family", "Consultation"], button: ["Perkhidmatan guaman", "Legal services"] },
+  salon: { ms: "Salon / kecantikan", en: "Salon / beauty", categories: ["Rambut", "Rawatan", "Pakej"], english: ["Hair", "Treatments", "Packages"], button: ["Lihat rawatan", "View treatments"] },
+  cleaning: { ms: "Servis pembersihan", en: "Cleaning services", categories: ["Rumah", "Pejabat", "Cucian khusus"], english: ["Home", "Office", "Specialist cleaning"], button: ["Lihat servis", "View services"] },
+  contractor: { ms: "Kontraktor / penyelenggaraan", en: "Contractor / maintenance", categories: ["Renovasi", "Elektrik", "Paip", "Pembaikan"], english: ["Renovation", "Electrical", "Plumbing", "Repairs"], button: ["Lihat perkhidmatan", "View services"] },
+  education: { ms: "Kelas / tuisyen", en: "Classes / tuition", categories: ["Kelas", "Subjek", "Pakej"], english: ["Classes", "Subjects", "Packages"], button: ["Lihat kelas", "View classes"] },
+  retail: { ms: "Kedai / produk", en: "Shop / products", categories: ["Produk", "Koleksi", "Aksesori"], english: ["Products", "Collections", "Accessories"], button: ["Lihat katalog", "View catalogue"] },
+  professional: { ms: "Perkhidmatan profesional", en: "Professional services", categories: ["Perakaunan", "Reka bentuk", "Perundingan"], english: ["Accounting", "Design", "Consultation"], button: ["Lihat perkhidmatan", "View services"] },
+  clinic: { ms: "Klinik / pergigian", en: "Clinic / dental", categories: ["Pemeriksaan", "Perkhidmatan", "Temujanji"], english: ["Check-ups", "Services", "Appointments"], button: ["Lihat perkhidmatan", "View services"] },
+  property: { ms: "Hartanah / penginapan", en: "Property / accommodation", categories: ["Sewaan", "Penginapan", "Pakej"], english: ["Rentals", "Accommodation", "Packages"], button: ["Lihat pilihan", "View options"] },
+  events: { ms: "Fotografi / acara", en: "Photography / events", categories: ["Fotografi", "Videografi", "Pakej acara"], english: ["Photography", "Videography", "Event packages"], button: ["Lihat pakej", "View packages"] },
+  custom: { ms: "Tersuai / lain-lain", en: "Custom / other", categories: ["Produk", "Perkhidmatan", "Pakej"], english: ["Products", "Services", "Packages"], button: ["Lihat katalog", "View catalogue"] }
+};
+var catalogUnits = { "": ["Sekali / tanpa unit", "One-off / no unit"], unit: ["Seunit", "Per unit"], hour: ["Sejam", "Per hour"], session: ["Sesi", "Per session"], day: ["Sehari", "Per day"], night: ["Semalam", "Per night"], month: ["Sebulan", "Per month"], project: ["Projek", "Per project"] };
+var MAX_CATALOG_ITEMS = 50;
+var catalogURL = (origin, id) => origin + "/menu/?s=" + id;
+var fail = (text2) => Object.assign(new Error(text2), { status: 400 });
+function text(value, max, required = false) {
+  if (typeof value !== "string" || value.length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)) throw fail("Teks katalog tidak sah.");
+  const result = value.normalize("NFC").trim();
+  if (result.length > max || required && !result) throw fail("Lengkapkan nama dan kategori item.");
+  return result;
+}
+function validateServiceCatalog(value, { id, mediaOrigin }) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some((key) => !["v", "enabled", "kind", "items"].includes(key)) || value.v !== 1 || typeof value.enabled !== "boolean" || !Object.hasOwn(catalogTemplates, value.kind) || !Array.isArray(value.items) || value.items.length > MAX_CATALOG_ITEMS) throw fail("Katalog tidak sah. Had maksimum 50 item.");
+  if (value.enabled && !value.items.length) throw fail("Tambah sekurang-kurangnya satu item untuk menerbitkan katalog.");
+  const ids = /* @__PURE__ */ new Set(), items = value.items.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item) || Object.keys(item).some((key) => !["id", "name", "category", "description", "priceMode", "priceCents", "unit", "status", "photo"].includes(key)) || !/^\b[a-f0-9]{16}$/.test(item.id || "") || ids.has(item.id)) throw fail("Item katalog tidak sah atau berulang.");
+    ids.add(item.id);
+    if (!["fixed", "from", "quote", "free"].includes(item.priceMode) || !["available", "unavailable", "hidden"].includes(item.status) || !Object.hasOwn(catalogUnits, item.unit)) throw fail("Pilihan harga atau status tidak sah.");
+    const priced = ["fixed", "from"].includes(item.priceMode);
+    if (priced ? !Number.isSafeInteger(item.priceCents) || item.priceCents < 0 || item.priceCents > 1e8 : item.priceCents !== null || item.unit !== "") throw fail("Harga katalog tidak sah.");
+    const photo = text(item.photo, 500);
+    if (photo) {
+      const expected = mediaOrigin + "/api/catalog-media/" + id + "/";
+      if (!photo.startsWith(expected) || !new RegExp("^[a-f0-9]{24}\\.webp$").test(photo.slice(expected.length))) throw fail("Gambar mesti dimuat naik untuk halaman ini.");
+    }
+    return { id: item.id, name: text(item.name, 80, true), category: text(item.category, 40, true), description: text(item.description, 300), priceMode: item.priceMode, priceCents: item.priceCents, unit: item.unit, status: item.status, photo };
+  });
+  const catalog = { v: 1, enabled: value.enabled, kind: value.kind, items };
+  if (new TextEncoder().encode(JSON.stringify(catalog)).length > 65e3) throw fail("Katalog terlalu besar. Ringkaskan maklumat item.");
+  return catalog;
+}
+function catalogPrice(item, language = "ms") {
+  const en = language === "en";
+  if (item.priceMode === "quote") return en ? "Request a quote" : "Minta sebut harga";
+  if (item.priceMode === "free") return en ? "Free" : "Percuma";
+  const money3 = "RM" + (item.priceCents / 100).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const suffix = { unit: en ? "unit" : "unit", hour: en ? "hour" : "jam", session: en ? "session" : "sesi", day: en ? "day" : "hari", night: en ? "night" : "malam", month: en ? "month" : "bulan", project: en ? "project" : "projek" }[item.unit];
+  return (item.priceMode === "from" ? en ? "From " : "Bermula " : "") + money3 + (suffix ? " / " + suffix : "");
+}
+function parseCatalogPrice(value) {
+  if (!/^\d{1,7}(?:\.\d{1,2})?$/.test(String(value))) throw fail("Masukkan harga yang sah, maksimum dua tempat perpuluhan.");
+  const [whole, decimal = ""] = String(value).split(".");
+  const cents = Number(whole) * 100 + Number(decimal.padEnd(2, "0"));
+  if (cents > 1e8) throw fail("Harga melebihi had katalog.");
+  return cents;
+}
+
+// src/catalog-editor.mjs
+function createCatalogEditor({ onChange, upload, loadImage }) {
+  const $2 = (id) => document.getElementById(id), mode = $2("appearance-menu-mode"), menu = $2("field-menu"), buttonLabel = $2("field-menuLabel"), host = menu.closest(".appearance-control");
+  let language = document.documentElement.lang === "en" ? "en" : "ms", selected2 = null, data = { v: 1, enabled: false, kind: "custom", items: [] }, locked = false, uploading = false, active = null, photo = "", previewURL2 = "", request = 0, page = 0, tab = 0;
+  try {
+    if (localStorage.getItem("smarttap.language") === "en") language = "en";
+  } catch {
+  }
+  const L = (ms, en) => language === "en" ? en : ms, copyNodes = [];
+  const el = (tag, cls, text2) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text2) n.textContent = text2;
+    return n;
+  };
+  function copy(node, ms, en, attr) {
+    copyNodes.push({ node, ms, en, attr });
+    if (attr) node.setAttribute(attr, L(ms, en));
+    else node.textContent = L(ms, en);
+    return node;
+  }
+  function button(ms, en, action, parent, cls = "secondary") {
+    const b = copy(el("button", cls), ms, en);
+    b.type = "button";
+    b.onclick = action;
+    parent.append(b);
+    return b;
+  }
+  function field(parent, ms, en, input) {
+    const box = el("div", "catalog-field"), label = copy(el("label"), ms, en);
+    input.id ||= "catalog-input-" + copyNodes.length;
+    label.htmlFor = input.id;
+    box.append(label, input);
+    parent.append(box);
+    return box;
+  }
+  function option(select, value, ms, en) {
+    const o = copy(el("option"), ms, en);
+    o.value = value;
+    select.append(o);
+    return o;
+  }
+  copy([...mode.options].find((o) => o.value === "catalog"), "Bina menu / katalog", "Build menu / catalogue");
+  [...mode.options].find((o) => o.value === "catalog").dataset.noI18n = "";
+  const root = el("div", "catalog-editor");
+  root.dataset.noI18n = "";
+  host.append(root);
+  const labelWrap = el("div", "catalog-label-field");
+  const originalLabel = document.querySelector('label[for="field-menuLabel"]');
+  labelWrap.append(originalLabel, buttonLabel);
+  root.append(labelWrap);
+  copy(originalLabel, "Nama butang menu / katalog", "Menu / catalogue button label");
+  const builder = el("div", "catalog-builder");
+  root.append(builder);
+  const kind = el("select");
+  kind.id = "catalog-kind";
+  for (const [key, t] of Object.entries(catalogTemplates)) option(kind, key, t.ms, t.en);
+  field(builder, "Jenis perniagaan", "Business type", kind);
+  const toolbar = el("div", "catalog-toolbar"), count = el("span", "catalog-count");
+  builder.append(toolbar);
+  const add = button("+ Tambah item", "+ Add item", () => open(), toolbar);
+  toolbar.append(count);
+  const list = el("div", "catalog-editor-list");
+  builder.append(list);
+  const pages = el("div", "catalog-pagination");
+  builder.append(pages);
+  const previous = button("\u2190 Sebelum", "\u2190 Previous", () => {
+    page--;
+    renderList();
+  }, pages), pageText = el("span"), next = button("Seterusnya \u2192", "Next \u2192", () => {
+    page++;
+    renderList();
+  }, pages);
+  pages.insertBefore(pageText, next);
+  const hint = copy(el("p", "help"), "Had 50 item. Sunting senarai dahulu, kemudian tekan Simpan pada URL yang sama.", "Up to 50 items. Edit the list, then save it on the same URL.");
+  builder.append(hint);
+  const dialog = el("dialog", "catalog-item-dialog");
+  dialog.id = "catalog-item-dialog";
+  dialog.dataset.noI18n = "";
+  dialog.setAttribute("aria-labelledby", "catalog-dialog-title");
+  const top = el("div", "catalog-dialog-top"), title = el("h2");
+  title.id = "catalog-dialog-title";
+  top.append(title);
+  const close = button("Tutup \xD7", "Close \xD7", () => dialog.close(), top);
+  dialog.append(top);
+  const tabs = el("nav", "customer-subnav");
+  tabs.setAttribute("aria-label", "Item sections");
+  dialog.append(tabs);
+  const info = el("div", "catalog-dialog-fields"), pricing = el("div", "catalog-dialog-fields");
+  dialog.append(info, pricing);
+  const tabButtons = [button("Maklumat item", "Item details", () => showTab(0), tabs), button("Harga & gambar", "Price & photo", () => showTab(1), tabs)];
+  const name = el("input");
+  name.id = "catalog-item-name";
+  name.maxLength = 80;
+  name.required = true;
+  field(info, "Nama produk / servis", "Product / service name", name);
+  const category = el("select");
+  category.id = "catalog-item-category";
+  field(info, "Kategori", "Category", category);
+  const customCategory = el("input");
+  customCategory.id = "catalog-item-custom-category";
+  customCategory.maxLength = 40;
+  const customBox = field(info, "Kategori sendiri", "Custom category", customCategory);
+  const description = el("textarea");
+  description.id = "catalog-item-description";
+  description.rows = 3;
+  description.maxLength = 300;
+  field(info, "Penerangan ringkas (pilihan)", "Short description (optional)", description);
+  const state = el("select");
+  state.id = "catalog-item-state";
+  for (const [v, ms, en] of [["available", "Tersedia", "Available"], ["unavailable", "Tidak tersedia sementara", "Temporarily unavailable"], ["hidden", "Sembunyikan", "Hidden"]]) option(state, v, ms, en);
+  field(info, "Status item", "Item status", state);
+  const priceMode = el("select");
+  priceMode.id = "catalog-item-price-mode";
+  for (const [v, ms, en] of [["fixed", "Harga tetap", "Fixed price"], ["from", "Bermula dari", "Starting from"], ["quote", "Minta sebut harga", "Request a quote"], ["free", "Percuma", "Free"]]) option(priceMode, v, ms, en);
+  field(pricing, "Jenis harga", "Price type", priceMode);
+  const amount = el("input");
+  amount.id = "catalog-item-price";
+  amount.type = "number";
+  amount.min = "0";
+  amount.max = "1000000";
+  amount.step = "0.01";
+  amount.inputMode = "decimal";
+  const amountBox = field(pricing, "Harga (RM)", "Price (RM)", amount);
+  const unit = el("select");
+  unit.id = "catalog-item-unit";
+  for (const [value, [ms, en]] of Object.entries(catalogUnits)) option(unit, value, ms, en);
+  const unitBox = field(pricing, "Unit harga", "Pricing unit", unit);
+  const file = el("input");
+  file.id = "catalog-item-file";
+  file.type = "file";
+  file.accept = "image/jpeg,image/png,image/webp";
+  field(pricing, "Gambar item (pilihan)", "Item photo (optional)", file);
+  const preview = el("img", "catalog-item-preview");
+  preview.alt = "Item preview";
+  preview.hidden = true;
+  pricing.append(preview);
+  const remove = button("Buang gambar", "Remove photo", () => {
+    photo = "";
+    revoke();
+    preview.hidden = true;
+    remove.hidden = true;
+  }, pricing);
+  pricing.append(copy(el("p", "help"), "JPG, PNG atau WebP, maksimum 2 MB. Gambar dikecilkan kepada 800 piksel / 200 KB. Gambar diterbitkan selepas senarai disimpan.", "JPG, PNG or WebP, up to 2 MB. Images are optimised to 800 pixels / 200 KB and published after the list is saved."));
+  const status = el("p", "catalog-item-status");
+  status.setAttribute("role", "status");
+  dialog.append(status);
+  const actions = el("div", "actions");
+  dialog.append(actions);
+  const done = button("Masukkan ke senarai", "Apply to list", () => commit(), actions, "");
+  button("Batal", "Cancel", () => dialog.close(), actions);
+  document.body.append(dialog);
+  const settings = el("div", "catalog-settings"), catalogTabs = el("nav", "customer-subnav catalog-mode-tabs");
+  catalogTabs.setAttribute("aria-label", "Catalogue sections");
+  root.prepend(catalogTabs, settings);
+  for (const node of [...host.children]) if (node !== root) settings.append(node);
+  const kindField = kind.closest(".catalog-field");
+  settings.append(labelWrap, kindField);
+  root.insertBefore(toolbar, builder);
+  root.dataset.catalogTab = "settings";
+  const tabChoices = [button("Tetapan", "Settings", () => switchView("settings"), catalogTabs), button("Senarai item", "Item list", () => switchView("items"), catalogTabs)];
+  function switchView(value) {
+    root.dataset.catalogTab = value;
+    tabChoices.forEach((b, i) => b.setAttribute("aria-current", (i === 0 ? "settings" : "items") === value ? "page" : "false"));
+  }
+  const modeLabel = document.querySelector('label[for="appearance-menu-mode"]');
+  copy(modeLabel, "Jenis menu / katalog", "Menu / catalogue type");
+  for (const [value, ms, en] of [["none", "Tidak dipaparkan", "Not displayed"], ["link", "Pautan HTTPS", "HTTPS link"]]) copy([...mode.options].find((o) => o.value === value), ms, en);
+  const mobile = matchMedia("(max-width:700px)"), pageSize = () => mobile.matches ? 2 : 3;
+  mobile.addEventListener("change", () => renderList());
+  const controls = [...root.querySelectorAll("button,select,input"), ...dialog.querySelectorAll("button,select,input,textarea")];
+  function revoke() {
+    if (previewURL2) {
+      URL.revokeObjectURL(previewURL2);
+      previewURL2 = "";
+    }
+  }
+  dialog.addEventListener("close", () => {
+    request++;
+    revoke();
+    active = null;
+    file.value = "";
+  });
+  dialog.addEventListener("cancel", (event) => {
+    if (uploading) event.preventDefault();
+  });
+  function showTab(index) {
+    tab = index;
+    info.hidden = index !== 0;
+    pricing.hidden = index !== 1;
+    tabButtons.forEach((b, i) => b.setAttribute("aria-current", i === index ? "page" : "false"));
+  }
+  function permissions() {
+    const unavailable = locked || uploading;
+    for (const control of controls) control.disabled = unavailable;
+    for (const control of builder.querySelectorAll("input,select,button")) control.disabled = unavailable || mode.value !== "catalog";
+    buttonLabel.disabled = unavailable || mode.value === "none";
+    const priced = ["fixed", "from"].includes(priceMode.value);
+    amountBox.hidden = unitBox.hidden = !priced;
+    amount.disabled = unit.disabled = unavailable || !priced;
+    amount.required = priced;
+    customBox.hidden = category.value !== "__custom";
+    customCategory.disabled = unavailable || customBox.hidden;
+    customCategory.required = !customBox.hidden;
+    previous.disabled = unavailable || page === 0;
+    next.disabled = unavailable || (page + 1) * pageSize() >= data.items.length;
+    add.disabled = unavailable || data.items.length >= 50;
+  }
+  function renderList() {
+    list.replaceChildren();
+    page = Math.max(0, Math.min(page, Math.max(0, Math.ceil(data.items.length / pageSize()) - 1)));
+    count.textContent = data.items.length + " / 50";
+    for (const item of data.items.slice(page * pageSize(), page * pageSize() + pageSize())) {
+      const row = el("article", "catalog-editor-row"), text2 = el("div"), heading = el("strong", null, item.name), meta = el("p", null, item.category + " \xB7 " + catalogPrice(item, language) + (item.status === "hidden" ? L(" \xB7 Tersembunyi", " \xB7 Hidden") : item.status === "unavailable" ? L(" \xB7 Tidak tersedia", " \xB7 Unavailable") : ""));
+      text2.append(heading, meta);
+      row.append(text2);
+      const buttons = el("div", "catalog-row-actions");
+      row.append(buttons);
+      const edit2 = el("button", "secondary", L("Sunting", "Edit"));
+      edit2.type = "button";
+      edit2.onclick = () => open(item);
+      edit2.disabled = locked;
+      buttons.append(edit2);
+      for (const [label, delta] of [["\u2191", -1], ["\u2193", 1]]) {
+        const b = el("button", "secondary", label);
+        b.type = "button";
+        b.setAttribute("aria-label", L(delta < 0 ? "Naik" : "Turun", delta < 0 ? "Move up" : "Move down") + " " + item.name);
+        const at = data.items.indexOf(item);
+        b.disabled = locked || at + delta < 0 || at + delta >= data.items.length;
+        b.onclick = () => {
+          [data.items[at], data.items[at + delta]] = [data.items[at + delta], data.items[at]];
+          page = Math.floor((at + delta) / pageSize());
+          renderList();
+          onChange();
+        };
+        buttons.append(b);
+      }
+      const del = el("button", "secondary", L("Padam", "Delete"));
+      del.type = "button";
+      del.disabled = locked;
+      del.onclick = () => {
+        if (confirm(L("Padam item ini daripada draf? Perubahan berkuat kuasa selepas Simpan.", "Remove this item from the draft? Save to apply the change."))) {
+          data.items = data.items.filter((x) => x.id !== item.id);
+          renderList();
+          onChange();
+        }
+      };
+      buttons.append(del);
+      list.append(row);
+    }
+    if (!data.items.length) list.append(el("p", "help", L("Belum ada item. Tekan + Tambah item untuk bermula.", "No items yet. Select + Add item to begin.")));
+    pages.hidden = data.items.length <= pageSize();
+    pageText.textContent = page + 1 + " / " + Math.max(1, Math.ceil(data.items.length / pageSize()));
+    permissions();
+  }
+  function renderMode() {
+    builder.hidden = toolbar.hidden = catalogTabs.hidden = kindField.hidden = mode.value !== "catalog";
+    if (mode.value !== "catalog") switchView("settings");
+    labelWrap.hidden = mode.value === "none";
+    if (mode.value === "catalog" && selected2) {
+      menu.value = catalogURL(location.origin, selected2.id);
+      if (!buttonLabel.value) buttonLabel.value = catalogTemplates[data.kind].button[language === "en" ? 1 : 0];
+    }
+    permissions();
+  }
+  mode.addEventListener("change", () => {
+    renderMode();
+    onChange();
+  });
+  kind.onchange = () => {
+    data.kind = kind.value;
+    const template = catalogTemplates[data.kind];
+    buttonLabel.value = template.button[language === "en" ? 1 : 0];
+    renderList();
+    onChange();
+  };
+  category.onchange = permissions;
+  priceMode.onchange = permissions;
+  async function open(item) {
+    if (locked) return;
+    active = item?.id || crypto.randomUUID().replaceAll("-", "").slice(0, 16);
+    title.textContent = item ? L("Sunting item", "Edit item") : L("Tambah item", "Add item");
+    name.value = item?.name || "";
+    description.value = item?.description || "";
+    state.value = item?.status || "available";
+    priceMode.value = item?.priceMode || "fixed";
+    amount.value = item?.priceCents === null ? "" : item?.priceCents !== void 0 ? (item.priceCents / 100).toFixed(2) : "";
+    unit.value = item?.unit || "";
+    photo = item?.photo || "";
+    status.textContent = "";
+    file.value = "";
+    preview.hidden = true;
+    remove.hidden = !photo;
+    category.replaceChildren();
+    const t = catalogTemplates[data.kind], choices = [.../* @__PURE__ */ new Set([...language === "en" ? t.english : t.categories, ...data.items.map((x) => x.category)])];
+    for (const text2 of choices) {
+      const o = el("option", null, text2);
+      o.value = text2;
+      category.append(o);
+    }
+    const custom = el("option", null, L("+ Kategori sendiri", "+ Custom category"));
+    custom.value = "__custom";
+    category.append(custom);
+    category.value = item?.category || choices[0];
+    customCategory.value = "";
+    showTab(0);
+    permissions();
+    dialog.showModal();
+    name.focus();
+    const thisRequest = ++request;
+    if (photo) {
+      try {
+        const blob = await loadImage(photo);
+        if (thisRequest !== request) return;
+        revoke();
+        previewURL2 = URL.createObjectURL(blob);
+        preview.src = previewURL2;
+        preview.hidden = false;
+      } catch {
+        if (thisRequest === request) status.textContent = L("Gambar belum dapat dipratonton. Anda boleh menggantikannya.", "Photo preview is unavailable. You can replace it.");
+      }
+    }
+  }
+  function commit() {
+    if (locked || uploading) return;
+    for (const control of [name, customCategory, amount]) if (!control.disabled && !control.checkValidity()) {
+      showTab(pricing.contains(control) ? 1 : 0);
+      control.focus();
+      control.reportValidity();
+      return;
+    }
+    try {
+      const priced = ["fixed", "from"].includes(priceMode.value), item = { id: active, name: name.value.trim(), category: (category.value === "__custom" ? customCategory.value : category.value).trim(), description: description.value.trim(), priceMode: priceMode.value, priceCents: priced ? parseCatalogPrice(amount.value) : null, unit: priced ? unit.value : "", status: state.value, photo };
+      const at = data.items.findIndex((x) => x.id === active), items = data.items.slice();
+      if (at < 0) items.push(item);
+      else items[at] = item;
+      validateServiceCatalog({ ...data, enabled: true, items }, { id: selected2.id, mediaOrigin: selected2.mediaOrigin });
+      data.items = items;
+      page = Math.floor((at < 0 ? items.length - 1 : at) / pageSize());
+      dialog.close();
+      switchView("items");
+      renderList();
+      onChange();
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  }
+  file.onchange = async () => {
+    const chosen = file.files[0];
+    if (!chosen || uploading) return;
+    if (chosen.size > 2 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(chosen.type)) {
+      status.textContent = L("Pilih JPG, PNG atau WebP sehingga 2 MB.", "Choose JPG, PNG or WebP up to 2 MB.");
+      file.value = "";
+      return;
+    }
+    const current = ++request;
+    uploading = true;
+    status.textContent = L("Memproses gambar\u2026", "Processing photo\u2026");
+    permissions();
+    try {
+      const result = await upload(chosen);
+      if (current !== request) return;
+      photo = result.url;
+      revoke();
+      previewURL2 = URL.createObjectURL(chosen);
+      preview.src = previewURL2;
+      preview.hidden = false;
+      remove.hidden = false;
+      status.textContent = L("Gambar siap. Masukkan item ke senarai dan Simpan untuk menerbitkannya.", "Photo ready. Apply the item to the list and save to publish it.");
+    } catch (error) {
+      if (current === request) status.textContent = error.message;
+    } finally {
+      uploading = false;
+      file.value = "";
+      permissions();
+    }
+  };
+  window.addEventListener("smarttap:language", (event) => {
+    language = event.detail.language === "en" ? "en" : "ms";
+    for (const { node, ms, en, attr } of copyNodes) {
+      if (attr) node.setAttribute(attr, L(ms, en));
+      else node.textContent = L(ms, en);
+    }
+    renderList();
+  });
+  return { set(item) {
+    request++;
+    if (dialog.open) dialog.close();
+    selected2 = { id: item.id, mediaOrigin: item.mediaOrigin };
+    data = structuredClone(item.catalog || { v: 1, enabled: false, kind: "custom", items: [] });
+    kind.value = data.kind;
+    page = 0;
+    switchView(data.items.length ? "items" : "settings");
+    renderMode();
+    renderList();
+  }, draft() {
+    if (!selected2) return void 0;
+    const value = { ...data, enabled: mode.value === "catalog", kind: kind.value };
+    return validateServiceCatalog(value, { id: selected2.id, mediaOrigin: selected2.mediaOrigin });
+  }, lock(value) {
+    locked = value;
+    renderList();
+  }, clear() {
+    request++;
+    if (dialog.open) dialog.close();
+    selected2 = null;
+    data = { v: 1, enabled: false, kind: "custom", items: [] };
+    list.replaceChildren();
+    revoke();
+  }, panel: root };
+}
 
 // src/appearance-controls-values.mjs
 function safeAppearanceURL(value) {
@@ -2149,10 +2623,10 @@ function createAppearanceControls({ onChange }) {
   const message = (ms, en) => document.documentElement.lang === "en" ? en : ms;
   const $2 = (key) => document.getElementById("field-" + key), nodes = {}, controls = [];
   let locked = false;
-  const el = (tag, cls, text) => {
+  const el = (tag, cls, text2) => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
-    if (text) n.textContent = text;
+    if (text2) n.textContent = text2;
     return n;
   };
   function wrap(key) {
@@ -2166,8 +2640,8 @@ function createAppearanceControls({ onChange }) {
     const l = el("label", "", label), s = el("select");
     s.id = id;
     l.htmlFor = id;
-    for (const [value, text] of options) {
-      const o = el("option", "", text);
+    for (const [value, text2] of options) {
+      const o = el("option", "", text2);
       o.value = value;
       s.append(o);
     }
@@ -2175,16 +2649,16 @@ function createAppearanceControls({ onChange }) {
     controls.push(s);
     return s;
   }
-  function button(text, action, box, cls = "secondary") {
-    const b = el("button", cls, text);
+  function button(text2, action, box, cls = "secondary") {
+    const b = el("button", cls, text2);
     b.type = "button";
     b.onclick = action;
     controls.push(b);
     box.append(b);
     return b;
   }
-  function help(box, text) {
-    const p = el("p", "help", text);
+  function help(box, text2) {
+    const p = el("p", "help", text2);
     box.append(p);
     return p;
   }
@@ -2196,8 +2670,8 @@ function createAppearanceControls({ onChange }) {
   const themeCards = el("div", "appearance-theme-cards");
   themeBox.append(themeCards);
   const themeOptions = [["classic", "Klasik", "#20543e"], ["dark", "Gelap", "#91c8ad"], ["bright", "Ceria", "#7040bb"]];
-  for (const [value, text, color] of themeOptions) {
-    const b = button(text, () => {
+  for (const [value, text2, color] of themeOptions) {
+    const b = button(text2, () => {
       $2("theme").value = value;
       $2("accent").value = color;
       changed();
@@ -2256,6 +2730,7 @@ function createAppearanceControls({ onChange }) {
     const box = wrap(key), input = $2(key);
     let draft = "";
     const options = [["none", "Tidak dipaparkan"], ["link", "Pautan HTTPS"]];
+    if (key === "menu") options.push(["catalog", "Bina menu / katalog"]);
     if (address) options.push(["address", "Guna alamat perniagaan"]);
     if (whatsapp) options.push(["whatsapp", "Nombor WhatsApp Malaysia"]);
     const mode = select(box, "appearance-" + key + "-mode", label, options), phone = el("input");
@@ -2271,18 +2746,18 @@ function createAppearanceControls({ onChange }) {
     box.append(open);
     const hint = help(box, address ? "Pilih pautan Maps sendiri atau jana arah daripada alamat yang anda simpan." : "Kosongkan pautan untuk menyembunyikan butang ini.");
     function sync() {
-      input.hidden = mode.value === "none" || mode.value === "whatsapp";
-      input.readOnly = mode.value === "address";
+      input.hidden = ["none", "whatsapp", "catalog"].includes(mode.value);
+      input.readOnly = ["address", "catalog"].includes(mode.value);
       phone.hidden = mode.value !== "whatsapp";
       phone.disabled = locked || phone.hidden;
       const url = safeAppearanceURL(input.value);
-      open.hidden = !url;
+      open.hidden = !url || mode.value === "catalog";
       if (url) open.href = url;
       else open.removeAttribute("href");
       input.setCustomValidity(input.value && !url ? message("Gunakan pautan HTTPS yang sah.", "Enter a valid HTTPS link.") : "");
       mode.setCustomValidity(mode.value === "address" && !input.value ? message("Isi alamat perniagaan dahulu.", "Enter your business address first.") : "");
       phone.setCustomValidity(mode.value === "whatsapp" && !whatsappFromPhone(phone.value) ? message("Masukkan nombor telefon Malaysia yang sah.", "Enter a valid Malaysian phone number.") : "");
-      hint.hidden = mode.value === "none";
+      hint.hidden = ["none", "catalog"].includes(mode.value);
     }
     mode.onchange = () => {
       if (mode.value === "none") {
@@ -2307,7 +2782,13 @@ function createAppearanceControls({ onChange }) {
     });
     resetters.push(() => {
       draft = input.value;
-      mode.value = input.value ? "link" : "none";
+      let builtIn = false;
+      try {
+        const u = new URL(input.value);
+        builtIn = key === "menu" && u.origin === location.origin && u.pathname === "/menu/" && /^[A-Za-z0-9_-]{16}$/.test(u.searchParams.get("s") || "");
+      } catch {
+      }
+      mode.value = builtIn ? "catalog" : input.value ? "link" : "none";
       phone.value = "";
       sync();
     });
@@ -2498,16 +2979,16 @@ function readAddress(raw) {
 
 // src/business-details-ui.mjs
 function createBusinessDetails({ addressInput, hoursInput, onChange }) {
-  const el = (tag, text) => {
+  const el = (tag, text2) => {
     const node = document.createElement(tag);
-    if (text) node.textContent = text;
+    if (text2) node.textContent = text2;
     return node;
   };
   const select = (id, options) => {
     const node = el("select");
     node.id = id;
-    for (const [value, text] of Object.entries(options)) {
-      const option = el("option", text);
+    for (const [value, text2] of Object.entries(options)) {
+      const option = el("option", text2);
       option.value = value;
       node.append(option);
     }
@@ -2689,9 +3170,9 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
   panel.className = "orders-panel";
   panel.innerHTML = '<h2>Pesanan saya</h2><p class="help">Semak pembelian, alamat dan penghantaran untuk perniagaan ini. Status penghantaran dikemas kini oleh super admin.</p><label for="orders-picker">Pilih pesanan</label><div class="orders-selector"><select id="orders-picker"></select><button type="button" id="orders-refresh" class="secondary" aria-label="Muat semula pesanan"><span aria-hidden="true">\u21BB</span><span class="orders-refresh-label">Muat semula pesanan</span></button><button type="button" id="orders-more" class="secondary" hidden>Pesanan terdahulu</button></div><p id="orders-status" role="status" aria-live="polite"></p><div id="order-body" hidden><nav class="customer-subnav orders-tabs" aria-label="Bahagian pesanan"></nav><section id="order-details"></section><form id="order-address-form" novalidate><div id="order-recipient"></div><div id="order-address"></div><p class="help">Penghantaran Malaysia sahaja. Alamat disimpan untuk pesanan ini dan hanya boleh dilihat oleh pemilik yang berhak serta super admin.</p><button type="submit" id="order-address-save">Simpan maklumat penghantaran</button><p id="order-address-lock" class="help" hidden>Pesanan sudah dihantar. Hubungi super admin untuk pembetulan alamat.</p></form><section id="order-tracking"><p id="order-tracking-state" class="notice"></p><div id="order-tracking-info"></div><ol id="order-timeline"></ol><form id="order-fulfillment-form"><label for="order-fulfillment-state">Status penyediaan / penghantaran</label><select id="order-fulfillment-state"></select><label for="order-courier">Nama kurier</label><input id="order-courier" maxlength="80" placeholder="Contoh: Pos Laju / J&T Express"><label for="order-tracking-number">Nombor tracking</label><input id="order-tracking-number" maxlength="100"><label for="order-tracking-url">Pautan tracking kurier (pilihan)</label><input id="order-tracking-url" type="url" maxlength="500" placeholder="https://"><button type="submit" id="order-fulfillment-save">Simpan status penghantaran</button></form></section><a id="order-contact" class="button secondary" target="_blank" rel="noopener noreferrer" hidden>WhatsApp tentang pesanan \u2197</a><p class="help" id="order-contact-help" hidden>Draf mesej mengandungi nama perniagaan dan ID pesanan. Semak dan hantar sendiri melalui WhatsApp.</p></div>';
   if (!customer2) panel.querySelector("h2").textContent = "Pesanan pelanggan";
-  const $2 = (id) => panel.querySelector("#" + id), el = (tag, text) => {
+  const $2 = (id) => panel.querySelector("#" + id), el = (tag, text2) => {
     const n = document.createElement(tag);
-    if (text) n.textContent = text;
+    if (text2) n.textContent = text2;
     return n;
   };
   const inputs = {};
@@ -3065,6 +3546,7 @@ var appearanceFields = {
   theme: { label: "Tema halaman", options: { classic: "Klasik \xB7 krim & hijau", dark: "Gelap \xB7 arang & putih", bright: "Ceria \xB7 putih & warna jenama" } },
   accent: { label: "Warna utama", type: "color" },
   cover: { label: "Cover tersimpan", type: "url", max: 500 },
+  menuLabel: { label: "Nama butang menu / katalog", max: 40 },
   menu: { label: "Pautan menu / katalog", type: "url", max: 500 },
   directions: { label: "Pautan lokasi Google Maps", type: "url", max: 500 },
   address: { label: "Alamat perniagaan", max: 240 },
@@ -3486,9 +3968,9 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
 
 // src/google-listing-tools.mjs
 function createGoogleListingTools({ input, name, onChange, search, lookup }) {
-  const el = (tag, text) => {
+  const el = (tag, text2) => {
     const node = document.createElement(tag);
-    if (text) node.textContent = text;
+    if (text2) node.textContent = text2;
     return node;
   };
   const panel = el("section");
@@ -3504,8 +3986,8 @@ function createGoogleListingTools({ input, name, onChange, search, lookup }) {
   panel.append(help);
   const links = el("div");
   links.className = "actions";
-  for (const [text, url] of [["Panduan tambah tempat di Google Maps \u2197", "https://support.google.com/maps/answer/6320846?hl=en"], ["Daftar Google Business Profile \u2197", "https://business.google.com/add"]]) {
-    const a = el("a", text);
+  for (const [text2, url] of [["Panduan tambah tempat di Google Maps \u2197", "https://support.google.com/maps/answer/6320846?hl=en"], ["Daftar Google Business Profile \u2197", "https://business.google.com/add"]]) {
+    const a = el("a", text2);
     a.href = url;
     a.target = "_blank";
     a.rel = "noopener noreferrer";
@@ -3703,10 +4185,10 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
     subnav.append(button);
   }
   const emptySections = {};
-  for (const [name, text] of [["messages", "Tiada mesej baharu daripada super admin."], ["delivery", "Maklumat penghantaran tersedia selepas bayaran pesanan fizikal disahkan."], ["gateway", "Belum ada bil pembayaran. Pilih Renew / beli untuk menyediakan pesanan."]]) {
+  for (const [name, text2] of [["messages", "Tiada mesej baharu daripada super admin."], ["delivery", "Maklumat penghantaran tersedia selepas bayaran pesanan fizikal disahkan."], ["gateway", "Belum ada bil pembayaran. Pilih Renew / beli untuk menyediakan pesanan."]]) {
     const p = document.createElement("p");
     p.className = "notice";
-    p.textContent = text;
+    p.textContent = text2;
     groups[name].append(p);
     emptySections[name] = p;
   }
@@ -3744,10 +4226,10 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   const paymentForm = $2("payment-form"), paymentChildren = [...paymentForm.children];
   const cart = document.createElement("div"), checkout = document.createElement("div");
   cart.className = checkout.className = "customer-payment-step";
-  let confirm = false;
+  let confirm2 = false;
   for (const node of paymentChildren) {
-    if (node.id === "payment-quote") confirm = true;
-    (confirm ? checkout : cart).append(node);
+    if (node.id === "payment-quote") confirm2 = true;
+    (confirm2 ? checkout : cart).append(node);
   }
   paymentForm.prepend(cart, checkout);
   const paymentTabs = document.createElement("nav");
@@ -3788,16 +4270,47 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
       if (key === "google" && $2("google-pending-note")) unit.append($2("google-pending-note"));
       group.append(unit);
     }
+    if (keys.includes("menu")) {
+      group.classList.add("customer-catalog-details");
+      group.dataset.catalogDetail = "menu";
+      for (const unit of group.children) unit.dataset.catalogDetail = unit.querySelector("#field-menu") ? "menu" : "directions";
+      const nav2 = document.createElement("nav");
+      nav2.className = "customer-subnav catalog-details-switch";
+      nav2.dataset.noI18n = "";
+      nav2.setAttribute("aria-label", "Menu & location");
+      for (const [id, ms, en] of [["menu", "Menu & katalog", "Menu & catalogue"], ["directions", "Lokasi", "Location"]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.catalogDetail = id;
+        const text2 = () => {
+          let language = document.documentElement.lang;
+          try {
+            language = localStorage.getItem("smarttap.language") || language;
+          } catch {
+          }
+          button.textContent = language === "en" ? en : ms;
+        };
+        text2();
+        window.addEventListener("smarttap:language", text2);
+        button.setAttribute("aria-current", id === "menu" ? "page" : "false");
+        button.onclick = () => {
+          group.dataset.catalogDetail = id;
+          for (const b of nav2.children) b.setAttribute("aria-current", b.dataset.catalogDetail === id ? "page" : "false");
+        };
+        nav2.append(button);
+      }
+      group.prepend(nav2);
+    }
     if (keys.includes("address")) {
       group.classList.add("customer-business-details");
       group.dataset.detail = "address";
       const nav2 = document.createElement("nav");
       nav2.className = "customer-subnav business-details-switch";
       nav2.setAttribute("aria-label", "Alamat dan waktu");
-      for (const [id, text] of [["address", "Alamat"], ["hours", "Waktu operasi"]]) {
+      for (const [id, text2] of [["address", "Alamat"], ["hours", "Waktu operasi"]]) {
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = text;
+        button.textContent = text2;
         button.dataset.detail = id;
         button.setAttribute("aria-current", id === "address" ? "page" : "false");
         button.onclick = () => {
@@ -3936,12 +4449,33 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
         group.dataset.detail = detail.dataset.businessDetail;
         for (const button of group.querySelectorAll(".business-details-switch button")) button.setAttribute("aria-current", button.dataset.detail === group.dataset.detail ? "page" : "false");
       }
+      const catalogDetail = invalid.closest(".customer-field[data-catalog-detail]");
+      if (catalogDetail) {
+        const group = catalogDetail.closest(".customer-catalog-details");
+        group.dataset.catalogDetail = catalogDetail.dataset.catalogDetail;
+        for (const b of group.querySelectorAll(".catalog-details-switch button")) b.setAttribute("aria-current", b.dataset.catalogDetail === group.dataset.catalogDetail ? "page" : "false");
+      }
       invalid.focus();
       invalid.reportValidity();
     }
   }, true);
   $2("cancel").addEventListener("click", () => open("my"));
-  return { update(item) {
+  return { focusField(key) {
+    for (const [name, sections] of Object.entries(pages)) {
+      const index = sections.findIndex((node) => node.querySelector("#field-" + key));
+      if (index >= 0) {
+        view = name;
+        activeTab[name] = index;
+        const group = sections[index];
+        if (group.classList.contains("customer-catalog-details")) {
+          group.dataset.catalogDetail = "menu";
+          for (const b of group.querySelectorAll(".catalog-details-switch button")) b.setAttribute("aria-current", b.dataset.catalogDetail === "menu" ? "page" : "false");
+        }
+        render2();
+        break;
+      }
+    }
+  }, update(item) {
     if (!selected2) view = "package";
     selected2 = item;
     $2("customer-business-name").textContent = item.profile.name;
@@ -3983,6 +4517,7 @@ var fields = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan r
 var listingTools = null;
 var businessDetails = null;
 var appearanceControls = null;
+var catalogEditor = null;
 var credential = "";
 var records = [];
 var cursor = null;
@@ -4000,6 +4535,7 @@ function lockControls(value) {
   listingTools?.lock(value);
   businessDetails?.lock(value || customer && selected?.state !== "active");
   appearanceControls?.lock(value || customer && selected?.state !== "active");
+  catalogEditor?.lock(value || customer && selected?.state !== "active");
 }
 var management = createManagementUI({ customer, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
   selected = item;
@@ -4045,6 +4581,7 @@ function logout(message = "Anda telah log keluar.") {
   for (const field of Object.keys(fields)) $("field-" + field).value = "";
   businessDetails?.set({});
   appearanceControls?.set();
+  catalogEditor?.clear();
   if ($("owner-email")) $("owner-email").value = "";
   $("share").value = "";
   $("qr").removeAttribute("src");
@@ -4165,6 +4702,7 @@ async function edit(item) {
   for (const field of Object.keys(fields)) $("field-" + field).value = item.profile[field] || (field === "theme" ? "classic" : field === "accent" ? "#20543e" : "");
   businessDetails?.set(item.profile);
   appearanceControls?.set();
+  catalogEditor?.set({ ...item, mediaOrigin: new URL(endpoint).origin });
   listingTools?.set(item.profile);
   if (customer) {
     $("field-google").required = item.profile.googleStatus !== "pending";
@@ -4193,20 +4731,20 @@ async function edit(item) {
   ordersUI.show(item);
   customerArea?.update(item);
 }
-for (const [key, text] of Object.entries(fields)) {
+for (const [key, text2] of Object.entries(fields)) {
   const label = document.createElement("label");
   label.htmlFor = "field-" + key;
-  label.textContent = text + (["name", "google"].includes(key) ? " *" : "");
+  label.textContent = text2 + (["name", "google"].includes(key) ? " *" : "");
   const spec = appearanceFields[key];
   const multiline = ["address", "promoText"].includes(key);
   const input = document.createElement(spec?.options ? "select" : multiline ? "textarea" : "input");
   input.id = "field-" + key;
   input.name = key;
   input.maxLength = spec?.max || (key === "name" ? 80 : key === "tagline" ? 140 : key === "phone" ? 30 : 500);
-  if (spec?.options) for (const [value, text2] of Object.entries(spec.options)) {
+  if (spec?.options) for (const [value, text3] of Object.entries(spec.options)) {
     const option = document.createElement("option");
     option.value = value;
-    option.textContent = text2;
+    option.textContent = text3;
     input.append(option);
   }
   if (["name", "google"].includes(key)) input.required = true;
@@ -4288,6 +4826,32 @@ appearanceControls = createAppearanceControls({ onChange: () => {
   $("save-status").textContent = "Ada perubahan yang belum disimpan.";
 } });
 coverStatus.after(...appearanceControls.coverNodes);
+catalogEditor = createCatalogEditor({ onChange: () => {
+  $("save-status").textContent = "Ada perubahan yang belum disimpan.";
+}, upload: async (file) => {
+  const item = selected, current = session;
+  if (!item || saving) throw new Error("Sila buka halaman semula.");
+  lockControls(true);
+  try {
+    const response = await fetch(new URL(base + "/links/" + item.id + "/catalog-image", endpoint), { method: "POST", headers: { Authorization: "Bearer " + credential, "Content-Type": file.type, "If-Match": item.revision }, body: file, cache: "no-store", credentials: "omit" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Gambar belum dapat disimpan.");
+    if (current !== session || selected?.id !== item.id) throw new Error("Sesi telah berubah.");
+    selected = result.page;
+    records = records.map((record) => record.id === selected.id ? selected : record);
+    render();
+    return result;
+  } finally {
+    lockControls(false);
+  }
+}, loadImage: async (url) => {
+  const item = selected, current = session;
+  if (!item) throw new Error("Sesi tamat.");
+  const name = new URL(url).pathname.split("/").at(-1);
+  const response = await fetch(new URL(base + "/links/" + item.id + "/catalog-image/" + name, endpoint), { headers: { Authorization: "Bearer " + credential }, cache: "no-store", credentials: "omit" });
+  if (!response.ok || current !== session || selected?.id !== item.id) throw new Error("Gambar tidak tersedia.");
+  return response.blob();
+} });
 var previewURL;
 coverFile.addEventListener("change", async () => {
   const file = coverFile.files[0];
@@ -4330,6 +4894,14 @@ coverFile.addEventListener("change", async () => {
 $("edit-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selected) return;
+  let catalog;
+  try {
+    catalog = catalogEditor?.draft();
+  } catch (error) {
+    $("save-status").textContent = error.message;
+    customerArea?.focusField("menu");
+    return;
+  }
   const item = selected, current = session;
   const profile = { v: 1 };
   for (const key of Object.keys(fields)) profile[key] = $("field-" + key).value.normalize("NFC").trim();
@@ -4341,6 +4913,7 @@ $("edit-form").addEventListener("submit", async (event) => {
   if (malaysiaPhone(profile.phone)) profile.phone = malaysiaPhone(profile.phone);
   businessDetails?.lock(true);
   appearanceControls?.lock(true);
+  catalogEditor?.lock(true);
   listingTools?.lock(true);
   saving = true;
   $("save").disabled = true;
@@ -4351,7 +4924,7 @@ $("edit-form").addEventListener("submit", async (event) => {
   for (const field of Object.keys(fields)) $("field-" + field).disabled = true;
   $("save-status").textContent = "Menyimpan pada URL yang sama\u2026";
   try {
-    const updated = await api(base + "/links/" + item.id, { method: "PUT", body: { profile, revision: item.revision } });
+    const updated = await api(base + "/links/" + item.id, { method: "PUT", body: { profile, revision: item.revision, ...catalog ? { catalog } : {} } });
     if (current !== session) return;
     records = records.map((record) => record.id === updated.id ? updated : record);
     selected = updated;
@@ -4361,6 +4934,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     for (const key of Object.keys(fields)) $("field-" + key).value = updated.profile[key] || (key === "theme" ? "classic" : key === "accent" ? "#20543e" : "");
     businessDetails?.set(updated.profile);
     appearanceControls?.set();
+    catalogEditor?.set({ ...updated, mediaOrigin: new URL(endpoint).origin });
     listingTools?.set(updated.profile);
     $("save-status").textContent = "Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.";
   } catch (error) {
@@ -4376,6 +4950,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     listingTools?.lock(false);
     businessDetails?.lock(customer && selected?.state !== "active");
     appearanceControls?.lock(customer && selected?.state !== "active");
+    catalogEditor?.lock(customer && selected?.state !== "active");
   }
 });
 $("owner-form")?.addEventListener("submit", async (event) => {

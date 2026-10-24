@@ -86,7 +86,7 @@ function renderCard(document2, profile2, now = Date.now()) {
   }
   if (profile2.whatsapp) content2.append(link(profile2.whatsapp, "Hubungi melalui WhatsApp", "business-action whatsapp-action", "whatsapp"));
   const quick = el2("div", "business-quick");
-  if (profile2.menu) quick.append(link(profile2.menu, "Lihat menu / katalog", "business-action outline-action", "menu"));
+  if (profile2.menu) quick.append(link(profile2.menu, profile2.menuLabel || "Lihat menu / katalog", "business-action outline-action", "menu"));
   if (profile2.directions) quick.append(link(profile2.directions, "Arah ke lokasi", "business-action outline-action", "pin"));
   if (quick.childElementCount) content2.append(quick);
   if (promotionVisible(profile2, now)) {
