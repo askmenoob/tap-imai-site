@@ -1,3 +1,4 @@
+import {createOrdersUI} from './orders-ui.mjs';
 import {createPaymentAlerts} from './payment-alerts.mjs';
 import {appearanceFields} from '../import-service/appearance.mjs';
 import QRCode from 'qrcode';
@@ -18,11 +19,12 @@ function lockControls(value){
   for(const field of Object.keys(fields))if($('field-'+field))$('field-'+field).disabled=value||(customer&&selected?.state!=='active');
   for(const id of ['cover-file','remove-cover'])if($(id))$(id).disabled=value||(customer&&selected?.state!=='active');listingTools?.lock(value);
 }
-const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();alerts?.refresh();customerArea?.update(item);$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
+const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();alerts?.refresh();customerArea?.update(item);ordersUI.show(item);$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
+const ordersUI=createOrdersUI({customer,api:(path,options)=>api(base+path,options)});$('edit-form').before(ordersUI.panel);
 const alerts=customer?null:createPaymentAlerts({api,open:async id=>{if(saving)return;const current=session;const item=await api(base+'/links/'+id);if(current!==session||saving)return;await edit(item);},canOpen:()=>!saving});
 function logout(message='Anda telah log keluar.'){
   coverPreview.hidden=true;coverStatus.textContent='';if(previewURL){URL.revokeObjectURL(previewURL);previewURL=null;}credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
-  listingTools?.invalidate();management.clear();alerts?.stop();customerArea?.clear();
+  listingTools?.invalidate();management.clear();ordersUI.clear();alerts?.stop();customerArea?.clear();
   $('dashboard').hidden=true;$('editor').hidden=true;$('login-panel').hidden=false;$('records').replaceChildren();
   for(const field of Object.keys(fields))$('field-'+field).value='';
   if($('owner-email'))$('owner-email').value='';
@@ -85,7 +87,7 @@ async function edit(item){
   try{const png=await QRCode.toDataURL(item.url,{width:1024,margin:4,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}});if(selected?.id===item.id){$('qr').src=png;$('download').href=png;}}
   catch{$('copy-status').textContent='QR belum dapat disediakan. URL pelanggan masih sama.';}
   if(!customer)$('editor').scrollIntoView({behavior:'smooth',block:'start'});
-  lockControls(false);await management.show(item);customerArea?.update(item);
+  lockControls(false);await management.show(item);ordersUI.show(item);customerArea?.update(item);
 }
 for(const [key,text] of Object.entries(fields)){
   const label=document.createElement('label');label.htmlFor='field-'+key;label.textContent=text+(['name','google'].includes(key)?' *':'');

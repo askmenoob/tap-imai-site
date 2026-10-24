@@ -1,5 +1,5 @@
 // All identities come from the server's Google verifiers, never request fields.
-export function createAccountRoutes({adminAuth,userAuth,admin,customers,management,clientId,adminConfigured,gateway,demo=false,reply,body}){
+export function createAccountRoutes({adminAuth,userAuth,admin,customers,management,clientId,adminConfigured,gateway,orders,demo=false,reply,body}){
   const checkoutWindows=new Map();
   return async(req,res,{path,origin})=>{
     const customer=path.startsWith('/api/user/');
@@ -16,6 +16,17 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
     if(path===base+'/plan'&&req.method==='GET'&&management){reply(res,200,{...management.config(),gateway:gateway?.config()||{enabled:false,configured:false}},origin);return true;}
     if(!customer&&path===base+'/pending-payments'&&req.method==='GET'){reply(res,200,await admin.pendingPayments(),origin);return true;}
     const query=new URL(req.url,'http://localhost').searchParams;
+    const orderRoute=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/orders(?:/(ST[a-f0-9]{24})(?:/(address|fulfillment))?)?$').exec(path);
+    if(orderRoute&&orders){
+      const [,pageId,id,action]=orderRoute;
+      if(req.method==='GET'&&!action){reply(res,200,id?await orders.get(pageId,id,actor):await orders.list(pageId,actor,query.get('cursor')),origin);return true;}
+      if(req.method==='PUT'&&id&&action){
+        if(customer&&action==='fulfillment'){reply(res,403,{error:'Hanya super admin boleh mengemas kini penghantaran.'},origin);return true;}
+        if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){reply(res,415,{error:'Gunakan JSON.'},origin);return true;}
+        const data=await body(req,4096);reply(res,200,action==='address'?await orders.address(pageId,id,data,actor):await orders.fulfill(pageId,id,data,actor),origin);return true;
+      }
+      reply(res,405,{error:'Kaedah tidak dibenarkan.'},origin);return true;
+    }
     if(gateway&&req.method==='POST'){
       const start=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/checkout$').exec(path);
       const order=new RegExp('^'+base+'/checkout/(ST[a-f0-9]{24})/(status|cancel)$').exec(path);
