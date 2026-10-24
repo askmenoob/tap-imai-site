@@ -1,5 +1,5 @@
 const menus=[['package','Status pakej','◈'],['business','Sunting perniagaan','✎'],['page','Sunting paparan','▧'],['orders','Pesanan saya','▤'],['my','Halaman saya','↗']];
-export function createCustomerArea({coverNodes,onSelect}){
+export function createCustomerArea({coverNodes,detailsNodes={},onSelect}){
  const $=id=>document.getElementById(id),dashboard=$('dashboard'),editor=$('editor'),form=$('edit-form');
  document.body.classList.add('customer-workspace');
  const list=dashboard.firstElementChild;list.classList.add('customer-legacy-list');
@@ -43,7 +43,8 @@ export function createCustomerArea({coverNodes,onSelect}){
  const pages={business:[],page:[]};
  for(const [view,steps] of Object.entries(fieldGroups))for(const keys of steps){
   const group=document.createElement('div');group.className='customer-field-step';group.dataset.fieldView=view;if(keys.includes('instagram'))group.classList.add('customer-social-fields');
-  for(const key of keys){const input=$('field-'+key),label=document.querySelector('label[for="field-'+key+'"]');const unit=document.createElement('div');unit.className='customer-field';unit.append(label,input);if(key==='cover')unit.append(...coverNodes);if(key==='google'&&$('google-pending-note'))unit.append($('google-pending-note'));group.append(unit);}
+  for(const key of keys){const input=$('field-'+key),label=document.querySelector('label[for="field-'+key+'"]');const unit=document.createElement('div');unit.className='customer-field';unit.append(label,...(detailsNodes[key]||[input]));if(['address','hours'].includes(key))unit.dataset.businessDetail=key;if(key==='cover')unit.append(...coverNodes);if(key==='google'&&$('google-pending-note'))unit.append($('google-pending-note'));group.append(unit);}
+  if(keys.includes('address')){group.classList.add('customer-business-details');group.dataset.detail='address';const nav=document.createElement('nav');nav.className='customer-subnav business-details-switch';nav.setAttribute('aria-label','Alamat dan waktu');for(const [id,text] of [['address','Alamat'],['hours','Waktu operasi']]){const button=document.createElement('button');button.type='button';button.textContent=text;button.dataset.detail=id;button.setAttribute('aria-current',id==='address'?'page':'false');button.onclick=()=>{group.dataset.detail=id;for(const b of nav.children)b.setAttribute('aria-current',b.dataset.detail===id?'page':'false');};nav.append(button);}group.prepend(nav);}
   $('fields').append(group);pages[view].push(group);
  }
  const fieldTabs=document.createElement('nav');fieldTabs.className='customer-subnav customer-field-tabs';fieldTabs.setAttribute('aria-label','Bahagian suntingan');form.prepend(fieldTabs);
@@ -69,7 +70,7 @@ export function createCustomerArea({coverNodes,onSelect}){
   const unread=!!selected?.adminMessage&&selected.adminMessage.status!=='resolved';messageAlert.hidden=!unread;subnav.querySelector('[data-section="messages"]').dataset.unread=String(unread);
  }
  // Native validation must first reveal the relevant section; hidden fields stay editable and are still saved together.
- form.noValidate=true;form.addEventListener('submit',event=>{const invalid=[...form.querySelectorAll('input,select,textarea')].find(input=>!input.disabled&&!input.checkValidity());if(invalid){event.preventDefault();event.stopImmediatePropagation();for(const [name,sections] of Object.entries(pages)){const at=sections.findIndex(group=>group.contains(invalid));if(at>=0){view=name;activeTab[name]=at;break;}}render();invalid.focus();invalid.reportValidity();}},true);
+ form.noValidate=true;form.addEventListener('submit',event=>{const invalid=[...form.querySelectorAll('input,select,textarea')].find(input=>!input.disabled&&!input.checkValidity());if(invalid){event.preventDefault();event.stopImmediatePropagation();for(const [name,sections] of Object.entries(pages)){const at=sections.findIndex(group=>group.contains(invalid));if(at>=0){view=name;activeTab[name]=at;break;}}render();const detail=invalid.closest('[data-business-detail]');if(detail){const group=detail.closest('.customer-business-details');group.dataset.detail=detail.dataset.businessDetail;for(const button of group.querySelectorAll('.business-details-switch button'))button.setAttribute('aria-current',button.dataset.detail===group.dataset.detail?'page':'false');}invalid.focus();invalid.reportValidity();}},true);
  $('cancel').addEventListener('click',()=>open('my'));
  return {update(item){if(!selected)view='package';selected=item;$('customer-business-name').textContent=item.profile.name;picker.value=item.id;document.body.classList.add('customer-session');render();},list(items){const current=picker.value;picker.replaceChildren();for(const item of items){const option=document.createElement('option');option.value=item.id;option.textContent=item.profile.name;picker.append(option);}picker.value=selected?.id||current;document.body.classList.add('customer-session');if(!selected)view='my';render();},clear(){selected=null;document.body.classList.remove('customer-session');dismissMenu();view='package';sectionName='overview';activeTab={business:0,page:0};paymentTab=0;showCart();render();},open};
 }

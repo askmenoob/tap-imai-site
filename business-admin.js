@@ -2102,6 +2102,251 @@ var require_browser = __commonJS({
   }
 });
 
+// src/business-details-values.mjs
+var malaysiaStates = ["Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan", "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah", "Sarawak", "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya"];
+var days = ["Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad"];
+var hourModes = { daily: "Setiap hari", weekdays: "Isnin\u2013Jumaat", weekends: "Sabtu\u2013Ahad", weekly: "Mengikut hari", custom: "Teks sedia ada / tersuai" };
+var timeSlots = Array.from({ length: 48 }, (_, i) => String(Math.floor(i / 2)).padStart(2, "0") + ":" + (i % 2 ? "30" : "00"));
+var validTime = (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value || "");
+function defaultSchedule() {
+  return days.map(() => ({ state: "open", open: "09:00", close: "18:00" }));
+}
+function period(value) {
+  if (value.state === "closed") return "Tutup";
+  if (value.state === "all") return "24 jam";
+  if (value.state !== "open" || !validTime(value.open) || !validTime(value.close) || value.open === value.close) throw Error("Semak waktu buka dan tutup. Pilih 24 jam jika dibuka sepanjang hari.");
+  return value.open + "\u2013" + value.close;
+}
+function formatHours(mode, schedule) {
+  let result;
+  if (mode === "weekly") result = days.map((day, i) => day + ": " + period(schedule[i])).join("; ");
+  else {
+    if (!["daily", "weekdays", "weekends"].includes(mode)) throw Error("Pilih jadual operasi.");
+    result = hourModes[mode] + ": " + period(schedule[0]);
+    if (mode === "weekdays") result += "; Sabtu\u2013Ahad: Tutup";
+    if (mode === "weekends") result += "; Isnin\u2013Jumaat: Tutup";
+  }
+  if (result.length > 240) throw Error("Waktu operasi melebihi 240 aksara.");
+  return result;
+}
+function readPeriod(value) {
+  if (value === "Tutup") return { state: "closed", open: "09:00", close: "18:00" };
+  if (value === "24 jam") return { state: "all", open: "09:00", close: "18:00" };
+  const match = /^(\d{2}:\d{2})–(\d{2}:\d{2})$/.exec(value);
+  return match && validTime(match[1]) && validTime(match[2]) && match[1] !== match[2] ? { state: "open", open: match[1], close: match[2] } : null;
+}
+function readHours(raw) {
+  for (const mode of ["daily", "weekdays", "weekends"]) {
+    const prefix = hourModes[mode] + ": ";
+    if (!raw.startsWith(prefix)) continue;
+    const suffix = mode === "weekdays" ? "; Sabtu\u2013Ahad: Tutup" : mode === "weekends" ? "; Isnin\u2013Jumaat: Tutup" : "";
+    if (suffix && !raw.endsWith(suffix)) continue;
+    const value = readPeriod(raw.slice(prefix.length, suffix ? -suffix.length : void 0));
+    if (value) return { mode, schedule: days.map(() => ({ ...value })) };
+  }
+  const parts = raw.split("; ");
+  if (parts.length !== 7) return null;
+  const schedule = parts.map((part, i) => part.startsWith(days[i] + ": ") ? readPeriod(part.slice(days[i].length + 2)) : null);
+  return schedule.every(Boolean) ? { mode: "weekly", schedule } : null;
+}
+function formatAddress({ line1, line2 = "", postcode, city, state }) {
+  const clean = (value) => typeof value === "string" ? value.normalize("NFC").trim() : "";
+  line1 = clean(line1);
+  line2 = clean(line2);
+  city = clean(city);
+  if (!line1 || !/^\d{5}$/.test(postcode) || !city || !malaysiaStates.includes(state)) throw Error("Lengkapkan alamat, poskod 5 digit, bandar dan negeri.");
+  const result = [line1, line2, postcode + " " + city, state].filter(Boolean).join("\n");
+  if (result.length > 240) throw Error("Alamat terlalu panjang. Gunakan maksimum 240 aksara.");
+  return result;
+}
+function readAddress(raw) {
+  const lines = raw.split("\n");
+  if (lines.length < 3 || lines.length > 4 || !malaysiaStates.includes(lines.at(-1))) return null;
+  const match = /^(\d{5}) (.+)$/.exec(lines.at(-2));
+  if (!match || !lines[0]) return null;
+  return { line1: lines[0], line2: lines.length === 4 ? lines[1] : "", postcode: match[1], city: match[2], state: lines.at(-1) };
+}
+
+// src/business-details-ui.mjs
+function createBusinessDetails({ addressInput, hoursInput, onChange }) {
+  const el = (tag, text) => {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    return node;
+  };
+  const select = (id, options) => {
+    const node = el("select");
+    node.id = id;
+    for (const [value, text] of Object.entries(options)) {
+      const option = el("option", text);
+      option.value = value;
+      node.append(option);
+    }
+    return node;
+  };
+  const field = (label, input) => {
+    const box = el("div");
+    box.className = "business-detail-field";
+    const caption = el("label", label);
+    caption.htmlFor = input.id;
+    box.append(caption, input);
+    return box;
+  };
+  const addressWrap = el("div");
+  addressWrap.className = "business-detail-editor";
+  addressInput.before(addressWrap);
+  const addressMode = select("business-address-mode", { custom: "Teks sedia ada / tersuai", structured: "Alamat Malaysia" }), addressFields2 = el("div");
+  addressFields2.className = "business-address-fields";
+  const addressParts = {};
+  for (const [key, label, max] of [["line1", "Alamat baris 1", 110], ["line2", "Alamat baris 2 (pilihan)", 80], ["postcode", "Poskod", 5], ["city", "Bandar", 60], ["state", "Negeri", 40]]) {
+    const input = key === "state" ? select("business-address-state", Object.fromEntries([["", "Pilih negeri"], ...malaysiaStates.map((state2) => [state2, state2])])) : el("input");
+    input.id = "business-address-" + key;
+    if (key !== "state") {
+      input.type = "text";
+      input.maxLength = max;
+    }
+    if (key === "postcode") {
+      input.pattern = "[0-9]{5}";
+      input.inputMode = "numeric";
+    }
+    input.required = key !== "line2";
+    input.autocomplete = "off";
+    addressParts[key] = input;
+    const box = field(label, input);
+    box.dataset.part = key;
+    addressFields2.append(box);
+  }
+  const addressHelp = el("p", "Pilih negeri daripada senarai. Poskod dan bandar diisi mengikut alamat perniagaan. Maksimum 240 aksara untuk alamat penuh.");
+  addressHelp.className = "help";
+  addressWrap.append(field("Format alamat", addressMode), addressInput, addressFields2, addressHelp);
+  const hoursWrap = el("div");
+  hoursWrap.className = "business-detail-editor";
+  hoursInput.before(hoursWrap);
+  const mode = select("business-hours-mode", hourModes), day = select("business-hours-day", Object.fromEntries(days.map((name, i) => [i, name]))), state = select("business-hours-state", { open: "Dibuka", closed: "Tutup", all: "24 jam" });
+  const open = select("business-hours-open", Object.fromEntries(timeSlots.map((time) => [time, time]))), close = select("business-hours-close", Object.fromEntries(timeSlots.map((time) => [time, time])));
+  const hoursFields = el("div"), timeRow = el("div");
+  hoursFields.className = "business-hours-fields";
+  timeRow.className = "business-time-row";
+  timeRow.append(field("Waktu buka", open), field("Waktu tutup", close));
+  const dayBox = field("Pilih hari", day);
+  hoursFields.append(dayBox, field("Status operasi", state), timeRow);
+  const hint = el("p", "Waktu Malaysia \xB7 format 24 jam. Pilih jadual dahulu untuk menggunakan dropdown waktu.");
+  hint.className = "help";
+  const preview = el("details");
+  preview.className = "business-hours-preview";
+  const previewText = el("p");
+  previewText.dataset.noI18n = "";
+  preview.append(el("summary", "Lihat jadual penuh"), previewText);
+  hoursWrap.append(field("Jadual operasi", mode), hoursInput, hoursFields, hint, preview);
+  let locked = false, schedule = defaultSchedule(), dayIndex = 0, lastMode = "custom";
+  const timeValue = (input, value) => {
+    if (![...input.options].some((option) => option.value === value)) {
+      const option = el("option", value);
+      option.value = value;
+      input.append(option);
+    }
+    input.value = value;
+  };
+  function permissions() {
+    addressMode.disabled = mode.disabled = locked;
+    addressInput.disabled = hoursInput.disabled = locked;
+    const structured = addressMode.value === "structured";
+    addressInput.hidden = structured;
+    addressFields2.hidden = !structured;
+    addressHelp.hidden = !structured;
+    for (const input of Object.values(addressParts)) input.disabled = locked || !structured;
+    const custom = mode.value === "custom";
+    hoursInput.hidden = !custom;
+    hoursFields.hidden = custom;
+    preview.hidden = custom;
+    dayBox.hidden = mode.value !== "weekly";
+    day.disabled = locked || mode.value !== "weekly";
+    state.disabled = locked || custom;
+    const timed = !custom && state.value === "open";
+    timeRow.hidden = !timed;
+    open.disabled = close.disabled = locked || !timed;
+  }
+  function showDay() {
+    const value = schedule[mode.value === "weekly" ? dayIndex : 0];
+    state.value = value.state;
+    timeValue(open, value.open);
+    timeValue(close, value.close);
+    hint.textContent = mode.value === "custom" ? "Waktu Malaysia \xB7 format 24 jam. Pilih jadual dahulu untuk menggunakan dropdown waktu." : value.state === "open" && value.close < value.open ? "Waktu tutup adalah pada hari berikutnya." : "Waktu Malaysia \xB7 format 24 jam.";
+    permissions();
+  }
+  function syncAddress() {
+    addressParts.line1.setCustomValidity("");
+    if (addressMode.value === "structured") try {
+      addressInput.value = formatAddress(Object.fromEntries(Object.entries(addressParts).map(([key, input]) => [key, input.value])));
+    } catch (error) {
+      if (Object.values(addressParts).every((input) => input.checkValidity())) addressParts.line1.setCustomValidity(error.message);
+    }
+    permissions();
+    onChange();
+  }
+  function syncHours() {
+    close.setCustomValidity("");
+    schedule[mode.value === "weekly" ? dayIndex : 0] = { state: state.value, open: open.value, close: close.value };
+    if (mode.value !== "custom") try {
+      hoursInput.value = formatHours(mode.value, schedule);
+      previewText.textContent = hoursInput.value;
+      hint.textContent = state.value === "open" && close.value < open.value ? "Waktu tutup adalah pada hari berikutnya." : "Waktu Malaysia \xB7 format 24 jam.";
+    } catch (error) {
+      close.setCustomValidity(error.message);
+    }
+    permissions();
+    onChange();
+  }
+  addressMode.onchange = () => {
+    if (addressMode.value === "structured" && !addressParts.line1.value) addressParts.line1.value = addressInput.value;
+    syncAddress();
+  };
+  for (const input of Object.values(addressParts)) input.addEventListener("input", syncAddress);
+  mode.onchange = () => {
+    if (mode.value === "weekly" && lastMode !== "weekly") {
+      const value = { ...schedule[0] };
+      schedule = days.map((_, i) => lastMode === "weekdays" && i > 4 || lastMode === "weekends" && i < 5 ? { state: "closed", open: "09:00", close: "18:00" } : { ...value });
+    }
+    lastMode = mode.value;
+    dayIndex = 0;
+    day.value = "0";
+    close.setCustomValidity("");
+    showDay();
+    syncHours();
+  };
+  day.onchange = () => {
+    if (!close.checkValidity()) {
+      day.value = String(dayIndex);
+      close.reportValidity();
+      return;
+    }
+    dayIndex = Number(day.value);
+    showDay();
+  };
+  for (const input of [state, open, close]) input.onchange = syncHours;
+  return { nodes: { address: [addressWrap], hours: [hoursWrap] }, lock(value) {
+    locked = value;
+    permissions();
+  }, set(profile) {
+    const address = readAddress(profile.address || "");
+    addressMode.value = address ? "structured" : "custom";
+    for (const [key, input] of Object.entries(addressParts)) {
+      input.value = address?.[key] || "";
+      input.setCustomValidity("");
+    }
+    const parsed = readHours(profile.hours || "");
+    mode.value = parsed?.mode || "custom";
+    lastMode = mode.value;
+    schedule = parsed?.schedule || defaultSchedule();
+    dayIndex = 0;
+    day.value = "0";
+    close.setCustomValidity("");
+    previewText.textContent = profile.hours || "";
+    hint.textContent = "Waktu Malaysia \xB7 format 24 jam. Pilih jadual dahulu untuk menggunakan dropdown waktu.";
+    showDay();
+  } };
+}
+
 // src/orders-ui.mjs
 var states = ["Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan", "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah", "Sarawak", "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya"];
 var fulfillmentLabels = { unpaid: "Menunggu bayaran", awaiting_address: "Bayaran diterima \xB7 perlukan alamat", received: "Alamat diterima", preparing: "Sedang disediakan", shipped: "Dihantar", completed: "Selesai" };
@@ -3065,7 +3310,7 @@ function createGoogleListingTools({ input, name, onChange, search, lookup }) {
 
 // src/customer-area.mjs
 var menus = [["package", "Status pakej", "\u25C8"], ["business", "Sunting perniagaan", "\u270E"], ["page", "Sunting paparan", "\u25A7"], ["orders", "Pesanan saya", "\u25A4"], ["my", "Halaman saya", "\u2197"]];
-function createCustomerArea({ coverNodes, onSelect }) {
+function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   const $2 = (id) => document.getElementById(id), dashboard = $2("dashboard"), editor = $2("editor"), form = $2("edit-form");
   document.body.classList.add("customer-workspace");
   const list = dashboard.firstElementChild;
@@ -3224,10 +3469,31 @@ function createCustomerArea({ coverNodes, onSelect }) {
       const input = $2("field-" + key), label = document.querySelector('label[for="field-' + key + '"]');
       const unit = document.createElement("div");
       unit.className = "customer-field";
-      unit.append(label, input);
+      unit.append(label, ...detailsNodes[key] || [input]);
+      if (["address", "hours"].includes(key)) unit.dataset.businessDetail = key;
       if (key === "cover") unit.append(...coverNodes);
       if (key === "google" && $2("google-pending-note")) unit.append($2("google-pending-note"));
       group.append(unit);
+    }
+    if (keys.includes("address")) {
+      group.classList.add("customer-business-details");
+      group.dataset.detail = "address";
+      const nav2 = document.createElement("nav");
+      nav2.className = "customer-subnav business-details-switch";
+      nav2.setAttribute("aria-label", "Alamat dan waktu");
+      for (const [id, text] of [["address", "Alamat"], ["hours", "Waktu operasi"]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = text;
+        button.dataset.detail = id;
+        button.setAttribute("aria-current", id === "address" ? "page" : "false");
+        button.onclick = () => {
+          group.dataset.detail = id;
+          for (const b of nav2.children) b.setAttribute("aria-current", b.dataset.detail === id ? "page" : "false");
+        };
+        nav2.append(button);
+      }
+      group.prepend(nav2);
     }
     $2("fields").append(group);
     pages[view2].push(group);
@@ -3351,6 +3617,12 @@ function createCustomerArea({ coverNodes, onSelect }) {
         }
       }
       render2();
+      const detail = invalid.closest("[data-business-detail]");
+      if (detail) {
+        const group = detail.closest(".customer-business-details");
+        group.dataset.detail = detail.dataset.businessDetail;
+        for (const button of group.querySelectorAll(".business-details-switch button")) button.setAttribute("aria-current", button.dataset.detail === group.dataset.detail ? "page" : "false");
+      }
       invalid.focus();
       invalid.reportValidity();
     }
@@ -3396,6 +3668,7 @@ var base = customer ? "/api/user" : "/api/admin";
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : window.SMARTTAP_IMPORT_CONFIG?.endpoint;
 var fields = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web", ...Object.fromEntries(Object.entries(appearanceFields).map(([key, spec]) => [key, spec.label])) };
 var listingTools = null;
+var businessDetails = null;
 var credential = "";
 var records = [];
 var cursor = null;
@@ -3411,6 +3684,7 @@ function lockControls(value) {
   for (const field of Object.keys(fields)) if ($("field-" + field)) $("field-" + field).disabled = value || customer && selected?.state !== "active";
   for (const id of ["cover-file", "remove-cover"]) if ($(id)) $(id).disabled = value || customer && selected?.state !== "active";
   listingTools?.lock(value);
+  businessDetails?.lock(value || customer && selected?.state !== "active");
 }
 var management = createManagementUI({ customer, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
   selected = item;
@@ -3454,6 +3728,7 @@ function logout(message = "Anda telah log keluar.") {
   $("login-panel").hidden = false;
   $("records").replaceChildren();
   for (const field of Object.keys(fields)) $("field-" + field).value = "";
+  businessDetails?.set({});
   if ($("owner-email")) $("owner-email").value = "";
   $("share").value = "";
   $("qr").removeAttribute("src");
@@ -3572,6 +3847,7 @@ async function edit(item) {
   $("save-status").textContent = "";
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
   for (const field of Object.keys(fields)) $("field-" + field).value = item.profile[field] || (field === "theme" ? "classic" : field === "accent" ? "#20543e" : "");
+  businessDetails?.set(item.profile);
   listingTools?.set(item.profile);
   if (customer) {
     $("field-google").required = item.profile.googleStatus !== "pending";
@@ -3605,7 +3881,7 @@ for (const [key, text] of Object.entries(fields)) {
   label.htmlFor = "field-" + key;
   label.textContent = text + (["name", "google"].includes(key) ? " *" : "");
   const spec = appearanceFields[key];
-  const input = document.createElement(spec?.options ? "select" : "input");
+  const input = document.createElement(spec?.options ? "select" : key === "address" ? "textarea" : "input");
   input.id = "field-" + key;
   input.name = key;
   input.maxLength = spec?.max || (key === "name" ? 80 : key === "tagline" ? 140 : key === "phone" ? 30 : 500);
@@ -3620,7 +3896,8 @@ for (const [key, text] of Object.entries(fields)) {
     input.type = "url";
     input.placeholder = "https://";
   }
-  if (spec && !spec.options) {
+  if (key === "address") input.rows = 3;
+  if (spec && !spec.options && key !== "address") {
     input.type = spec.type || "text";
     if (spec.type === "url") input.placeholder = "https://";
   }
@@ -3644,6 +3921,9 @@ for (const [key, text] of Object.entries(fields)) {
   });
   $("fields").append(label, input);
 }
+businessDetails = createBusinessDetails({ addressInput: $("field-address"), hoursInput: $("field-hours"), onChange: () => {
+  $("save-status").textContent = "Ada perubahan yang belum disimpan.";
+} });
 if (!customer) {
   listingTools = createGoogleListingTools({ input: $("field-google"), name: () => $("field-name").value, onChange: () => {
     $("save-status").textContent = "Ada perubahan yang belum disimpan.";
@@ -3734,6 +4014,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     profile.googleStatus = "pending";
   }
   if (malaysiaPhone(profile.phone)) profile.phone = malaysiaPhone(profile.phone);
+  businessDetails?.lock(true);
   listingTools?.lock(true);
   saving = true;
   $("save").disabled = true;
@@ -3752,6 +4033,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     customerArea?.update(updated);
     $("edit-title").textContent = updated.profile.name;
     for (const key of Object.keys(fields)) $("field-" + key).value = updated.profile[key] || (key === "theme" ? "classic" : key === "accent" ? "#20543e" : "");
+    businessDetails?.set(updated.profile);
     listingTools?.set(updated.profile);
     $("save-status").textContent = "Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.";
   } catch (error) {
@@ -3765,6 +4047,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     if ($("save-owner")) $("save-owner").disabled = false;
     for (const field of Object.keys(fields)) $("field-" + field).disabled = false;
     listingTools?.lock(false);
+    businessDetails?.lock(customer && selected?.state !== "active");
   }
 });
 $("owner-form")?.addEventListener("submit", async (event) => {
@@ -3815,7 +4098,7 @@ $("copy").addEventListener("click", async () => {
     $("copy-status").textContent = "Pilih dan salin pautan secara manual.";
   }
 });
-if (customer) customerArea = createCustomerArea({ coverNodes: [coverLabel, coverFile, coverHelp, coverPreview, removeCover, coverStatus], onSelect: async (id) => {
+if (customer) customerArea = createCustomerArea({ detailsNodes: businessDetails.nodes, coverNodes: [coverLabel, coverFile, coverHelp, coverPreview, removeCover, coverStatus], onSelect: async (id) => {
   if (saving) return;
   try {
     await edit(await api(base + "/links/" + id));
