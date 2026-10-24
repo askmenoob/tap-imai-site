@@ -1,40 +1,27 @@
-import { deflateSync } from 'node:zlib';
+import sharp from 'sharp';
+import {readFile} from 'node:fs/promises';
 
-// Render the existing SmartTap diamond mark without a third-party image service.
-export function createAppIcon(size) {
-  if (![180, 192, 512].includes(size)) throw new Error('Unsupported app icon size.');
-  const palette = [[23, 59, 51], [255, 250, 244], [214, 177, 92]];
-  const row = size * 4 + 1;
-  const pixels = Buffer.alloc(row * size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const color = [0, 0, 0];
-      for (let sy = 0; sy < 4; sy++) for (let sx = 0; sx < 4; sx++) {
-        const dx = Math.abs((x + (sx + .5) / 4) * 512 / size - 256);
-        const dy = Math.abs((y + (sy + .5) / 4) * 512 / size - 256);
-        const diamond = dx + dy;
-        const sample = palette[diamond <= 68 ? 2 : diamond <= 116 ? 0 : diamond <= 152 ? 1 : 0];
-        for (let c = 0; c < 3; c++) color[c] += sample[c] / 16;
-      }
-      const offset = y * row + 1 + x * 4;
-      for (let c = 0; c < 3; c++) pixels[offset + c] = Math.round(color[c]);
-      pixels[offset + 3] = 255;
-    }
-  }
-  function chunk(type, data) {
-    const name = Buffer.from(type), content = Buffer.concat([name, data]);
-    let crc = 0xffffffff;
-    for (const byte of content) {
-      crc ^= byte;
-      for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
-    }
-    const result = Buffer.alloc(data.length + 12);
-    result.writeUInt32BE(data.length); content.copy(result, 4);
-    result.writeUInt32BE((crc ^ 0xffffffff) >>> 0, result.length - 4);
-    return result;
-  }
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(size); header.writeUInt32BE(size, 4);
-  header[8] = 8; header[9] = 6;
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(pixels)), chunk('IEND', Buffer.alloc(0))]);
+// Reuse the owner's selected transparent artwork; sizing never redraws the logo.
+const original=readFile(new URL('./smarttap-selected.png',import.meta.url));
+const mark=original.then(bytes=>sharp(bytes).trim({threshold:20}).png().toBuffer());
+export async function createBrandMark(){
+  return sharp(await mark).resize(256,256,{fit:'inside',withoutEnlargement:true}).png().toBuffer();
+}
+export async function createAppIcon(size,{maskable=false}={}){
+  if(![16,32,180,192,512].includes(size))throw new Error('Unsupported app icon size.');
+  // A 56% square lies wholly inside the standard maskable safe circle (r=40%).
+  const fraction=maskable?0.56:size<=32?0.88:0.76;
+  const edge=Math.round(size*fraction);
+  const image=await sharp(await mark).resize(edge,edge,{fit:'inside'}).png().toBuffer();
+  return sharp({create:{width:size,height:size,channels:4,background:'#fffaf4'}}).composite([{input:image,gravity:'centre'}]).png().toBuffer();
+}
+export async function createFavicon(){
+  const images=await Promise.all([16,32].map(size=>createAppIcon(size)));
+  const header=Buffer.alloc(6+16*images.length);header.writeUInt16LE(1,2);header.writeUInt16LE(images.length,4);
+  let offset=header.length;
+  images.forEach((bytes,index)=>{
+    const pos=6+16*index,size=[16,32][index];header[pos]=size;header[pos+1]=size;
+    header.writeUInt16LE(1,pos+4);header.writeUInt16LE(32,pos+6);header.writeUInt32LE(bytes.length,pos+8);header.writeUInt32LE(offset,pos+12);offset+=bytes.length;
+  });
+  return Buffer.concat([header,...images]);
 }
