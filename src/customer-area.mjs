@@ -14,7 +14,8 @@ export function createCustomerArea({coverNodes,onSelect}){
  const picker=document.createElement('select');picker.id='customer-page-picker';picker.setAttribute('aria-label','Pilih halaman perniagaan');
  picker.onchange=()=>onSelect(picker.value);myView.append(picker,$('refresh'),$('more'),$('list-status'),$('public-sharing'));
  const empty=document.createElement('p');empty.className='notice';empty.id='customer-empty';empty.textContent='Pilih halaman perniagaan untuk mengurus maklumat anda.';
- dashboard.prepend(bar,nav,stage);stage.append(empty,packageView,editor,myView);
+ const backdrop=document.createElement('button');backdrop.type='button';backdrop.className='customer-menu-backdrop';backdrop.tabIndex=-1;backdrop.setAttribute('aria-label','Tutup menu pelanggan');const closeMenu=document.createElement('button');closeMenu.type='button';closeMenu.className='customer-menu-close';closeMenu.textContent='Tutup menu ×';nav.prepend(closeMenu);
+ dashboard.prepend(bar,backdrop,nav,stage);stage.append(empty,packageView,editor,myView);
  const management=document.querySelector('.management-panel');packageView.append(management);
  const subnav=document.createElement('nav');subnav.className='customer-subnav';subnav.setAttribute('aria-label','Bahagian status pakej');packageView.prepend(subnav);
  const groups={};
@@ -37,20 +38,24 @@ export function createCustomerArea({coverNodes,onSelect}){
  const paymentTabs=document.createElement('nav');paymentTabs.className='customer-subnav customer-payment-tabs';paymentTabs.setAttribute('aria-label','Bahagian pembelian');
  let paymentTab=0;const showCart=()=>{cart.hidden=paymentTab!==0;checkout.hidden=paymentTab!==1;for(const [i,button] of [...paymentTabs.children].entries())button.setAttribute('aria-current',i===paymentTab?'page':'false');};
  for(const [i,label] of ['Pesanan','Jumlah & bayaran'].entries()){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>{paymentTab=i;showCart();};paymentTabs.append(button);}paymentForm.prepend(paymentTabs);showCart();
- const fieldGroups={business:[['name','tagline'],['logo'],['phone','whatsapp'],['website'],['instagram','facebook'],['tiktok','threads'],['google']],page:[['theme','accent'],['cover'],['menu','directions'],['address','hours'],['promoTitle','promoText'],['promoURL'],['promoStart','promoEnd']]};
+ const fieldGroups={business:[['name','tagline'],['logo'],['phone','whatsapp'],['website','instagram','facebook','tiktok','threads'],['google']],page:[['theme','accent'],['cover'],['menu','directions'],['address','hours'],['promoTitle','promoText'],['promoURL'],['promoStart','promoEnd']]};
  const pages={business:[],page:[]};
  for(const [view,steps] of Object.entries(fieldGroups))for(const keys of steps){
-  const group=document.createElement('div');group.className='customer-field-step';group.dataset.fieldView=view;
+  const group=document.createElement('div');group.className='customer-field-step';group.dataset.fieldView=view;if(keys.includes('instagram'))group.classList.add('customer-social-fields');
   for(const key of keys){const input=$('field-'+key),label=document.querySelector('label[for="field-'+key+'"]');const unit=document.createElement('div');unit.className='customer-field';unit.append(label,input);if(key==='cover')unit.append(...coverNodes);if(key==='google'&&$('google-pending-note'))unit.append($('google-pending-note'));group.append(unit);}
   $('fields').append(group);pages[view].push(group);
  }
  const fieldTabs=document.createElement('nav');fieldTabs.className='customer-subnav customer-field-tabs';fieldTabs.setAttribute('aria-label','Bahagian suntingan');form.prepend(fieldTabs);
- const tabLabels={business:['Maklumat','Logo','Hubungi','Laman web','Instagram / Facebook','TikTok / Threads','Google Review'],page:['Tema & warna','Cover','Menu & lokasi','Alamat & waktu','Promosi','Pautan promosi','Tarikh promosi']};
+ const tabLabels={business:['Maklumat','Logo','Hubungi','Social Media','Google Review'],page:['Tema & warna','Cover','Menu & lokasi','Alamat & waktu','Promosi','Pautan promosi','Tarikh promosi']};
  let view='package',sectionName='overview',activeTab={business:0,page:0},selected=null;
  for(const [name,labels] of Object.entries(tabLabels))for(const [i,label] of labels.entries()){const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.fieldView=name;button.dataset.index=String(i);button.onclick=()=>{activeTab[name]=i;render();};fieldTabs.append(button);}
- const toggle=$('customer-menu-toggle');toggle.onclick=()=>{const expanded=toggle.getAttribute('aria-expanded')!=='true';toggle.setAttribute('aria-expanded',String(expanded));nav.classList.toggle('is-open',expanded);};
- document.addEventListener('keydown',event=>{if(event.key==='Escape'){toggle.setAttribute('aria-expanded','false');nav.classList.remove('is-open');}});
- function open(next,focus=false){view=next;nav.classList.remove('is-open');toggle.setAttribute('aria-expanded','false');render();if(focus)$('customer-title').focus({preventScroll:true});}
+ const toggle=$('customer-menu-toggle');
+ function dismissMenu(restore=false){toggle.setAttribute('aria-expanded','false');nav.classList.remove('is-open');backdrop.classList.remove('is-open');nav.removeAttribute('role');nav.removeAttribute('aria-modal');stage.inert=false;bar.inert=false;document.querySelector('.app-header').inert=false;if(restore)toggle.focus();}
+ toggle.onclick=()=>{if(toggle.getAttribute('aria-expanded')==='true'){dismissMenu(true);return;}toggle.setAttribute('aria-expanded','true');nav.classList.add('is-open');backdrop.classList.add('is-open');if(matchMedia('(max-width:700px)').matches){nav.setAttribute('role','dialog');nav.setAttribute('aria-modal','true');stage.inert=true;bar.inert=true;document.querySelector('.app-header').inert=true;closeMenu.focus();}};
+ matchMedia('(max-width:700px)').addEventListener('change',()=>dismissMenu());
+ closeMenu.onclick=()=>dismissMenu(true);backdrop.onclick=()=>dismissMenu(true);
+ document.addEventListener('keydown',event=>{if(toggle.getAttribute('aria-expanded')!=='true')return;if(event.key==='Escape'){dismissMenu(true);return;}if(event.key==='Tab'&&matchMedia('(max-width:700px)').matches){const buttons=[...nav.querySelectorAll('button:not(:disabled)')];const first=buttons[0],last=buttons.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
+ function open(next,focus=false){view=next;dismissMenu();render();if(focus)$('customer-title').focus({preventScroll:true});}
  function render(){
   const active=!!selected;empty.hidden=active;packageView.hidden=!active||view!=='package';myView.hidden=view!=='my';editor.hidden=!active||!['business','page'].includes(view);
   for(const b of nav.querySelectorAll('[data-view]')){b.setAttribute('aria-current',b.dataset.view===view?'page':'false');b.disabled=!active&&b.dataset.view!=='my';}
@@ -65,5 +70,5 @@ export function createCustomerArea({coverNodes,onSelect}){
  // Native validation must first reveal the relevant section; hidden fields stay editable and are still saved together.
  form.noValidate=true;form.addEventListener('submit',event=>{const invalid=[...form.querySelectorAll('input,select,textarea')].find(input=>!input.disabled&&!input.checkValidity());if(invalid){event.preventDefault();event.stopImmediatePropagation();for(const [name,sections] of Object.entries(pages)){const at=sections.findIndex(group=>group.contains(invalid));if(at>=0){view=name;activeTab[name]=at;break;}}render();invalid.focus();invalid.reportValidity();}},true);
  $('cancel').addEventListener('click',()=>open('my'));
- return {update(item){if(!selected)view='package';selected=item;$('customer-business-name').textContent=item.profile.name;picker.value=item.id;document.body.classList.add('customer-session');render();},list(items){const current=picker.value;picker.replaceChildren();for(const item of items){const option=document.createElement('option');option.value=item.id;option.textContent=item.profile.name;picker.append(option);}picker.value=selected?.id||current;document.body.classList.add('customer-session');if(!selected)view='my';render();},clear(){selected=null;document.body.classList.remove('customer-session');nav.classList.remove('is-open');view='package';sectionName='overview';activeTab={business:0,page:0};paymentTab=0;showCart();render();},open};
+ return {update(item){if(!selected)view='package';selected=item;$('customer-business-name').textContent=item.profile.name;picker.value=item.id;document.body.classList.add('customer-session');render();},list(items){const current=picker.value;picker.replaceChildren();for(const item of items){const option=document.createElement('option');option.value=item.id;option.textContent=item.profile.name;picker.append(option);}picker.value=selected?.id||current;document.body.classList.add('customer-session');if(!selected)view='my';render();},clear(){selected=null;document.body.classList.remove('customer-session');dismissMenu();view='package';sectionName='overview';activeTab={business:0,page:0};paymentTab=0;showCart();render();},open};
 }
