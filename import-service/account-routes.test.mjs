@@ -39,6 +39,14 @@ test('HTTP signed Google identities enforce customer boundaries, role and privat
   assert.equal(rejected.status,200);
   assert.equal((await call('/api/admin/pending-payments','owner@gmail.com')).data.count,0);
 
+  assert.equal((await call('/api/user/links/'+alice.id+'/message','alice@gmail.com','POST',{action:'send',text:'spoof',revision:alice.revision})).status,403);
+  assert.equal((await call('/api/admin/links/'+alice.id+'/message-reply','owner@gmail.com','POST',{text:'spoof',revision:alice.revision})).status,403);
+  const message=await call('/api/admin/links/'+bob.id+'/message','owner@gmail.com','POST',{action:'send',text:'Please provide the transaction number.',revision:rejected.data.revision});
+  assert.equal(message.status,200);
+  assert.equal((await call('/api/user/links/'+bob.id,'bob@gmail.com')).data.adminMessage.text,'Please provide the transaction number.');
+  assert.equal((await call('/api/user/links/'+bob.id+'/message-reply','alice@gmail.com','POST',{text:'BANK-123',messageId:message.data.adminMessage.id,revision:message.data.revision})).status,404);
+  const replyMessage=await call('/api/user/links/'+bob.id+'/message-reply','bob@gmail.com','POST',{text:'BANK-123',messageId:message.data.adminMessage.id,revision:message.data.revision});
+  assert.equal(replyMessage.status,200);assert.equal(replyMessage.data.adminMessage.status,'replied');
   const list=await call('/api/user/links?email=bob@gmail.com&role=admin','alice@gmail.com');assert.equal(list.status,200);assert.deepEqual(list.data.items.map(x=>x.id),[alice.id]);assert.equal('ownerEmail' in list.data.items[0],false);
   assert.equal((await call('/api/user/links/'+bob.id,'alice@gmail.com')).status,404);
   assert.equal((await call('/api/user/links/'+bob.id,'alice@gmail.com','PUT',{profile,revision:bob.revision})).status,404);

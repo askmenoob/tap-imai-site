@@ -41,7 +41,7 @@ function render(){
     const row=document.createElement('article');row.className='record';const info=document.createElement('div');info.className='record-info';
     const title=document.createElement('h3');title.textContent=item.profile.name;
     const link=document.createElement('a');link.href=item.url;link.textContent=item.url;link.target='_blank';link.rel='noopener noreferrer';
-    const meta=document.createElement('p');meta.textContent=(stateLabels[item.state]||'Aktif')+(item.renewal?.status==='pending'?' · Bayaran menunggu semakan':'')+' · Dicipta '+date(item.createdAt)+' · Dikemas kini '+date(item.updatedAt)+(!customer?' · '+(item.ownerEmail||'Gmail pemilik belum didaftarkan'):'');
+    const meta=document.createElement('p');meta.textContent=(item.adminMessage&&item.adminMessage.status!=='resolved'?(customer?'Mesej daripada super admin':'Mesej pelanggan: '+(item.adminMessage.status==='replied'?'balasan diterima':'menunggu balasan'))+' · ':'')+(stateLabels[item.state]||'Aktif')+(item.renewal?.status==='pending'?' · Bayaran menunggu semakan':'')+' · Dicipta '+date(item.createdAt)+' · Dikemas kini '+date(item.updatedAt)+(!customer?' · '+(item.ownerEmail||'Gmail pemilik belum didaftarkan'):'');
     const button=document.createElement('button');button.type='button';button.textContent='Urus halaman';button.setAttribute('aria-label','Urus '+item.profile.name);button.addEventListener('click',()=>edit(item));
     info.append(title,link,meta);row.append(info,button);$('records').append(row);
   }

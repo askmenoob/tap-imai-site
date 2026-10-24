@@ -67,3 +67,37 @@ test('expiry is enforced without a scheduler, renewal keeps disabled pages disab
   page=await ctx.management.state(page.id,{state:'disabled',revision:page.revision},admin);page=await request(ctx,page,'renew','BANK-LATE');page=await ctx.management.decide(page.id,{requestId:page.renewal.id,decision:'approve',revision:page.revision,confirmBank:true},admin);
   assert.equal(page.subscription.expiresAt,'2028-11-01T00:00:00.000Z');assert.equal(page.state,'disabled');assert.equal(annualEnd('2028-02-29T10:20:30.000Z'),'2029-02-28T10:20:30.000Z');
 });
+
+
+test('private admin action request supports owner reply and admin resolution without affecting payment or QR',async()=>{
+  const ctx=setup();let page=await ctx.customers.register({url,email:alice.email},admin);
+  const originalURL=page.url;
+  await assert.rejects(ctx.management.message(page.id,{action:'send',text:'Request Transaction Number',revision:page.revision},alice),e=>e.status===403);
+  page=await ctx.management.message(page.id,{action:'send',text:'Sila berikan nombor transaksi bank.',revision:page.revision},admin);
+  assert.equal(page.adminMessage.status,'open');assert.equal(page.renewal,null);assert.equal(page.url,originalURL);
+  let owner=await ctx.customers.get(page.id,alice);assert.equal(owner.adminMessage.text,'Sila berikan nombor transaksi bank.');
+  assert.equal('recipientKey' in owner.adminMessage,false);assert.equal('sentBy' in owner.adminMessage,false);
+  await assert.rejects(ctx.customers.get(page.id,bob),e=>e.status===404);
+  await assert.rejects(ctx.management.replyMessage(page.id,{text:'BANK-123',messageId:page.adminMessage.id,revision:page.revision},bob),e=>e.status===404);
+  await assert.rejects(ctx.management.replyMessage(page.id,{text:'BANK-123',messageId:'old-message',revision:page.revision},alice),e=>e.status===409);
+  await assert.rejects(ctx.management.replyMessage(page.id,{text:' ',messageId:page.adminMessage.id,revision:page.revision},alice),e=>e.status===400);
+  page=await ctx.management.replyMessage(page.id,{text:'BANK-123',messageId:page.adminMessage.id,revision:page.revision},alice);
+  assert.equal(page.adminMessage.status,'replied');assert.equal(page.adminMessage.reply.text,'BANK-123');assert.equal('sentBy' in page.adminMessage.reply,false);
+  await assert.rejects(ctx.management.replyMessage(page.id,{text:'BANK-999',messageId:page.adminMessage.id,revision:page.revision},alice),e=>e.status===409);
+  page=await ctx.management.message(page.id,{action:'resolve',messageId:page.adminMessage.id,revision:page.revision},admin);
+  assert.equal(page.adminMessage.status,'resolved');assert.equal(page.url,originalURL);assert.equal(page.subscription,null);assert.equal(page.renewal,null);
+  const publicResult=await createShortLinks({store:ctx.store,secret:'s'.repeat(32)}).resolve(page.id);
+  assert.equal(Object.keys(publicResult).join(),'url');assert.ok(!JSON.stringify(publicResult).includes('BANK-123'));
+});
+
+test('message validation, stale revisions, deleted pages and owner changes fail closed',async()=>{
+  const ctx=setup();let page=await ctx.customers.register({url,email:alice.email},admin);
+  for(const text of ['', 'x'.repeat(1001)])await assert.rejects(ctx.management.message(page.id,{action:'send',text,revision:page.revision},admin),e=>e.status===400);
+  const old=page;page=await ctx.management.message(page.id,{action:'send',text:'Private request',revision:page.revision},admin);
+  await assert.rejects(ctx.management.message(page.id,{action:'send',text:'Stale',revision:old.revision},admin),e=>e.status===409);
+  page=await ctx.customers.assign(page.id,{email:bob.email,revision:page.revision},admin);
+  assert.equal((await ctx.customers.get(page.id,bob)).adminMessage,null);
+  await assert.rejects(ctx.management.replyMessage(page.id,{text:'wrong recipient',messageId:page.adminMessage.id,revision:page.revision},bob),e=>e.status===409);
+  page=await ctx.management.state(page.id,{state:'deleted',confirmName:profile.name,revision:page.revision},admin);
+  await assert.rejects(ctx.management.message(page.id,{action:'send',text:'Deleted',revision:page.revision},admin),e=>e.status===409);
+});

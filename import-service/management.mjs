@@ -17,6 +17,34 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
     if(!owns||item.record.lifecycle?.state==='deleted')throw fail(404,'Halaman ini tidak tersedia untuk akaun Gmail anda.');return item;
   }
   return {
+    async message(id,data={},actor){
+      admin(actor);
+      if(Object.keys(data).some(key=>!['text','revision','action','messageId'].includes(key)))throw fail(400,'Maklumat mesej tidak sah.');
+      const previous=await load(id,actor);
+      if(previous.record.lifecycle?.state==='deleted'||!previous.record.ownerEmail)throw fail(409,'Daftarkan Gmail pemilik pada halaman yang tersedia dahulu.');
+      let adminMessage;
+      if(data.action==='send'){
+        const text=typeof data.text==='string'?data.text.normalize('NFC').trim():'';
+        if(!text||text.length>1000)throw fail(400,'Masukkan mesej, maksimum 1000 aksara.');
+        adminMessage={id:randomUUID(),text,status:'open',sentAt:new Date(now()).toISOString(),sentBy:actor.email,recipientKey:ownerKey(previous.record.ownerEmail)};
+      }else if(data.action==='resolve'){
+        const old=previous.record.adminMessage;
+        if(!old||old.id!==data.messageId)throw fail(409,'Mesej telah berubah. Muat semula halaman.');
+        adminMessage={...old,status:'resolved',resolvedAt:new Date(now()).toISOString(),resolvedBy:actor.email};
+      }else throw fail(400,'Tindakan mesej tidak sah.');
+      const saved=await savePage({store,id,previous,revision:data.revision,changes:{adminMessage},actor,now});return view(id,saved,actor);
+    },
+    async replyMessage(id,data={},actor){
+      if(actor?.role!=='user')throw fail(403,'Hanya pelanggan boleh membalas mesej ini.');
+      if(Object.keys(data).some(key=>!['text','revision','messageId'].includes(key)))throw fail(400,'Maklumat balasan tidak sah.');
+      const previous=await load(id,actor),old=previous.record.adminMessage;
+      if(!old||old.id!==data.messageId||old.recipientKey!==ownerKey(actor.email)||old.status!=='open')throw fail(409,'Mesej ini tidak lagi menunggu balasan.');
+      const text=typeof data.text==='string'?data.text.normalize('NFC').trim():'';
+      if(!text||text.length>500)throw fail(400,'Masukkan balasan, maksimum 500 aksara.');
+      const adminMessage={...old,status:'replied',reply:{text,sentAt:new Date(now()).toISOString(),sentBy:actor.email}};
+      await savePage({store,id,previous,revision:data.revision,changes:{adminMessage},actor,now});
+      return view(id,await load(id,actor),actor);
+    },
     config(){return {enabled,...catalog.config,payee,...(enabled?{qrPayload}:{})};},
     async quote(id,options,actor){ready();const item=await load(id,actor);return catalog.quote(item.record,options);},
     async state(id,{state,revision,confirmName}={},actor){

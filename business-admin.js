@@ -2265,7 +2265,8 @@ var stateLabels = { active: "Aktif", disabled: "Dinyahaktifkan", deleted: "Dipad
 function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }) {
   const panel = document.createElement("section");
   panel.className = "management-panel";
-  panel.innerHTML = `<h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review \u2197</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej \u2197</a>
+  panel.innerHTML = `<section id="admin-message-box" class="admin-message-box" hidden aria-labelledby="admin-message-title"><h3 id="admin-message-title">Mesej daripada super admin</h3><p id="admin-message-text" data-no-i18n></p><p id="admin-message-time" class="help" data-no-i18n></p><p id="admin-message-state" role="status" aria-live="polite"></p><div id="admin-message-reply" hidden><strong>Balasan pelanggan</strong><p id="admin-message-reply-text" data-no-i18n></p></div><form id="message-reply-form" hidden><label for="message-reply-text">Nombor transaksi / balasan anda</label><textarea id="message-reply-text" required maxlength="500" rows="3"></textarea><button type="submit">Hantar balasan kepada super admin</button></form><button id="message-resolve" type="button" class="secondary" hidden>Tandakan selesai</button><a id="message-whatsapp" class="button secondary" href="https://wa.me/60103250032" target="_blank" rel="noopener noreferrer" hidden>Hubungi super admin di WhatsApp \u2197</a></section>
+  <form id="admin-message-form" class="admin-message-compose" ${customer2 ? "hidden" : ""}><h3>Hantar mesej kepada pelanggan</h3><label for="admin-message-input">Mesej / tindakan yang diperlukan</label><textarea id="admin-message-input" required maxlength="1000" rows="3" placeholder="Contoh: Sila berikan nombor transaksi bank untuk semakan bayaran."></textarea><p class="help">Mesej muncul pada halaman edit pelanggan. Mesej baharu menggantikan mesej semasa; rekod sebelumnya disimpan.</p><button type="submit">Hantar mesej</button></form><h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review \u2197</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej \u2197</a>
   <div id="lifecycle-actions" class="actions" ${customer2 ? "hidden" : ""}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button></div>
   <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
   <p id="management-status" role="status" aria-live="polite"></p>
@@ -2278,7 +2279,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   <form id="payment-review" hidden><h4>Semakan super admin</h4><p id="review-details"></p><label class="check-label"><input id="bank-confirm" type="checkbox"> Saya telah menyemak akaun bank dan wang benar-benar diterima untuk transaksi ini.</label><label for="review-note">Nota kepada pelanggan (pilihan)</label><input id="review-note" maxlength="200"><div class="actions"><button id="payment-approve">Sahkan bayaran</button><button type="button" id="payment-reject" class="secondary">Tolak permohonan</button></div></form></div>`;
   document.getElementById("edit-form").before(panel);
   const $2 = (id) => panel.querySelector("#" + id);
-  let current = null, config = null, quote = null, sequence = 0, working = false, paymentOpen = !customer2, paymentAvailable = false;
+  let current = null, config = null, quote = null, sequence = 0, messageSequence = 0, working = false, paymentOpen = !customer2, paymentAvailable = false;
   function paymentVisibility(open) {
     paymentOpen = open;
     sequence++;
@@ -2295,7 +2296,13 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   const today = () => new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);
   const options = () => ({ package: $2("payment-package").value, extraNfcQty: Number($2("payment-nfc").value), stickerQty: Number($2("payment-stickers").value) });
   function clear() {
+    messageSequence++;
     current = null;
+    $2("admin-message-box").hidden = true;
+    $2("admin-message-text").textContent = "";
+    $2("admin-message-reply-text").textContent = "";
+    $2("message-reply-text").value = "";
+    $2("admin-message-input").value = "";
     paymentAvailable = false;
     paymentVisibility(!customer2);
     $2("payment-disclosure").hidden = true;
@@ -2305,6 +2312,21 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("delete-form").hidden = true;
     $2("order-support").hidden = true;
     $2("order-whatsapp").removeAttribute("href");
+  }
+  function showMessage(item) {
+    const message = item.adminMessage, note = !message ? item.renewal?.note : "";
+    const visible = !!(message && (!customer2 || message.status !== "resolved") || note);
+    $2("admin-message-box").hidden = !visible;
+    $2("admin-message-form").hidden = customer2 || item.manualState === "deleted" || !item.ownerEmail;
+    $2("admin-message-text").textContent = message?.text || note || "";
+    $2("admin-message-time").textContent = message?.sentAt ? new Date(message.sentAt).toLocaleString("ms-MY", { timeZone: "Asia/Kuala_Lumpur" }) : "";
+    $2("admin-message-state").textContent = message?.status === "replied" ? "Balasan telah dihantar. Menunggu tindakan super admin." : message?.status === "resolved" ? "Mesej telah diselesaikan." : message ? customer2 ? "Tindakan anda diperlukan." : "Menunggu tindakan pelanggan." : "Nota semakan bayaran daripada super admin.";
+    $2("admin-message-box").dataset.status = message?.status || "open";
+    $2("admin-message-reply").hidden = !message?.reply;
+    $2("admin-message-reply-text").textContent = message?.reply?.text || "";
+    $2("message-reply-form").hidden = !customer2 || message?.status !== "open";
+    $2("message-resolve").hidden = customer2 || !message || message.status === "resolved";
+    $2("message-whatsapp").hidden = !customer2 || !!message;
   }
   function orderSupport(item) {
     const approved = item.renewal?.status === "approved" ? item.renewal : null, orderId = approved?.id || item.subscription?.lastPaymentId;
@@ -2351,9 +2373,17 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     }
   }
   async function show(item) {
-    const changed = current?.id !== item.id, oldStatus = current?.renewal?.status;
+    const changed = current?.id !== item.id, messageChanged = current?.adminMessage?.id !== item.adminMessage?.id, oldStatus = current?.renewal?.status;
     current = item;
+    if (changed || messageChanged) {
+      $2("message-reply-text").value = "";
+      $2("management-status").textContent = "";
+    }
+    showMessage(item);
     if (changed) {
+      messageSequence++;
+      $2("message-reply-text").value = "";
+      $2("admin-message-input").value = "";
       paymentAvailable = false;
       paymentVisibility(!customer2);
       $2("payment-disclosure").hidden = true;
@@ -2434,21 +2464,23 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     if (working || !current) return;
     working = true;
     onBusy(true);
-    const id = current.id;
+    const id = current.id, version = messageSequence;
     $2("management-status").textContent = "Menyimpan\u2026";
-    for (const node of panel.querySelectorAll("button,input,select")) node.disabled = true;
+    for (const node of panel.querySelectorAll("button,input,select,textarea")) node.disabled = true;
     try {
       const updated = await api2("/links/" + id + path, { method: "POST", body });
-      if (current?.id !== id) return;
+      if (current?.id !== id || version !== messageSequence) return;
       onUpdate(updated);
       await show(updated);
+      if (path === "/message" && body.action === "send") $2("admin-message-input").value = "";
+      if (path === "/message-reply") $2("message-reply-text").value = "";
       $2("management-status").textContent = message;
     } catch (error) {
       $2("management-status").textContent = error.message;
     } finally {
       working = false;
       onBusy(false);
-      for (const node of panel.querySelectorAll("button,input,select")) node.disabled = false;
+      for (const node of panel.querySelectorAll("button,input,select,textarea")) node.disabled = false;
       if (!quote) $2("payment-submit").disabled = true;
     }
   }
@@ -2483,6 +2515,15 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     decide("approve");
   };
   $2("payment-reject").onclick = () => decide("reject");
+  $2("admin-message-form").onsubmit = (event) => {
+    event.preventDefault();
+    action("/message", { action: "send", text: $2("admin-message-input").value, revision: current.revision }, "Mesej telah dihantar kepada pelanggan.");
+  };
+  $2("message-reply-form").onsubmit = (event) => {
+    event.preventDefault();
+    action("/message-reply", { messageId: current.adminMessage.id, text: $2("message-reply-text").value, revision: current.revision }, "Balasan telah dihantar kepada super admin.");
+  };
+  $2("message-resolve").onclick = () => action("/message", { action: "resolve", messageId: current.adminMessage.id, revision: current.revision }, "Mesej telah diselesaikan.");
   return { show, clear };
 }
 
@@ -2577,7 +2618,7 @@ function render() {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     const meta = document.createElement("p");
-    meta.textContent = (stateLabels[item.state] || "Aktif") + (item.renewal?.status === "pending" ? " \xB7 Bayaran menunggu semakan" : "") + " \xB7 Dicipta " + date2(item.createdAt) + " \xB7 Dikemas kini " + date2(item.updatedAt) + (!customer ? " \xB7 " + (item.ownerEmail || "Gmail pemilik belum didaftarkan") : "");
+    meta.textContent = (item.adminMessage && item.adminMessage.status !== "resolved" ? (customer ? "Mesej daripada super admin" : "Mesej pelanggan: " + (item.adminMessage.status === "replied" ? "balasan diterima" : "menunggu balasan")) + " \xB7 " : "") + (stateLabels[item.state] || "Aktif") + (item.renewal?.status === "pending" ? " \xB7 Bayaran menunggu semakan" : "") + " \xB7 Dicipta " + date2(item.createdAt) + " \xB7 Dikemas kini " + date2(item.updatedAt) + (!customer ? " \xB7 " + (item.ownerEmail || "Gmail pemilik belum didaftarkan") : "");
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Urus halaman";
