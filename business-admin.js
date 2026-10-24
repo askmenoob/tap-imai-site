@@ -2102,6 +2102,101 @@ var require_browser = __commonJS({
   }
 });
 
+// src/payment-alerts.mjs
+function createPaymentAlerts({ api: api2, open, canOpen }) {
+  const $2 = (id) => document.getElementById(id), bell = $2("payment-bell"), panel = $2("payment-alerts"), count = $2("payment-count"), status = $2("payment-alert-status"), list = $2("payment-alert-list"), refreshButton = $2("payment-alert-refresh");
+  let active = false, generation = 0, timer, flight = null, lastCount = null;
+  const schedule = () => {
+    clearTimeout(timer);
+    if (active) timer = setTimeout(() => {
+      if (document.hidden) schedule();
+      else refresh();
+    }, 6e4);
+  };
+  async function refresh() {
+    if (!active) return;
+    if (flight) return flight;
+    const current = generation;
+    refreshButton.disabled = true;
+    const work = (async () => {
+      try {
+        const data = await api2("/api/admin/pending-payments");
+        if (!active || current !== generation) return;
+        count.textContent = String(data.count);
+        lastCount = data.count;
+        bell.classList.toggle("has-pending", data.count > 0);
+        status.textContent = data.count ? "Pilih perniagaan untuk semak bayaran." : "Tiada bayaran menunggu semakan.";
+        list.replaceChildren();
+        for (const item of data.items) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "payment-alert-item secondary";
+          const name = document.createElement("strong");
+          name.textContent = item.name;
+          name.dataset.noI18n = "";
+          const detail = document.createElement("span");
+          detail.dataset.noI18n = "";
+          detail.textContent = new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(item.amountCents / 100) + " \xB7 " + new Date(item.submittedAt).toLocaleString("ms-MY", { timeZone: "Asia/Kuala_Lumpur" });
+          button.append(name, detail);
+          button.addEventListener("click", async () => {
+            if (!canOpen()) return;
+            button.disabled = true;
+            try {
+              await open(item.id);
+            } catch {
+              if (active && current === generation) status.textContent = "Bayaran belum dapat dibuka. Cuba lagi.";
+            } finally {
+              button.disabled = false;
+            }
+          });
+          list.append(button);
+        }
+      } catch {
+        if (!active || current !== generation) return;
+        count.textContent = lastCount === null ? "!" : String(lastCount);
+        status.textContent = "Semakan bayaran belum dapat dikemas kini. Muat semula bayaran.";
+      } finally {
+        if (active && current === generation) {
+          refreshButton.disabled = false;
+          schedule();
+        }
+      }
+    })();
+    flight = work;
+    try {
+      await work;
+    } finally {
+      if (flight === work) flight = null;
+    }
+  }
+  bell.addEventListener("click", () => {
+    panel.hidden = !panel.hidden;
+    bell.setAttribute("aria-expanded", String(!panel.hidden));
+    if (!panel.hidden) refresh();
+  });
+  refreshButton.addEventListener("click", refresh);
+  document.addEventListener("visibilitychange", () => {
+    if (active && !document.hidden) refresh();
+  });
+  return { refresh, start() {
+    this.stop();
+    active = true;
+    refresh();
+  }, stop() {
+    active = false;
+    generation++;
+    clearTimeout(timer);
+    flight = null;
+    lastCount = null;
+    count.textContent = "\u2026";
+    bell.classList.remove("has-pending");
+    bell.setAttribute("aria-expanded", "false");
+    panel.hidden = true;
+    list.replaceChildren();
+    status.textContent = "";
+  } };
+}
+
 // import-service/appearance.mjs
 var appearanceFields = {
   theme: { label: "Tema halaman", options: { classic: "Klasik \xB7 krim & hijau", dark: "Gelap \xB7 arang & putih", bright: "Ceria \xB7 putih & warna jenama" } },
@@ -2415,9 +2510,17 @@ var management = createManagementUI({ customer, api: (path, options) => api(base
   selected = item;
   records = records.map((record) => record.id === item.id ? item : record);
   render();
+  alerts?.refresh();
   $("edit-title").textContent = item.profile.name;
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
 } });
+var alerts = customer ? null : createPaymentAlerts({ api, open: async (id) => {
+  if (saving) return;
+  const current = session;
+  const item = await api(base + "/links/" + id);
+  if (current !== session || saving) return;
+  await edit(item);
+}, canOpen: () => !saving });
 function logout(message = "Anda telah log keluar.") {
   coverPreview.hidden = true;
   coverStatus.textContent = "";
@@ -2432,6 +2535,7 @@ function logout(message = "Anda telah log keluar.") {
   session++;
   clearTimeout(expiryTimer);
   management.clear();
+  alerts?.stop();
   $("dashboard").hidden = true;
   $("editor").hidden = true;
   $("login-panel").hidden = false;
@@ -2534,6 +2638,7 @@ async function login(token) {
     $("identity").textContent = actor.email;
     $("login-panel").hidden = true;
     $("dashboard").hidden = false;
+    alerts?.start();
     await load(true);
   } catch (error) {
     credential = "";
@@ -2742,7 +2847,10 @@ $("owner-form")?.addEventListener("submit", async (event) => {
   }
 });
 $("filter").addEventListener("input", render);
-$("refresh").addEventListener("click", () => load(true));
+$("refresh").addEventListener("click", () => {
+  load(true);
+  alerts?.refresh();
+});
 $("more").addEventListener("click", () => load());
 $("cancel").addEventListener("click", () => {
   selected = null;

@@ -1,3 +1,4 @@
+import {createPaymentAlerts} from './payment-alerts.mjs';
 import {appearanceFields} from '../import-service/appearance.mjs';
 import QRCode from 'qrcode';
 import {malaysiaPhone,whatsappFromPhone} from '../import-service/contacts.mjs';
@@ -14,10 +15,11 @@ function lockControls(value){
   for(const field of Object.keys(fields))if($('field-'+field))$('field-'+field).disabled=value||(customer&&selected?.state!=='active');
   for(const id of ['cover-file','remove-cover'])if($(id))$(id).disabled=value||(customer&&selected?.state!=='active');
 }
-const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
+const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();alerts?.refresh();$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
+const alerts=customer?null:createPaymentAlerts({api,open:async id=>{if(saving)return;const current=session;const item=await api(base+'/links/'+id);if(current!==session||saving)return;await edit(item);},canOpen:()=>!saving});
 function logout(message='Anda telah log keluar.'){
   coverPreview.hidden=true;coverStatus.textContent='';if(previewURL){URL.revokeObjectURL(previewURL);previewURL=null;}credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
-  management.clear();
+  management.clear();alerts?.stop();
   $('dashboard').hidden=true;$('editor').hidden=true;$('login-panel').hidden=false;$('records').replaceChildren();
   for(const field of Object.keys(fields))$('field-'+field).value='';
   if($('owner-email'))$('owner-email').value='';
@@ -65,7 +67,7 @@ async function login(token){
   try{
     const actor=await api(base+'/self');if(current!==session)return;
     clearTimeout(expiryTimer);expiryTimer=setTimeout(()=>logout('Sesi tamat. Log masuk semula.'),Math.max(0,actor.expiresAt-Date.now()));
-    $('identity').textContent=actor.email;$('login-panel').hidden=true;$('dashboard').hidden=false;await load(true);
+    $('identity').textContent=actor.email;$('login-panel').hidden=true;$('dashboard').hidden=false;alerts?.start();await load(true);
   }catch(error){credential='';$('login-status').textContent=error.message;}
 }
 async function edit(item){
@@ -139,7 +141,7 @@ $('owner-form')?.addEventListener('submit',async event=>{
   }catch(error){$('owner-status').textContent=error.message;}
   finally{saving=false;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])$(id).disabled=false;}
 });
-$('filter').addEventListener('input',render);$('refresh').addEventListener('click',()=>load(true));$('more').addEventListener('click',()=>load());
+$('filter').addEventListener('input',render);$('refresh').addEventListener('click',()=>{load(true);alerts?.refresh();});$('more').addEventListener('click',()=>load());
 $('cancel').addEventListener('click',()=>{selected=null;$('editor').hidden=true;});$('logout').addEventListener('click',()=>logout());
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('share').value);$('copy-status').textContent='Pautan disalin.';}catch{$('share').focus();$('share').select();$('copy-status').textContent='Pilih dan salin pautan secara manual.';}});
 try{

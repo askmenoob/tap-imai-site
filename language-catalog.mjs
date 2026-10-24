@@ -1,4 +1,12 @@
 export const translations = {
+  'Bayaran menunggu semakan':'Payment awaiting review',
+  'Muat semula bayaran':'Refresh payments',
+  'Pilih perniagaan untuk semak bayaran.':'Select a business to review its payment.',
+  'Tiada bayaran menunggu semakan.':'No payments awaiting review.',
+  'Pelanggan telah menghantar rujukan bayaran. Semak wang diterima dalam akaun bank sebelum meluluskan.':'Customers have submitted payment references. Check that funds have reached the bank account before approving.',
+  'Bayaran belum dapat dibuka. Cuba lagi.':'Unable to open this payment. Try again.',
+  'Semakan bayaran belum dapat dikemas kini. Muat semula bayaran.':'Payment alerts could not be updated. Refresh payments.',
+
   'Cari perniagaan — SmartTap':'Find a business — SmartTap',
   'Sunting halaman saya':'Edit my page','Super admin':'Super admin','Pakej':'Packages',
   '1 CARI · 2 SEMAK · 3 KONGSI':'1 SEARCH · 2 REVIEW · 3 SHARE',

@@ -13,6 +13,7 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
     if(!admin||!customers){reply(res,503,{error:'Simpanan pautan belum tersedia.'},origin);return true;}
     if(path===base+'/self'&&req.method==='GET'){reply(res,200,actor,origin);return true;}
     if(path===base+'/plan'&&req.method==='GET'&&management){reply(res,200,management.config(),origin);return true;}
+    if(!customer&&path===base+'/pending-payments'&&req.method==='GET'){reply(res,200,await admin.pendingPayments(),origin);return true;}
     const query=new URL(req.url,'http://localhost').searchParams;
     const operation=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/(state|quote|renewal|decision)$').exec(path);
     if(operation&&management){
@@ -21,7 +22,7 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
       if(req.method==='POST'){
         if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){reply(res,415,{error:'Gunakan JSON.'},origin);return true;}
         const data=await body(req,4096);const result=action==='state'?await management.state(id,data,actor):action==='quote'?await management.quote(id,data,actor):action==='renewal'?await management.request(id,data,actor):await management.decide(id,data,actor);
-        reply(res,200,result,origin);return true;
+        admin.invalidatePending();reply(res,200,result,origin);return true;
       }
     }
     if(path===base+'/links'&&req.method==='GET'){

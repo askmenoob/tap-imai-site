@@ -58,3 +58,20 @@ test('stale admin editors cannot overwrite a more recent edit, and invalid edits
   assert.equal(store.history.size,size);assert.equal((await admin.list()).items[0].profile.name,'Penyunting Pertama');
   await assert.rejects(admin.update('../wrong',{profile,revision:'1'},{email}),e=>e.status===404);
 });
+
+
+test('pending payments include every list page, exclude reviewed/deleted records and cache only complete successful scans',async()=>{
+  const store=storage();let clock=Date.now(),reads=0;
+  const original=store.list;store.list=async cursor=>{reads++;return original(cursor);};
+  for(let i=0;i<28;i++)await store.create(String(i).padStart(16,'0'),{url:encode({...profile,name:'Business '+i}),renewal:{status:i===0?'approved':i===1?'rejected':'pending',amountCents:10000,submittedAt:new Date(clock+i*1000).toISOString()},...(i===2?{lifecycle:{state:'deleted'}}:{})});
+  const admin=createAdminService({store,now:()=>clock});
+  const [a,b]=await Promise.all([admin.pendingPayments(),admin.pendingPayments()]);
+  assert.equal(a.count,25);assert.deepEqual(a,b);assert.equal(reads,28);assert.equal(a.items.at(-1).name,'Business 27');
+  assert.equal('ownerEmail' in a.items[0],false);assert.equal('profile' in a.items[0],false);
+  await admin.pendingPayments();assert.equal(reads,28);
+  const id='0000000000000027',previous=await store.getVersion(id);await store.update(id,{...previous.record,renewal:{...previous.record.renewal,status:'approved'}},previous.revision);
+  admin.invalidatePending();assert.equal((await admin.pendingPayments()).count,24);
+  clock+=60001;store.list=async()=>{throw new Error('storage unavailable');};
+  await assert.rejects(admin.pendingPayments(),/storage unavailable/);
+  store.list=original;assert.equal((await admin.pendingPayments()).count,24);
+});
