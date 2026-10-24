@@ -3575,6 +3575,147 @@ function googleLogin({ clientId, container, onCredential, onError, prompt = fals
   document.head.append(script);
 }
 
+// import-service/page-state.mjs
+var hasEntitlement = (record) => !!(record.subscription?.lastPaymentId || record.subscription?.lastGrantId);
+var hasAnnualEntitlement = (record) => record.subscription?.plan === "annual" && hasEntitlement(record);
+function annualEnd(value) {
+  const start = new Date(value), year = start.getUTCFullYear() + 1, month = start.getUTCMonth();
+  const day = Math.min(start.getUTCDate(), new Date(Date.UTC(year, month + 1, 0)).getUTCDate());
+  return new Date(Date.UTC(year, month, day, start.getUTCHours(), start.getUTCMinutes(), start.getUTCSeconds(), start.getUTCMilliseconds())).toISOString();
+}
+
+// src/admin-subscription-ui.mjs
+function createAdminSubscriptionUI({ customer: customer2, onSubmit }) {
+  const panel = document.createElement("section");
+  panel.id = "subscription-management";
+  panel.className = "subscription-admin";
+  panel.dataset.noI18n = "";
+  panel.hidden = true;
+  let item = null, working = false, language = "ms";
+  try {
+    language = localStorage.getItem("smarttap.language") || "ms";
+  } catch {
+  }
+  const L = (ms, en) => language === "en" ? en : ms, copies = [];
+  const node = (tag, ms, en) => {
+    const el = document.createElement(tag);
+    if (ms) {
+      copies.push({ el, ms, en });
+      el.textContent = L(ms, en);
+    }
+    return el;
+  };
+  const source = node("p", "Langganan ditetapkan oleh super admin.", "Subscription set by the super admin.");
+  source.className = "notice";
+  panel.append(source);
+  const details = node("details"), summary = node("summary", "Tetapkan langganan tanpa ToyyibPay", "Set subscription without ToyyibPay");
+  details.append(summary);
+  panel.append(details);
+  const form = node("form");
+  form.id = "admin-subscription-form";
+  details.append(form);
+  form.append(node("p", "Aktifkan halaman tahunan secara terus. Ini tidak mencipta bil, resit bayaran atau pesanan NFC.", "Activate an annual page directly. This does not create a bill, payment receipt or NFC order."));
+  function field(id, ms, en, input) {
+    input.id = id;
+    const label = node("label", ms, en);
+    label.htmlFor = id;
+    form.append(label, input);
+    return input;
+  }
+  const mode = field("subscription-action", "Tindakan langganan", "Subscription action", node("select"));
+  for (const [value, ms, en] of [["extend", "Aktifkan / lanjutkan 12 bulan", "Activate / extend 12 months"], ["set-date", "Tetapkan tarikh tamat", "Set expiry date"]]) {
+    const o = node("option", ms, en);
+    o.value = value;
+    mode.append(o);
+  }
+  const date4 = field("subscription-expiry", "Tarikh tamat (waktu Malaysia)", "Expiry date (Malaysia time)", node("input"));
+  date4.type = "date";
+  const dateLabel = form.querySelector('label[for="subscription-expiry"]');
+  const preview = node("p");
+  preview.id = "subscription-preview";
+  preview.setAttribute("role", "status");
+  form.append(preview);
+  const note = field("subscription-note", "Sebab pelarasan (catatan dalaman)", "Reason for adjustment (internal note)", node("input"));
+  note.required = true;
+  note.maxLength = 200;
+  note.autocomplete = "off";
+  const blocked = node("p");
+  blocked.className = "notice";
+  blocked.id = "subscription-blocked";
+  form.append(blocked);
+  const save = node("button", "Simpan langganan", "Save subscription");
+  save.type = "submit";
+  save.id = "subscription-save";
+  form.append(save);
+  const history = node("p");
+  history.className = "help";
+  history.id = "subscription-audit";
+  details.append(history);
+  function unavailable() {
+    return item?.renewal?.status === "pending" || item?.checkout && !["paid", "cancelled", "creation_failed"].includes(item.checkout.status);
+  }
+  function refresh() {
+    const custom = mode.value === "set-date";
+    date4.hidden = dateLabel.hidden = !custom;
+    date4.required = custom;
+    for (const input of form.querySelectorAll("input,select,button")) input.disabled = working || !!unavailable();
+    date4.disabled = working || !!unavailable() || !custom;
+    const today = new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);
+    date4.min = today;
+    let end = "";
+    if (custom && date4.value) end = date4.value + "T23:59:59.999+08:00";
+    else if (!custom) {
+      const old = item?.subscription?.plan === "annual" ? Date.parse(item.subscription.expiresAt || "") : 0;
+      end = annualEnd(Math.max(Number.isFinite(old) ? old : 0, Date.now()));
+    }
+    preview.textContent = end ? L("Tarikh tamat baharu: ", "New expiry: ") + new Date(end).toLocaleDateString(language === "en" ? "en-MY" : "ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) + (item?.manualState === "disabled" ? L(" \xB7 Halaman kekal dinyahaktifkan.", " \xB7 Page remains disabled.") : "") : "";
+    blocked.hidden = !unavailable();
+    blocked.textContent = L("Selesaikan atau batalkan bil/semakan bayaran yang masih terbuka dahulu.", "Complete or cancel the open bill/payment review first.");
+  }
+  mode.onchange = refresh;
+  date4.oninput = refresh;
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    if (working || unavailable() || !item) return;
+    onSubmit({ action: mode.value, note: note.value.trim(), ...mode.value === "set-date" ? { expiresDate: date4.value } : {} });
+  };
+  function renderHistory() {
+    const audit = item?.subscriptionAdjustment;
+    history.textContent = audit ? L("Pelarasan terakhir: ", "Last adjustment: ") + new Date(audit.changedAt).toLocaleString(language === "en" ? "en-MY" : "ms-MY", { timeZone: "Asia/Kuala_Lumpur" }) + " \xB7 " + audit.changedBy + " \xB7 " + audit.note : "";
+  }
+  window.addEventListener("smarttap:language", (event) => {
+    language = event.detail.language === "en" ? "en" : "ms";
+    for (const { el, ms, en } of copies) el.textContent = L(ms, en);
+    renderHistory();
+    refresh();
+  });
+  return { panel, set(value) {
+    const changed = item?.id !== value.id || item?.revision !== value.revision;
+    item = value;
+    panel.hidden = customer2 && item.subscription?.source !== "admin";
+    source.hidden = item.subscription?.source !== "admin";
+    details.hidden = customer2 || item.manualState === "deleted";
+    if (changed) {
+      details.open = false;
+      mode.value = "extend";
+      date4.value = "";
+      note.value = "";
+    }
+    renderHistory();
+    refresh();
+  }, busy(value) {
+    working = value;
+    refresh();
+  }, clear() {
+    item = null;
+    details.open = false;
+    note.value = "";
+    date4.value = "";
+    history.textContent = "";
+    panel.hidden = true;
+  } };
+}
+
 // src/payment-prompt.mjs
 function paymentPrompt(item, now = Date.now()) {
   const annual = item.subscription?.plan === "annual";
@@ -3639,9 +3780,12 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("payment-submit").disabled = true;
     $2("gateway-pay").disabled = true;
   }
+  const subscriptionUI = createAdminSubscriptionUI({ customer: customer2, onSubmit: (data) => action("/subscription", { ...data, revision: current.revision }, "Langganan dikemas kini oleh super admin. URL dan QR kekal sama.") });
+  $2("lifecycle-actions").before(subscriptionUI.panel);
   const today = () => new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);
   const options = () => ({ package: $2("payment-package").value, extraNfcQty: Number($2("payment-nfc").value), stickerQty: Number($2("payment-stickers").value) });
   function clear() {
+    subscriptionUI.clear();
     messageSequence++;
     current = null;
     $2("admin-message-box").hidden = true;
@@ -3758,6 +3902,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     if (working || !current || !config?.gateway?.enabled) return;
     if (kind === "create" && !quote) return;
     working = true;
+    subscriptionUI.busy(true);
     onBusy(true);
     const item = current, version = ++gatewaySequence;
     $2("gateway-status").textContent = kind === "create" ? "Menyediakan bil ToyyibPay\u2026" : "Menyemak status ToyyibPay\u2026";
@@ -3783,9 +3928,11 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       for (const node of panel.querySelectorAll("button,input,select,textarea")) node.disabled = false;
       $2("gateway-pay").disabled = !quote || !config?.gateway?.enabled;
       if (!quote) $2("payment-submit").disabled = true;
+      subscriptionUI.busy(false);
     }
   }
   async function show(item) {
+    subscriptionUI.set(item);
     const changed = current?.id !== item.id, messageChanged = current?.adminMessage?.id !== item.adminMessage?.id, oldStatus = current?.renewal?.status;
     current = item;
     if (changed || messageChanged) {
@@ -3857,10 +4004,10 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("review-details").textContent = payment ? "Rujukan: " + payment.reference + " \xB7 " + payment.paidDate + " \xB7 " + money2(payment.amountCents) + " \xB7 " + payment.items.map((x) => x.name + " \xD7 " + x.quantity).join(", ") : "";
     $2("bank-confirm").checked = false;
     $2("review-note").value = "";
-    const selected2 = $2("payment-package").value, annual = !!item.subscription?.lastPaymentId && item.subscription.plan === "annual";
+    const selected2 = $2("payment-package").value, annual = hasAnnualEntitlement(item);
     $2("payment-package").replaceChildren();
     for (const product of config.packages) {
-      if (product.id === "addons" && !item.subscription?.lastPaymentId || product.id !== "addons" && (annual && product.id !== "renew" || !annual && product.id === "renew")) continue;
+      if (product.id === "addons" && !hasEntitlement(item) || product.id !== "addons" && (annual && product.id !== "renew" || !annual && product.id === "renew")) continue;
       const option = document.createElement("option");
       option.value = product.id;
       option.textContent = product.name + (product.id === "addons" ? "" : " \xB7 " + money2(product.amountCents) + (product.months ? " / " + product.months + " bulan" : " \xB7 sekali bayar"));
@@ -3894,6 +4041,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   async function action(path, body, message) {
     if (working || !current) return;
     working = true;
+    subscriptionUI.busy(true);
     onBusy(true);
     const id = current.id, version = messageSequence;
     $2("management-status").textContent = "Menyimpan\u2026";
@@ -3913,6 +4061,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       onBusy(false);
       for (const node of panel.querySelectorAll("button,input,select,textarea")) node.disabled = false;
       if (!quote) $2("payment-submit").disabled = true;
+      subscriptionUI.busy(false);
     }
   }
   $2("state-toggle").onclick = () => action("/state", { state: current.manualState === "disabled" ? "active" : "disabled", revision: current.revision }, "Status halaman dikemas kini. URL dan QR kekal sama.");
@@ -4206,7 +4355,7 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   };
   const statusHeading = $2("page-state").previousElementSibling;
   groups.overview.append(statusHeading);
-  for (const id of ["page-state", "subscription-summary", "google-listing-status", "direct-review-wrap", "payment-summary", "renewal-reminder", "payment-disclosure"]) move(id, "overview");
+  for (const id of ["page-state", "subscription-summary", "subscription-management", "google-listing-status", "direct-review-wrap", "payment-summary", "renewal-reminder", "payment-disclosure"]) move(id, "overview");
   const orderShortcut = document.createElement("button");
   orderShortcut.type = "button";
   orderShortcut.className = "secondary";

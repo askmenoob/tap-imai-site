@@ -28,7 +28,7 @@ export function createCustomerArea({coverNodes,detailsNodes={},onSelect}){
  const move=(id,group)=>{if($(id))groups[group].append($(id));};
  // Keep every managed control below the same management root: existing payment handlers own their state.
  const statusHeading=$('page-state').previousElementSibling;groups.overview.append(statusHeading);
- for(const id of ['page-state','subscription-summary','google-listing-status','direct-review-wrap','payment-summary','renewal-reminder','payment-disclosure'])move(id,'overview');
+ for(const id of ['page-state','subscription-summary','subscription-management','google-listing-status','direct-review-wrap','payment-summary','renewal-reminder','payment-disclosure'])move(id,'overview');
  const orderShortcut=document.createElement('button');orderShortcut.type='button';orderShortcut.className='secondary';orderShortcut.textContent='Buka Pesanan saya';orderShortcut.onclick=()=>open('orders',true);groups.delivery.append(orderShortcut);
  move('admin-message-box','messages');move('order-support','delivery');move('gateway-panel','gateway');move('payment-form','buy');
  const packageLink=[...management.querySelectorAll('a')].find(a=>a.getAttribute('href')==='/subscribe/');if(packageLink)groups.overview.append(packageLink);

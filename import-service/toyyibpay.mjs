@@ -2,7 +2,7 @@ import {createHash,timingSafeEqual,randomBytes} from 'node:crypto';
 import {ownerKey} from './identity.mjs';
 import {validId,pageView,savePage} from './admin.mjs';
 import {createCatalog} from './catalog.mjs';
-import {annualEnd} from './page-state.mjs';
+import {annualEnd,hasAnnualEntitlement} from './page-state.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const orderId=id=>/^ST[a-f0-9]{24}$/.test(id||'');
 const billCode=code=>/^[A-Za-z0-9]{4,40}$/.test(code||'');
@@ -79,7 +79,7 @@ export function createToyyibCheckout({store,provider,secretKey='',categoryCode='
       if(!recipient||previous.record.lifecycle?.state==='deleted'||order.status==='cancelled')return saveOrder(order.id,{status:'review',invoice,verifiedAt:new Date(now()).toISOString()});
       const old=previous.record.subscription,changes={gatewayApplied:{...previous.record.gatewayApplied,[order.id]:invoice},renewal:{id:order.id,status:'approved',provider:'toyyibpay',reference:invoice,paidDate:new Date(now()).toISOString().slice(0,10),...order.quote,submittedAt:order.createdAt,decidedAt:new Date(now()).toISOString(),decidedBy:'toyyibpay'}};
       if(order.quote.months===12){const expiry=Date.parse(old?.expiresAt||'');const start=Math.max(Number.isFinite(expiry)?expiry:0,now());changes.subscription={plan:'annual',currency:'MYR',lastOrderCents:order.quote.amountCents,renewalCents:3000,startsAt:old?.startsAt||new Date(now()).toISOString(),expiresAt:annualEnd(start),lastPaymentId:order.id};}
-      else if(old?.plan!=='annual'||!old.lastPaymentId)changes.subscription={plan:'nfc_only',currency:'MYR',lastPaymentId:order.id};
+      else if(!hasAnnualEntitlement(previous.record))changes.subscription={plan:'nfc_only',currency:'MYR',lastPaymentId:order.id};
       if(previous.record.checkout?.id===order.id)changes.checkout={...previous.record.checkout,status:'paid',invoice};
       try{await savePage({store,id:order.pageId,previous,revision:previous.revision,changes,actor:{email:'toyyibpay'},now});return saveOrder(order.id,{status:'paid',invoice,verifiedAt:new Date(now()).toISOString()});}catch(error){if(error.status!==409)throw error;}
     }throw fail(409,'Bayaran diterima tetapi pengaktifan sedang dikemas kini. Semak semula status.');

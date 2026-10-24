@@ -73,6 +73,14 @@ test('HTTP signed Google identities enforce customer boundaries, role and privat
   assert.equal((await call('/api/user/links/'+bob.id+'/renewal','alice@gmail.com','POST',{package:'bundle',amountCents:10000,reference:'REF-X',paidDate:'2026-10-23',revision:bob.revision})).status,404);
   const disabled=await call('/api/admin/links/'+alice.id+'/state','owner@gmail.com','POST',{state:'disabled',revision:saved.data.revision});assert.equal(disabled.status,200);
   await assert.rejects(createShortLinks({store,secret:'s'.repeat(32)}).resolve(alice.id),e=>e.status===403);
+  const grantPath='/api/admin/links/'+alice.id+'/subscription',grant={action:'extend',note:'Internal grant test',revision:disabled.data.revision};
+  assert.equal((await call(grantPath,null,'POST',grant)).status,401);
+  assert.equal((await call(grantPath,'alice@gmail.com','POST',grant)).status,403);
+  assert.equal((await call(grantPath.replace('/admin/','/user/'),'alice@gmail.com','POST',grant)).status,403);
+  assert.equal((await call(grantPath,'owner@gmail.com','POST',grant,'https://evil.test')).status,403);
+  const granted=await call(grantPath,'owner@gmail.com','POST',grant);assert.equal(granted.status,200);assert.equal(granted.data.subscription.source,'admin');assert.equal(granted.data.state,'disabled');assert.equal(granted.data.checkout,null);
+  assert.equal((await call(grantPath,'owner@gmail.com','POST',grant)).status,409);
+  const customerGrant=(await call('/api/user/links/'+alice.id,'alice@gmail.com')).data;assert.equal(customerGrant.subscriptionAdjustment,undefined);assert.ok(!JSON.stringify(customerGrant).includes('Internal grant test'));
 });
 test('customer verifier rejects non Gmail, unverified identities and client mismatch; ignores token roles',async()=>{
   const verify=createGoogleUserAuth({clientId,keySet:pair.publicKey});

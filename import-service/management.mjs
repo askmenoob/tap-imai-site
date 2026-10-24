@@ -1,7 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {ownerKey} from './identity.mjs';
 import {validId,pageView,savePage} from './admin.mjs';
-import {annualEnd} from './page-state.mjs';
+import {annualEnd,hasAnnualEntitlement} from './page-state.mjs';
 import {createCatalog} from './catalog.mjs';
 const fail=(status,message)=>Object.assign(new Error(message),{status});
 const admin=actor=>{if(actor?.role!=='admin')throw fail(403,'Hanya super admin boleh mengurus status dan mengesahkan bayaran.');};
@@ -17,6 +17,27 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
     if(!owns||item.record.lifecycle?.state==='deleted')throw fail(404,'Halaman ini tidak tersedia untuk akaun Gmail anda.');return item;
   }
   return {
+    async subscription(id,data={},actor){
+      admin(actor);
+      if(!actor.email||!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(key=>!['action','expiresDate','note','revision'].includes(key)))throw fail(400,'Maklumat langganan tidak sah.');
+      const previous=await load(id,actor),record=previous.record;
+      if(record.lifecycle?.state==='deleted'||!record.ownerEmail)throw fail(409,'Pulihkan halaman dan daftarkan Gmail pemilik dahulu.');
+      if(record.renewal?.status==='pending'||record.checkout&&!['paid','cancelled','creation_failed'].includes(record.checkout.status))throw fail(409,'Selesaikan atau batalkan bil/semakan bayaran yang masih terbuka dahulu.');
+      const note=typeof data.note==='string'?data.note.normalize('NFC').trim():'';
+      if(!note||note.length>200||/[\u0000-\u001f]/.test(note))throw fail(400,'Masukkan sebab pelarasan, maksimum 200 aksara.');
+      const time=now(),old=record.subscription;let expiresAt;
+      if(data.action==='extend'){
+        if(data.expiresDate!==undefined)throw fail(400,'Tarikh tidak diperlukan untuk lanjutan 12 bulan.');
+        const end=Date.parse(old?.plan==='annual'?old.expiresAt:'');expiresAt=annualEnd(Math.max(Number.isFinite(end)?end:0,time));
+      }else if(data.action==='set-date'){
+        if(typeof data.expiresDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(data.expiresDate)||!Number.isFinite(Date.parse(data.expiresDate))||new Date(data.expiresDate).toISOString().slice(0,10)!==data.expiresDate)throw fail(400,'Tarikh tamat tidak sah.');
+        expiresAt=new Date(data.expiresDate+'T23:59:59.999+08:00').toISOString();
+        if(Date.parse(expiresAt)<=time)throw fail(400,'Pilih tarikh tamat yang belum berlalu.');
+      }else throw fail(400,'Tindakan langganan tidak sah.');
+      const grant={id:randomUUID(),action:data.action,note,changedAt:new Date(time).toISOString(),changedBy:actor.email,previousExpiresAt:old?.expiresAt||null,expiresAt};
+      const subscription={...old,plan:'annual',currency:'MYR',renewalCents:3000,startsAt:old?.plan==='annual'&&old.startsAt?old.startsAt:new Date(time).toISOString(),expiresAt,source:'admin',lastGrantId:grant.id};
+      const saved=await savePage({store,id,previous,revision:data.revision,changes:{subscription,subscriptionAdjustment:grant},actor,now});return view(id,saved,actor);
+    },
     async message(id,data={},actor){
       admin(actor);
       if(Object.keys(data).some(key=>!['text','revision','action','messageId'].includes(key)))throw fail(400,'Maklumat mesej tidak sah.');
@@ -92,7 +113,7 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
         if(renewal.months===12){
           const expiry=Date.parse(old?.expiresAt||''),start=Math.max(Number.isFinite(expiry)?expiry:0,now());
           changes.subscription={plan:'annual',currency:'MYR',lastOrderCents:renewal.amountCents,renewalCents:3000,startsAt:old?.startsAt||new Date(now()).toISOString(),expiresAt:annualEnd(start),lastPaymentId:renewal.id};
-        }else if(old?.plan!=='annual'||!old.lastPaymentId){changes.subscription={plan:'nfc_only',currency:'MYR',lastPaymentId:renewal.id};}
+        }else if(!hasAnnualEntitlement(previous.record)){changes.subscription={plan:'nfc_only',currency:'MYR',lastPaymentId:renewal.id};}
       }
       const saved=await savePage({store,id,previous,revision,changes,actor,now});return view(id,saved,actor);
     },
