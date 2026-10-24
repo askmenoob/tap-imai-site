@@ -2102,6 +2102,335 @@ var require_browser = __commonJS({
   }
 });
 
+// src/appearance-controls-values.mjs
+function safeAppearanceURL(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+function mapsAddressURL(address) {
+  return address.trim() ? "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(address.trim()) : "";
+}
+function malaysiaDateTime(now = Date.now()) {
+  return new Date(now + 8 * 36e5).toISOString().slice(0, 16);
+}
+function promotionRange(days2, now = Date.now()) {
+  return { promoStart: malaysiaDateTime(now), promoEnd: malaysiaDateTime(now + days2 * 864e5) };
+}
+function promotionState(profile, now = Date.now()) {
+  if (!profile.promoTitle?.trim()) return "empty";
+  const start = profile.promoStart ? Date.parse(profile.promoStart + "+08:00") : -Infinity;
+  const end = profile.promoEnd ? Date.parse(profile.promoEnd + "+08:00") : Infinity;
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return "invalid";
+  return now < start ? "scheduled" : now >= end ? "expired" : "active";
+}
+
+// import-service/contacts.mjs
+function malaysiaPhone(value) {
+  if (typeof value !== "string") return null;
+  let number = value.trim().replace(/^tel:/i, "");
+  if (!/^[+\d\s().-]+$/.test(number)) return null;
+  number = number.replace(/[\s().-]/g, "");
+  if (number.startsWith("0060")) number = number.slice(2);
+  else if (number.startsWith("+60")) number = number.slice(1);
+  else if (number.startsWith("0")) number = "60" + number.slice(1);
+  return /^60[1-9]\d{7,9}$/.test(number) ? number : null;
+}
+function whatsappFromPhone(value) {
+  const number = malaysiaPhone(value);
+  return number ? "https://wa.me/" + number : null;
+}
+
+// src/appearance-controls-ui.mjs
+function createAppearanceControls({ onChange }) {
+  const message = (ms, en) => document.documentElement.lang === "en" ? en : ms;
+  const $2 = (key) => document.getElementById("field-" + key), nodes = {}, controls = [];
+  let locked = false;
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text) n.textContent = text;
+    return n;
+  };
+  function wrap(key) {
+    const box = el("div", "appearance-control");
+    $2(key).before(box);
+    box.append($2(key));
+    nodes[key] = [box];
+    return box;
+  }
+  function select(box, id, label, options) {
+    const l = el("label", "", label), s = el("select");
+    s.id = id;
+    l.htmlFor = id;
+    for (const [value, text] of options) {
+      const o = el("option", "", text);
+      o.value = value;
+      s.append(o);
+    }
+    box.prepend(l, s);
+    controls.push(s);
+    return s;
+  }
+  function button(text, action, box, cls = "secondary") {
+    const b = el("button", cls, text);
+    b.type = "button";
+    b.onclick = action;
+    controls.push(b);
+    box.append(b);
+    return b;
+  }
+  function help(box, text) {
+    const p = el("p", "help", text);
+    box.append(p);
+    return p;
+  }
+  function changed() {
+    refresh();
+    onChange();
+  }
+  const themeBox = wrap("theme"), accentBox = wrap("accent");
+  const themeCards = el("div", "appearance-theme-cards");
+  themeBox.append(themeCards);
+  const themeOptions = [["classic", "Klasik", "#20543e"], ["dark", "Gelap", "#91c8ad"], ["bright", "Ceria", "#7040bb"]];
+  for (const [value, text, color] of themeOptions) {
+    const b = button(text, () => {
+      $2("theme").value = value;
+      $2("accent").value = color;
+      changed();
+    }, themeCards, "appearance-theme-card");
+    b.dataset.theme = value;
+    b.dataset.choice = value;
+    const sample = el("span", "theme-card-sample");
+    sample.setAttribute("aria-hidden", "true");
+    b.prepend(sample);
+  }
+  const colorLine = el("div", "appearance-color-line");
+  $2("accent").before(colorLine);
+  colorLine.append($2("accent"));
+  const hex = el("input");
+  hex.id = "appearance-hex";
+  hex.type = "text";
+  hex.maxLength = 7;
+  hex.pattern = "#[a-fA-F0-9]{6}";
+  hex.setAttribute("aria-label", "Kod warna HEX");
+  hex.dataset.noI18n = "";
+  colorLine.append(hex);
+  controls.push(hex);
+  hex.oninput = () => {
+    if (/^#[a-fA-F0-9]{6}$/.test(hex.value)) {
+      $2("accent").value = hex.value;
+      changed();
+    }
+  };
+  hex.onblur = () => {
+    if (!hex.checkValidity()) {
+      hex.value = $2("accent").value;
+    }
+  };
+  const swatches = el("div", "appearance-swatches");
+  accentBox.append(swatches);
+  for (const color of ["#20543e", "#193c70", "#7040bb", "#a33245", "#a45c13", "#111827"]) {
+    const b = button(color, () => {
+      $2("accent").value = color;
+      changed();
+    }, swatches, "appearance-swatch");
+    b.style.backgroundColor = color;
+    b.setAttribute("aria-label", color);
+    b.title = color;
+    b.dataset.color = color;
+  }
+  help(accentBox, "Pilih palet atau masukkan kod HEX. Warna butang digunakan pada halaman anda.");
+  const themePreview = el("div", "appearance-theme-preview");
+  themePreview.setAttribute("aria-label", "Pratonton tema");
+  themeBox.append(themePreview);
+  const previewName = el("strong"), previewText = el("span"), previewButton = el("span", "appearance-preview-button", "Contoh butang");
+  previewName.dataset.noI18n = "";
+  previewText.dataset.noI18n = "";
+  themePreview.append(previewName, previewText, previewButton);
+  const resetters = [];
+  function linkEditor(key, label, { address = false, whatsapp = false } = {}) {
+    const box = wrap(key), input = $2(key);
+    let draft = "";
+    const options = [["none", "Tidak dipaparkan"], ["link", "Pautan HTTPS"]];
+    if (address) options.push(["address", "Guna alamat perniagaan"]);
+    if (whatsapp) options.push(["whatsapp", "Nombor WhatsApp Malaysia"]);
+    const mode = select(box, "appearance-" + key + "-mode", label, options), phone = el("input");
+    phone.type = "tel";
+    phone.placeholder = "Contoh: 012-2258950";
+    phone.setAttribute("aria-label", "Nombor WhatsApp promosi");
+    phone.hidden = true;
+    box.append(phone);
+    controls.push(phone);
+    const open = el("a", "appearance-test-link", "Uji pautan \u2197");
+    open.target = "_blank";
+    open.rel = "noopener noreferrer";
+    box.append(open);
+    const hint = help(box, address ? "Pilih pautan Maps sendiri atau jana arah daripada alamat yang anda simpan." : "Kosongkan pautan untuk menyembunyikan butang ini.");
+    function sync() {
+      input.hidden = mode.value === "none" || mode.value === "whatsapp";
+      input.readOnly = mode.value === "address";
+      phone.hidden = mode.value !== "whatsapp";
+      phone.disabled = locked || phone.hidden;
+      const url = safeAppearanceURL(input.value);
+      open.hidden = !url;
+      if (url) open.href = url;
+      else open.removeAttribute("href");
+      input.setCustomValidity(input.value && !url ? message("Gunakan pautan HTTPS yang sah.", "Enter a valid HTTPS link.") : "");
+      mode.setCustomValidity(mode.value === "address" && !input.value ? message("Isi alamat perniagaan dahulu.", "Enter your business address first.") : "");
+      phone.setCustomValidity(mode.value === "whatsapp" && !whatsappFromPhone(phone.value) ? message("Masukkan nombor telefon Malaysia yang sah.", "Enter a valid Malaysian phone number.") : "");
+      hint.hidden = mode.value === "none";
+    }
+    mode.onchange = () => {
+      if (mode.value === "none") {
+        draft = input.value || draft;
+        input.value = "";
+      } else if (mode.value === "address") {
+        input.value = mapsAddressURL($2("address").value);
+      } else if (mode.value === "whatsapp") {
+        input.value = whatsappFromPhone(phone.value) || "";
+      } else input.value = draft;
+      sync();
+      changed();
+    };
+    phone.oninput = () => {
+      input.value = whatsappFromPhone(phone.value) || "";
+      sync();
+      changed();
+    };
+    input.addEventListener("input", () => {
+      draft = input.value;
+      sync();
+    });
+    resetters.push(() => {
+      draft = input.value;
+      mode.value = input.value ? "link" : "none";
+      phone.value = "";
+      sync();
+    });
+    return { sync };
+  }
+  const links = [linkEditor("menu", "Jenis pautan menu / katalog"), linkEditor("directions", "Pilihan lokasi", { address: true }), linkEditor("promoURL", "Jenis pautan promosi", { whatsapp: true })];
+  const promoTitleBox = wrap("promoTitle"), promoTextBox = wrap("promoText");
+  const templates = select(promoTitleBox, "appearance-promo-template", "Idea promosi", [["", "Tulis promosi sendiri"], ["offer", "Tawaran istimewa"], ["menu", "Menu baharu"], ["booking", "Tempahan dibuka"]]);
+  const examples = { offer: ["Tawaran istimewa", "Hubungi kami untuk maklumat tawaran terkini."], menu: ["Menu baharu", "Singgah dan cuba pilihan menu baharu kami."], booking: ["Tempahan dibuka", "Tempah awal untuk memastikan tempat anda."] };
+  const englishExamples = { offer: ["Special offer", "Contact us for details of our latest offer."], menu: ["New menu", "Drop by and try our new menu choices."], booking: ["Bookings open", "Book early to secure your place."] };
+  templates.onchange = () => {
+    const example = (document.documentElement.lang === "en" ? englishExamples : examples)[templates.value];
+    if (example) {
+      [$2("promoTitle").value, $2("promoText").value] = example;
+      changed();
+    }
+  };
+  help(promoTitleBox, "Pilih idea sebagai permulaan, kemudian sunting mengikut tawaran anda. Kosongkan tajuk untuk menyembunyikan promosi.");
+  const titleCount = help(promoTitleBox, ""), textCount = help(promoTextBox, "");
+  titleCount.dataset.noI18n = "";
+  textCount.dataset.noI18n = "";
+  const promoPreview = el("div", "appearance-promo-preview");
+  promoTextBox.append(promoPreview);
+  const promoHeading = el("strong"), promoBody = el("p");
+  promoHeading.dataset.noI18n = "";
+  promoBody.dataset.noI18n = "";
+  promoPreview.append(promoHeading, promoBody);
+  const startBox = wrap("promoStart"), endBox = wrap("promoEnd");
+  let dateDraft = { start: "", end: "" };
+  const schedule = select(startBox, "appearance-schedule", "Jadual promosi", [["always", "Sepanjang masa"], ["range", "Tarikh mula & tamat"], ["start", "Bermula pada tarikh"], ["end", "Sehingga tarikh tamat"]]);
+  const quick = el("div", "appearance-duration");
+  startBox.append(quick);
+  for (const days2 of [7, 14, 30]) button(days2 + " hari", () => {
+    const range = promotionRange(days2);
+    $2("promoStart").value = range.promoStart;
+    $2("promoEnd").value = range.promoEnd;
+    dateDraft = { start: range.promoStart, end: range.promoEnd };
+    schedule.value = "range";
+    syncDates();
+    changed();
+  }, quick);
+  help(startBox, "Waktu Malaysia (UTC+8). Promosi dipaparkan mengikut jadual apabila halaman pelanggan dibuka.");
+  const status = el("p", "appearance-promotion-state");
+  status.setAttribute("role", "status");
+  endBox.append(status);
+  function syncDates() {
+    const start = ["range", "start"].includes(schedule.value), end = ["range", "end"].includes(schedule.value);
+    $2("promoStart").hidden = !start;
+    $2("promoEnd").hidden = !end;
+    for (const [key, show] of [["promoStart", start], ["promoEnd", end]]) {
+      const label = document.querySelector('label[for="field-' + key + '"]');
+      if (label) label.hidden = !show;
+    }
+    $2("promoStart").required = start;
+    $2("promoEnd").required = end;
+    $2("promoEnd").setCustomValidity(start && end && $2("promoStart").value && $2("promoEnd").value && $2("promoEnd").value <= $2("promoStart").value ? message("Tarikh tamat mesti selepas tarikh mula.", "The end date must be after the start date.") : "");
+  }
+  schedule.onchange = () => {
+    if ($2("promoStart").value) dateDraft.start = $2("promoStart").value;
+    if ($2("promoEnd").value) dateDraft.end = $2("promoEnd").value;
+    $2("promoStart").value = ["range", "start"].includes(schedule.value) ? dateDraft.start : "";
+    $2("promoEnd").value = ["range", "end"].includes(schedule.value) ? dateDraft.end : "";
+    syncDates();
+    changed();
+  };
+  for (const key of ["promoStart", "promoEnd"]) $2(key).addEventListener("input", syncDates);
+  resetters.push(() => {
+    templates.value = "";
+    dateDraft = { start: $2("promoStart").value, end: $2("promoEnd").value };
+    schedule.value = dateDraft.start ? dateDraft.end ? "range" : "start" : dateDraft.end ? "end" : "always";
+    syncDates();
+  });
+  const coverEmpty = el("div", "appearance-cover-empty", "Belum ada cover. Latar tema akan digunakan.");
+  coverEmpty.id = "appearance-cover-empty";
+  const coverTip = el("p", "help", "Cadangan cover: gambar melintang 16:9. Pastikan subjek utama di tengah supaya sesuai pada telefon.");
+  const coverMeta = el("p", "help");
+  coverMeta.id = "appearance-cover-meta";
+  coverMeta.dataset.noI18n = "";
+  function refresh() {
+    hex.value = $2("accent").value;
+    for (const b of themeCards.children) b.setAttribute("aria-pressed", String(b.dataset.choice === $2("theme").value));
+    for (const b of swatches.children) b.setAttribute("aria-pressed", String(b.dataset.color === $2("accent").value));
+    const theme = $2("theme").value;
+    themePreview.dataset.theme = theme;
+    themePreview.style.setProperty("--preview-accent", $2("accent").value);
+    previewName.textContent = $2("name").value || "SmartTap";
+    previewText.textContent = $2("tagline").value;
+    previewButton.style.color = contrast($2("accent").value);
+    titleCount.textContent = $2("promoTitle").value.length + " / 70";
+    textCount.textContent = $2("promoText").value.length + " / 180";
+    promoHeading.textContent = $2("promoTitle").value;
+    promoBody.textContent = $2("promoText").value;
+    promoPreview.hidden = !$2("promoTitle").value;
+    const state = promotionState({ promoTitle: $2("promoTitle").value, promoStart: $2("promoStart").value, promoEnd: $2("promoEnd").value });
+    status.dataset.state = state;
+    status.textContent = { empty: "Tiada promosi \u2014 isi tajuk pada tab Promosi.", active: "Promosi aktif", scheduled: "Promosi dijadualkan \u2014 belum bermula", expired: "Promosi tamat \u2014 tidak dipaparkan", invalid: "Semak tarikh mula dan tamat." }[state];
+    coverEmpty.hidden = !!$2("cover").value;
+  }
+  for (const key of ["name", "tagline", "theme", "accent", "promoTitle", "promoText", "promoStart", "promoEnd"]) $2(key).addEventListener("input", refresh);
+  $2("theme").addEventListener("change", refresh);
+  window.addEventListener("smarttap:language", () => {
+    for (const link of links) link.sync();
+    syncDates();
+  });
+  function lock(value) {
+    locked = value;
+    for (const c of controls) c.disabled = value;
+    for (const link of links) link.sync();
+  }
+  return { nodes, coverNodes: [coverEmpty, coverTip, coverMeta], refresh, lock, set() {
+    for (const reset of resetters) reset();
+    coverMeta.textContent = "";
+    refresh();
+  }, coverSelected(file) {
+    coverMeta.textContent = file ? file.name + " \xB7 " + (file.size / 1024 / 1024).toFixed(2) + " MB" : "";
+    refresh();
+  } };
+}
+function contrast(hex) {
+  const rgb = hex.slice(1).match(/../g).map((x) => parseInt(x, 16) / 255).map((x) => x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2] > 0.179 ? "#14281f" : "#ffffff";
+}
+
 // src/business-details-values.mjs
 var malaysiaStates = ["Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan", "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah", "Sarawak", "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya"];
 var days = ["Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad"];
@@ -2749,22 +3078,6 @@ var appearanceFields = {
 
 // src/admin.js
 var import_qrcode = __toESM(require_browser(), 1);
-
-// import-service/contacts.mjs
-function malaysiaPhone(value) {
-  if (typeof value !== "string") return null;
-  let number = value.trim().replace(/^tel:/i, "");
-  if (!/^[+\d\s().-]+$/.test(number)) return null;
-  number = number.replace(/[\s().-]/g, "");
-  if (number.startsWith("0060")) number = number.slice(2);
-  else if (number.startsWith("+60")) number = number.slice(1);
-  else if (number.startsWith("0")) number = "60" + number.slice(1);
-  return /^60[1-9]\d{7,9}$/.test(number) ? number : null;
-}
-function whatsappFromPhone(value) {
-  const number = malaysiaPhone(value);
-  return number ? "https://wa.me/" + number : null;
-}
 
 // src/google-login.mjs
 function googleLogin({ clientId, container, onCredential, onError, prompt = false }) {
@@ -3669,6 +3982,7 @@ var endpoint = location.hostname === "127.0.0.1" ? location.origin : window.SMAR
 var fields = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web", ...Object.fromEntries(Object.entries(appearanceFields).map(([key, spec]) => [key, spec.label])) };
 var listingTools = null;
 var businessDetails = null;
+var appearanceControls = null;
 var credential = "";
 var records = [];
 var cursor = null;
@@ -3685,6 +3999,7 @@ function lockControls(value) {
   for (const id of ["cover-file", "remove-cover"]) if ($(id)) $(id).disabled = value || customer && selected?.state !== "active";
   listingTools?.lock(value);
   businessDetails?.lock(value || customer && selected?.state !== "active");
+  appearanceControls?.lock(value || customer && selected?.state !== "active");
 }
 var management = createManagementUI({ customer, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
   selected = item;
@@ -3729,6 +4044,7 @@ function logout(message = "Anda telah log keluar.") {
   $("records").replaceChildren();
   for (const field of Object.keys(fields)) $("field-" + field).value = "";
   businessDetails?.set({});
+  appearanceControls?.set();
   if ($("owner-email")) $("owner-email").value = "";
   $("share").value = "";
   $("qr").removeAttribute("src");
@@ -3848,6 +4164,7 @@ async function edit(item) {
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
   for (const field of Object.keys(fields)) $("field-" + field).value = item.profile[field] || (field === "theme" ? "classic" : field === "accent" ? "#20543e" : "");
   businessDetails?.set(item.profile);
+  appearanceControls?.set();
   listingTools?.set(item.profile);
   if (customer) {
     $("field-google").required = item.profile.googleStatus !== "pending";
@@ -3881,7 +4198,8 @@ for (const [key, text] of Object.entries(fields)) {
   label.htmlFor = "field-" + key;
   label.textContent = text + (["name", "google"].includes(key) ? " *" : "");
   const spec = appearanceFields[key];
-  const input = document.createElement(spec?.options ? "select" : key === "address" ? "textarea" : "input");
+  const multiline = ["address", "promoText"].includes(key);
+  const input = document.createElement(spec?.options ? "select" : multiline ? "textarea" : "input");
   input.id = "field-" + key;
   input.name = key;
   input.maxLength = spec?.max || (key === "name" ? 80 : key === "tagline" ? 140 : key === "phone" ? 30 : 500);
@@ -3896,8 +4214,8 @@ for (const [key, text] of Object.entries(fields)) {
     input.type = "url";
     input.placeholder = "https://";
   }
-  if (key === "address") input.rows = 3;
-  if (spec && !spec.options && key !== "address") {
+  if (multiline) input.rows = 3;
+  if (spec && !spec.options && !multiline) {
     input.type = spec.type || "text";
     if (spec.type === "url") input.placeholder = "https://";
   }
@@ -3962,8 +4280,14 @@ removeCover.addEventListener("click", () => {
   $("field-cover").value = "";
   coverPreview.hidden = true;
   coverStatus.textContent = "Tekan Simpan untuk membuang cover dan menggunakan latar tema.";
+  appearanceControls?.coverSelected(null);
+  $("save-status").textContent = "Ada perubahan yang belum disimpan.";
 });
 $("field-cover").after(coverLabel, coverFile, coverHelp, coverPreview, removeCover, coverStatus);
+appearanceControls = createAppearanceControls({ onChange: () => {
+  $("save-status").textContent = "Ada perubahan yang belum disimpan.";
+} });
+coverStatus.after(...appearanceControls.coverNodes);
 var previewURL;
 coverFile.addEventListener("change", async () => {
   const file = coverFile.files[0];
@@ -3995,6 +4319,7 @@ coverFile.addEventListener("change", async () => {
     coverPreview.src = previewURL;
     coverPreview.hidden = false;
     coverStatus.textContent = "Cover telah disimpan. URL pendek dan QR kekal sama.";
+    appearanceControls?.coverSelected(file);
   } catch (error) {
     coverStatus.textContent = error.message;
   } finally {
@@ -4015,6 +4340,7 @@ $("edit-form").addEventListener("submit", async (event) => {
   }
   if (malaysiaPhone(profile.phone)) profile.phone = malaysiaPhone(profile.phone);
   businessDetails?.lock(true);
+  appearanceControls?.lock(true);
   listingTools?.lock(true);
   saving = true;
   $("save").disabled = true;
@@ -4034,6 +4360,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     $("edit-title").textContent = updated.profile.name;
     for (const key of Object.keys(fields)) $("field-" + key).value = updated.profile[key] || (key === "theme" ? "classic" : key === "accent" ? "#20543e" : "");
     businessDetails?.set(updated.profile);
+    appearanceControls?.set();
     listingTools?.set(updated.profile);
     $("save-status").textContent = "Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.";
   } catch (error) {
@@ -4048,6 +4375,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     for (const field of Object.keys(fields)) $("field-" + field).disabled = false;
     listingTools?.lock(false);
     businessDetails?.lock(customer && selected?.state !== "active");
+    appearanceControls?.lock(customer && selected?.state !== "active");
   }
 });
 $("owner-form")?.addEventListener("submit", async (event) => {
@@ -4098,7 +4426,7 @@ $("copy").addEventListener("click", async () => {
     $("copy-status").textContent = "Pilih dan salin pautan secara manual.";
   }
 });
-if (customer) customerArea = createCustomerArea({ detailsNodes: businessDetails.nodes, coverNodes: [coverLabel, coverFile, coverHelp, coverPreview, removeCover, coverStatus], onSelect: async (id) => {
+if (customer) customerArea = createCustomerArea({ detailsNodes: { ...businessDetails.nodes, ...appearanceControls.nodes }, coverNodes: [coverLabel, coverFile, coverHelp, coverPreview, removeCover, coverStatus, ...appearanceControls.coverNodes], onSelect: async (id) => {
   if (saving) return;
   try {
     await edit(await api(base + "/links/" + id));

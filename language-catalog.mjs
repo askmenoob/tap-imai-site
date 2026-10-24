@@ -1,4 +1,15 @@
 export const translations = {
+  'Pratonton tema':'Theme preview','Klasik':'Classic','Gelap':'Dark','Ceria':'Bright','Contoh butang':'Example button','Kod warna HEX':'HEX colour code',
+  'Pilih palet atau masukkan kod HEX. Warna butang digunakan pada halaman anda.':'Choose a palette or enter a HEX code. Your page buttons use this colour.',
+  'Jenis pautan menu / katalog':'Menu / catalogue link type','Pilihan lokasi':'Location option','Jenis pautan promosi':'Promotion link type','Tidak dipaparkan':'Not displayed','Pautan HTTPS':'HTTPS link','Guna alamat perniagaan':'Use business address','Nombor WhatsApp Malaysia':'Malaysia WhatsApp number','Nombor WhatsApp promosi':'Promotion WhatsApp number','Uji pautan ↗':'Test link ↗',
+  'Pilih pautan Maps sendiri atau jana arah daripada alamat yang anda simpan.':'Use your own Maps link or generate directions from your saved address.','Kosongkan pautan untuk menyembunyikan butang ini.':'Leave the link empty to hide this button.',
+  'Idea promosi':'Promotion ideas','Tulis promosi sendiri':'Write your own promotion','Tawaran istimewa':'Special offer','Menu baharu':'New menu','Tempahan dibuka':'Bookings open',
+  'Pilih idea sebagai permulaan, kemudian sunting mengikut tawaran anda. Kosongkan tajuk untuk menyembunyikan promosi.':'Choose an idea, then edit it to match your offer. Clear the title to hide the promotion.',
+  'Jadual promosi':'Promotion schedule','Sepanjang masa':'All the time','Tarikh mula & tamat':'Start & end dates','Bermula pada tarikh':'From a start date','Sehingga tarikh tamat':'Until an end date','7 hari':'7 days','14 hari':'14 days','30 hari':'30 days',
+  'Waktu Malaysia (UTC+8). Promosi dipaparkan mengikut jadual apabila halaman pelanggan dibuka.':'Malaysia time (UTC+8). Promotions follow this schedule when a visitor opens the page.',
+  'Tiada promosi — isi tajuk pada tab Promosi.':'No promotion — add a title in the Promotion tab.','Promosi aktif':'Promotion active','Promosi dijadualkan — belum bermula':'Promotion scheduled — not started','Promosi tamat — tidak dipaparkan':'Promotion ended — not displayed','Semak tarikh mula dan tamat.':'Check the start and end dates.',
+  'Belum ada cover. Latar tema akan digunakan.':'No cover yet. The theme background will be used.',
+  'Cadangan cover: gambar melintang 16:9. Pastikan subjek utama di tengah supaya sesuai pada telefon.':'Suggested cover: a landscape 16:9 photo. Keep the main subject centred for mobile screens.',
   'Bayaran baharu dibuat melalui ToyyibPay. SmartTap menyimpan pakej, kuantiti, jumlah produk, kod bil, rujukan transaksi dan status bayaran secara peribadi untuk pemilik rekod dan super admin. Rekod bayaran manual terdahulu dikekalkan untuk semakan dan audit. Tiada kata laluan bank atau maklumat kad disimpan oleh SmartTap.':'New payments use ToyyibPay. SmartTap privately stores packages, quantities, product totals, bill codes, transaction references and payment status for the record owner and super admin. Earlier manual payment records are retained for review and audit. SmartTap does not store bank passwords or card details.',
 
   'Langganan & pembayaran':'Subscription & payment',
