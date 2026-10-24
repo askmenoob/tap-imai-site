@@ -120,7 +120,7 @@ export function createToyyibCheckout({store,provider,secretKey='',categoryCode='
       const quote=catalog.quote(previous.record,data);if(data.expectedAmountCents!==undefined&&data.expectedAmountCents!==quote.amountCents)throw fail(409,'Jumlah pesanan berubah. Semak jumlah terkini sebelum membayar.');const idOrder=newId();if(!orderId(idOrder))throw Error('Invalid generated order ID');
       const order={id:idOrder,pageId:id,ownerKey:ownerKey(previous.record.ownerEmail),quote,mode:provider.mode,status:'creating',createdAt:new Date(now()).toISOString()};
       if(!await store.createGatewayOrder(idOrder,order))throw fail(409,'Pesanan belum dapat disediakan. Cuba semula.');
-      await savePage({store,id,previous,revision:data.revision,changes:{checkout:{id:idOrder,status:'creating',mode:provider.mode,amountCents:quote.amountCents,createdAt:order.createdAt,recipientKey:order.ownerKey}},actor,now});
+      await savePage({store,id,previous,revision:data.revision,changes:{checkoutIds:[...(previous.record.checkoutIds||[]),idOrder],checkout:{id:idOrder,status:'creating',mode:provider.mode,amountCents:quote.amountCents,createdAt:order.createdAt,recipientKey:order.ownerKey}},actor,now});
       let code;
       try{code=await provider.create(order,{callbackURL:apiOrigin+'/api/toyyibpay/callback',returnURL:origin+'/edit/?s='+id+'&payment='+idOrder,duitNowQR});}
       catch(error){await saveOrder(idOrder,{status:'creation_failed'});await updatePage(order,{status:'creation_failed'});throw error;}

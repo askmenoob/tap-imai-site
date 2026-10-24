@@ -1,3 +1,4 @@
+import {createOrdersService} from './orders.mjs';
 import {createCoverMedia,createCloudMediaStore,MAX_COVER_INPUT} from './cover-media.mjs';
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
@@ -46,7 +47,8 @@ const toyCategory=demo?'local-demo':(process.env.TOYYIBPAY_CATEGORY_CODE||'').tr
 const toyDemo=demo?createToyyibDemo('http://127.0.0.1:'+port):null;
 const toyProvider=toyDemo?.provider||(toySecret&&toyCategory?createToyyibProvider({secretKey:toySecret,categoryCode:toyCategory,mode:toyMode}):null);
 const gateway=linkStore?createToyyibCheckout({store:linkStore,provider:toyProvider,secretKey:toySecret,categoryCode:toyCategory,enabled:demo||process.env.TOYYIBPAY_ENABLED==='true',accountVerified:process.env.TOYYIBPAY_ACCOUNT_VERIFIED==='true',settlementHoldAccepted:process.env.TOYYIBPAY_SETTLEMENT_HOLD_ACCEPTED==='true',duitNowQR:demo||process.env.TOYYIBPAY_DUITNOW_QR==='true',origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',apiOrigin:preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app'}):null;
-const accountRoutes=createAccountRoutes({adminAuth,userAuth,admin,customers,management,gateway,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
+const orders=linkStore?createOrdersService({store:linkStore}):null;
+const accountRoutes=createAccountRoutes({orders,adminAuth,userAuth,admin,customers,management,gateway,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
 const mediaOrigin=preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app';
 const demoMedia=new Map();
 const mediaStore=demo?{put:async(name,bytes)=>demoMedia.set(name,bytes),get:async name=>demoMedia.get(name)}:process.env.SHORT_LINK_BUCKET?createCloudMediaStore({bucket:process.env.SHORT_LINK_BUCKET,getToken:runtimeToken}):null;

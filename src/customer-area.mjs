@@ -1,4 +1,4 @@
-const menus=[['package','Status pakej','◈'],['business','Sunting perniagaan','✎'],['page','Sunting paparan','▧'],['my','Halaman saya','↗']];
+const menus=[['package','Status pakej','◈'],['business','Sunting perniagaan','✎'],['page','Sunting paparan','▧'],['orders','Pesanan saya','▤'],['my','Halaman saya','↗']];
 export function createCustomerArea({coverNodes,onSelect}){
  const $=id=>document.getElementById(id),dashboard=$('dashboard'),editor=$('editor'),form=$('edit-form');
  document.body.classList.add('customer-workspace');
@@ -10,12 +10,12 @@ export function createCustomerArea({coverNodes,onSelect}){
  const account=document.createElement('button');account.type='button';account.textContent='Log keluar';account.className='customer-logout';account.onclick=()=>$('logout').click();nav.append(account);
  const stage=document.createElement('div');stage.className='customer-stage';stage.id='customer-stage';
  const packageView=document.createElement('section');packageView.id='customer-package';
- const myView=document.createElement('section');myView.id='customer-my';
+ const orderView=$('orders-panel');const myView=document.createElement('section');myView.id='customer-my';
  const picker=document.createElement('select');picker.id='customer-page-picker';picker.setAttribute('aria-label','Pilih halaman perniagaan');
  picker.onchange=()=>onSelect(picker.value);myView.append(picker,$('refresh'),$('more'),$('list-status'),$('public-sharing'));
  const empty=document.createElement('p');empty.className='notice';empty.id='customer-empty';empty.textContent='Pilih halaman perniagaan untuk mengurus maklumat anda.';
  const backdrop=document.createElement('button');backdrop.type='button';backdrop.className='customer-menu-backdrop';backdrop.tabIndex=-1;backdrop.setAttribute('aria-label','Tutup menu pelanggan');const closeMenu=document.createElement('button');closeMenu.type='button';closeMenu.className='customer-menu-close';closeMenu.textContent='Tutup menu ×';nav.prepend(closeMenu);
- dashboard.prepend(bar,backdrop,nav,stage);stage.append(empty,packageView,editor,myView);
+ dashboard.prepend(bar,backdrop,nav,stage);stage.append(empty,packageView,editor,orderView,myView);
  const management=document.querySelector('.management-panel');packageView.append(management);
  const subnav=document.createElement('nav');subnav.className='customer-subnav';subnav.setAttribute('aria-label','Bahagian status pakej');packageView.prepend(subnav);
  const groups={};
@@ -29,6 +29,7 @@ export function createCustomerArea({coverNodes,onSelect}){
  // Keep every managed control below the same management root: existing payment handlers own their state.
  const statusHeading=$('page-state').previousElementSibling;groups.overview.append(statusHeading);
  for(const id of ['page-state','subscription-summary','google-listing-status','direct-review-wrap','payment-summary','renewal-reminder','payment-disclosure'])move(id,'overview');
+ const orderShortcut=document.createElement('button');orderShortcut.type='button';orderShortcut.className='secondary';orderShortcut.textContent='Buka Pesanan saya';orderShortcut.onclick=()=>open('orders',true);groups.delivery.append(orderShortcut);
  move('admin-message-box','messages');move('order-support','delivery');move('gateway-panel','gateway');move('payment-form','buy');
  const packageLink=[...management.querySelectorAll('a')].find(a=>a.getAttribute('href')==='/subscribe/');if(packageLink)groups.overview.append(packageLink);
  $('payment-toggle').addEventListener('click',()=>{sectionName=$('payment-form').hidden?'overview':'buy';render();});
@@ -57,7 +58,7 @@ export function createCustomerArea({coverNodes,onSelect}){
  document.addEventListener('keydown',event=>{if(toggle.getAttribute('aria-expanded')!=='true')return;if(event.key==='Escape'){dismissMenu(true);return;}if(event.key==='Tab'&&matchMedia('(max-width:700px)').matches){const buttons=[...nav.querySelectorAll('button:not(:disabled)')];const first=buttons[0],last=buttons.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
  function open(next,focus=false){view=next;dismissMenu();render();if(focus)$('customer-title').focus({preventScroll:true});}
  function render(){
-  const active=!!selected;empty.hidden=active;packageView.hidden=!active||view!=='package';myView.hidden=view!=='my';editor.hidden=!active||!['business','page'].includes(view);
+  const active=!!selected;empty.hidden=active;orderView.hidden=!active||view!=='orders';packageView.hidden=!active||view!=='package';myView.hidden=view!=='my';editor.hidden=!active||!['business','page'].includes(view);
   for(const b of nav.querySelectorAll('[data-view]')){b.setAttribute('aria-current',b.dataset.view===view?'page':'false');b.disabled=!active&&b.dataset.view!=='my';}
   const title=menus.find(m=>m[0]===view)[1];if($('customer-title').textContent!==title)$('customer-title').textContent=title;
   for(const [name,sections] of Object.entries(pages))sections.forEach((node,i)=>{node.hidden=view!==name||i!==activeTab[name];});

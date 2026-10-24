@@ -2102,6 +2102,295 @@ var require_browser = __commonJS({
   }
 });
 
+// src/orders-ui.mjs
+var states = ["Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan", "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah", "Sarawak", "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya"];
+var fulfillmentLabels = { unpaid: "Menunggu bayaran", awaiting_address: "Bayaran diterima \xB7 perlukan alamat", received: "Alamat diterima", preparing: "Sedang disediakan", shipped: "Dihantar", completed: "Selesai" };
+var paymentLabels = { creating: "Bil sedang disediakan", pending: "Menunggu bayaran", failed: "Bayaran belum berjaya", creation_failed: "Bil belum dapat disediakan", cancelled: "Dibatalkan", paid: "Bayaran disahkan", review: "Bayaran memerlukan semakan admin" };
+var money = (value) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(value / 100);
+var date = (value) => value ? new Date(value).toLocaleString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "short" }) : "\u2014";
+var addressFields = { name: ["Nama penerima", 100], phone: ["Telefon penerima", 30], notes: ["Nota penghantaran (pilihan)", 300], line1: ["Alamat baris 1", 160], line2: ["Alamat baris 2 (pilihan)", 160], postcode: ["Poskod", 5], city: ["Bandar", 80], state: ["Negeri", 40] };
+function createOrdersUI({ customer: customer2, api: api2 }) {
+  const panel = document.createElement("section");
+  panel.id = "orders-panel";
+  panel.className = "orders-panel";
+  panel.innerHTML = '<h2>Pesanan saya</h2><p class="help">Semak pembelian, alamat dan penghantaran untuk perniagaan ini. Status penghantaran dikemas kini oleh super admin.</p><label for="orders-picker">Pilih pesanan</label><div class="orders-selector"><select id="orders-picker"></select><button type="button" id="orders-refresh" class="secondary" aria-label="Muat semula pesanan"><span aria-hidden="true">\u21BB</span><span class="orders-refresh-label">Muat semula pesanan</span></button><button type="button" id="orders-more" class="secondary" hidden>Pesanan terdahulu</button></div><p id="orders-status" role="status" aria-live="polite"></p><div id="order-body" hidden><nav class="customer-subnav orders-tabs" aria-label="Bahagian pesanan"></nav><section id="order-details"></section><form id="order-address-form" novalidate><div id="order-recipient"></div><div id="order-address"></div><p class="help">Penghantaran Malaysia sahaja. Alamat disimpan untuk pesanan ini dan hanya boleh dilihat oleh pemilik yang berhak serta super admin.</p><button type="submit" id="order-address-save">Simpan maklumat penghantaran</button><p id="order-address-lock" class="help" hidden>Pesanan sudah dihantar. Hubungi super admin untuk pembetulan alamat.</p></form><section id="order-tracking"><p id="order-tracking-state" class="notice"></p><div id="order-tracking-info"></div><ol id="order-timeline"></ol><form id="order-fulfillment-form"><label for="order-fulfillment-state">Status penyediaan / penghantaran</label><select id="order-fulfillment-state"></select><label for="order-courier">Nama kurier</label><input id="order-courier" maxlength="80" placeholder="Contoh: Pos Laju / J&T Express"><label for="order-tracking-number">Nombor tracking</label><input id="order-tracking-number" maxlength="100"><label for="order-tracking-url">Pautan tracking kurier (pilihan)</label><input id="order-tracking-url" type="url" maxlength="500" placeholder="https://"><button type="submit" id="order-fulfillment-save">Simpan status penghantaran</button></form></section><a id="order-contact" class="button secondary" target="_blank" rel="noopener noreferrer" hidden>WhatsApp tentang pesanan \u2197</a><p class="help" id="order-contact-help" hidden>Draf mesej mengandungi nama perniagaan dan ID pesanan. Semak dan hantar sendiri melalui WhatsApp.</p></div>';
+  if (!customer2) panel.querySelector("h2").textContent = "Pesanan pelanggan";
+  const $2 = (id) => panel.querySelector("#" + id), el = (tag, text) => {
+    const n = document.createElement(tag);
+    if (text) n.textContent = text;
+    return n;
+  };
+  const inputs = {};
+  for (const [key, [caption, max]] of Object.entries(addressFields)) {
+    const unit = el("div");
+    unit.className = "order-field";
+    unit.dataset.field = key;
+    const label = el("label", caption);
+    label.htmlFor = "order-address-" + key;
+    const input = el(key === "state" ? "select" : "input");
+    input.id = label.htmlFor;
+    input.name = key;
+    inputs[key] = input;
+    if (key === "state") {
+      const option = el("option", "Pilih negeri");
+      option.value = "";
+      input.append(option);
+      for (const state of states) {
+        const option2 = el("option", state);
+        option2.value = state;
+        input.append(option2);
+      }
+    } else {
+      input.maxLength = max;
+      input.type = key === "phone" ? "tel" : "text";
+      if (key === "postcode") {
+        input.inputMode = "numeric";
+        input.pattern = "[0-9]{5}";
+      }
+    }
+    input.required = !["line2", "notes"].includes(key);
+    input.autocomplete = "off";
+    unit.append(label, input);
+    $2(["name", "phone", "notes"].includes(key) ? "order-recipient" : "order-address").append(unit);
+  }
+  let page = null, order = null, items = [], cursor2 = null, tab = "details", sequence = 0, signature = "", working = false;
+  const tabs = { details: "Butiran pesanan", recipient: "Penerima", address: "Alamat", tracking: "Tracking" };
+  for (const [key, label] of Object.entries(tabs)) {
+    const button = el("button", label);
+    button.type = "button";
+    button.dataset.tab = key;
+    button.onclick = () => {
+      tab = key;
+      renderTabs();
+    };
+    panel.querySelector(".orders-tabs").append(button);
+  }
+  function renderTabs() {
+    panel.dataset.tab = tab;
+    const physical = order?.paymentStatus === "paid" && order.includesPhysical;
+    if (!physical) tab = "details";
+    for (const b of panel.querySelector(".orders-tabs").children) {
+      b.hidden = b.dataset.tab !== "details" && !physical;
+      b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
+    }
+    const contactVisible = order?.paymentStatus === "paid" && ["details", "tracking"].includes(tab);
+    $2("order-contact").hidden = !contactVisible;
+    $2("order-contact-help").hidden = !contactVisible;
+    $2("order-details").hidden = tab !== "details";
+    $2("order-address-form").hidden = !["recipient", "address"].includes(tab);
+    $2("order-recipient").hidden = tab !== "recipient";
+    $2("order-address").hidden = tab !== "address";
+    $2("order-tracking").hidden = tab !== "tracking";
+  }
+  function controls() {
+    $2("orders-picker").disabled = working || !items.length;
+    $2("orders-refresh").disabled = working;
+    $2("orders-more").disabled = working;
+    const locked = ["shipped", "completed"].includes(order?.fulfillmentState);
+    for (const input of Object.values(inputs)) input.disabled = working || locked;
+    $2("order-address-save").disabled = working;
+    $2("order-address-save").hidden = locked;
+    $2("order-address-lock").hidden = !locked;
+    for (const node of $2("order-fulfillment-form").querySelectorAll("input,select,button")) node.disabled = working || !order?.shipping;
+  }
+  function render2() {
+    if (!order) {
+      $2("order-body").hidden = true;
+      for (const input of Object.values(inputs)) input.value = "";
+      for (const id of ["order-details", "order-tracking-info", "order-timeline"]) $2(id).replaceChildren();
+      for (const id of ["order-courier", "order-tracking-number", "order-tracking-url"]) $2(id).value = "";
+      $2("order-contact").removeAttribute("href");
+      return;
+    }
+    $2("order-body").hidden = false;
+    const details = $2("order-details");
+    details.replaceChildren();
+    const badge = el("p", paymentLabels[order.paymentStatus] || order.paymentStatus);
+    badge.className = "notice";
+    badge.dataset.payment = order.paymentStatus;
+    details.append(badge);
+    for (const [label, value] of [["ID pesanan", order.id], ["Tarikh pesanan", date(order.createdAt)], ["Rujukan bayaran", order.invoice || "\u2014"]]) {
+      const line = el("p");
+      line.append(el("strong", label + ": "), el("span", value));
+      details.append(line);
+    }
+    const list = el("ul");
+    list.className = "order-items";
+    for (const item of order.items) list.append(el("li", item.name + " \xD7 " + item.quantity + " \xB7 " + money(item.totalCents)));
+    details.append(list, el("p", (order.paymentStatus === "paid" ? "Jumlah dibayar: " : "Jumlah bil: ") + money(order.amountCents)));
+    if (order.mode !== "live") details.append(el("p", "DEMO / SANDBOX \u2014 bukan bayaran sebenar."));
+    if (order.includesPhysical) details.append(el("p", order.shippingCents ? "Caj penghantaran dalam pesanan: " + money(order.shippingCents) : "Caj penghantaran diurus secara berasingan dengan super admin."));
+    else if (order.paymentStatus === "paid") details.append(el("p", "Pesanan digital sahaja. Alamat penghantaran tidak diperlukan."));
+    for (const [key, input] of Object.entries(inputs)) input.value = order.shipping?.[key] || "";
+    $2("order-tracking-state").dataset.state = order.fulfillmentState;
+    $2("order-tracking-state").textContent = fulfillmentLabels[order.fulfillmentState] || order.fulfillmentState;
+    const info = $2("order-tracking-info");
+    info.replaceChildren();
+    if (order.fulfillment?.courier) info.append(el("p", order.fulfillment.courier + " \xB7 " + order.fulfillment.trackingNumber));
+    if (order.fulfillment?.trackingURL) {
+      const a = el("a", "Semak tracking kurier \u2197");
+      a.href = order.fulfillment.trackingURL;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.className = "button secondary";
+      info.append(a);
+    }
+    if (order.fulfillmentState === "awaiting_address") info.append(el("p", "Simpan nama penerima dan alamat untuk meneruskan penyediaan pesanan."));
+    $2("order-timeline").replaceChildren();
+    for (const entry of order.fulfillment?.timeline || []) $2("order-timeline").append(el("li", (fulfillmentLabels[entry.state] || entry.state) + " \xB7 " + date(entry.at)));
+    const options = { received: ["preparing"], preparing: ["preparing", "shipped"], shipped: ["shipped", "completed"], completed: ["completed"] };
+    const choose = $2("order-fulfillment-state");
+    choose.replaceChildren();
+    for (const state of options[order.fulfillmentState] || []) {
+      const option = el("option", fulfillmentLabels[state]);
+      option.value = state;
+      choose.append(option);
+    }
+    $2("order-fulfillment-form").hidden = customer2 || !order.shipping;
+    for (const [id, key] of [["order-courier", "courier"], ["order-tracking-number", "trackingNumber"], ["order-tracking-url", "trackingURL"]]) $2(id).value = order.fulfillment?.[key] || "";
+    const paid = order.paymentStatus === "paid";
+    $2("order-contact").hidden = !paid;
+    $2("order-contact-help").hidden = !paid;
+    if (paid) {
+      const link = new URL("https://wa.me/60103250032");
+      link.searchParams.set("text", "Salam SmartTap, saya ingin bertanya tentang pesanan.\nPerniagaan: " + page.profile.name + "\nID pesanan: " + order.id);
+      $2("order-contact").href = link.href;
+    } else $2("order-contact").removeAttribute("href");
+    renderTabs();
+    controls();
+  }
+  const path = () => "/links/" + page.id + "/orders";
+  async function select(id) {
+    const current = ++sequence;
+    working = true;
+    controls();
+    $2("orders-status").textContent = "Memuatkan pesanan\u2026";
+    try {
+      const result = await api2(path() + "/" + id);
+      if (current !== sequence) return;
+      order = result;
+      tab = "details";
+      $2("orders-status").textContent = "";
+      render2();
+    } catch (e) {
+      if (current === sequence) {
+        $2("orders-status").textContent = e.message;
+        order = null;
+        render2();
+      }
+    } finally {
+      if (current === sequence) {
+        working = false;
+        controls();
+      }
+    }
+  }
+  async function load2(more = false) {
+    if (!page) return;
+    const current = ++sequence;
+    working = true;
+    controls();
+    $2("orders-status").textContent = "Memuatkan pesanan\u2026";
+    try {
+      const result = await api2(path() + (more && cursor2 ? "?cursor=" + encodeURIComponent(cursor2) : ""));
+      if (current !== sequence) return;
+      items = more ? [...items, ...result.items.filter((item) => !items.some((old) => old.id === item.id))] : result.items;
+      cursor2 = result.cursor;
+      $2("orders-more").hidden = !cursor2;
+      const previous = order?.id;
+      $2("orders-picker").replaceChildren();
+      for (const item of items) {
+        const option = el("option", date(item.createdAt) + " \xB7 " + money(item.amountCents) + " \xB7 " + (item.paymentStatus === "paid" ? fulfillmentLabels[item.fulfillmentState] : paymentLabels[item.paymentStatus]) + " \xB7 " + item.id.slice(-8));
+        option.value = item.id;
+        $2("orders-picker").append(option);
+      }
+      if (!items.length) {
+        order = null;
+        render2();
+        $2("orders-status").textContent = "Belum ada pesanan ToyyibPay untuk perniagaan ini.";
+        return;
+      }
+      const id = items.some((item) => item.id === previous) ? previous : items[0].id;
+      $2("orders-picker").value = id;
+      working = false;
+      await select(id);
+    } catch (e) {
+      if (current === sequence) $2("orders-status").textContent = e.message;
+    } finally {
+      if (current === sequence) {
+        working = false;
+        controls();
+      }
+    }
+  }
+  $2("orders-picker").onchange = () => select($2("orders-picker").value);
+  $2("orders-refresh").onclick = () => load2();
+  $2("orders-more").onclick = () => load2(true);
+  async function save(action, data) {
+    if (!order || working) return;
+    const current = sequence;
+    working = true;
+    controls();
+    $2("orders-status").textContent = "Menyimpan pesanan\u2026";
+    try {
+      const result = await api2(path() + "/" + order.id + "/" + action, { method: "PUT", body: { revision: order.revision, ...data } });
+      if (current !== sequence) return;
+      order = result;
+      render2();
+      $2("orders-status").textContent = "Maklumat pesanan berjaya disimpan.";
+    } catch (e) {
+      if (current === sequence) $2("orders-status").textContent = e.message;
+    } finally {
+      if (current === sequence) {
+        working = false;
+        controls();
+      }
+    }
+  }
+  $2("order-address-form").onsubmit = (event) => {
+    event.preventDefault();
+    if (working) return;
+    const invalid = Object.values(inputs).find((input) => !input.disabled && !input.checkValidity());
+    if (invalid) {
+      tab = ["name", "phone", "notes"].includes(invalid.name) ? "recipient" : "address";
+      renderTabs();
+      invalid.focus();
+      invalid.reportValidity();
+      return;
+    }
+    save("address", { address: Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])) });
+  };
+  $2("order-fulfillment-form").onsubmit = (event) => {
+    event.preventDefault();
+    save("fulfillment", { state: $2("order-fulfillment-state").value, courier: $2("order-courier").value.trim(), trackingNumber: $2("order-tracking-number").value.trim(), trackingURL: $2("order-tracking-url").value.trim() });
+  };
+  return { panel, show(item) {
+    const next = item.id + "|" + (item.checkout?.id || "") + "|" + (item.checkout?.status || "");
+    const changed = page?.id !== item.id;
+    page = item;
+    if (next === signature) return;
+    signature = next;
+    if (changed) {
+      order = null;
+      items = [];
+      render2();
+      $2("orders-picker").replaceChildren();
+    }
+    load2();
+  }, clear() {
+    sequence++;
+    page = null;
+    order = null;
+    items = [];
+    cursor2 = null;
+    signature = "";
+    working = false;
+    render2();
+    $2("orders-picker").replaceChildren();
+    $2("orders-status").textContent = "";
+  } };
+}
+
 // src/payment-alerts.mjs
 function createPaymentAlerts({ api: api2, open, canOpen }) {
   const $2 = (id) => document.getElementById(id), bell = $2("payment-bell"), panel = $2("payment-alerts"), count = $2("payment-count"), status = $2("payment-alert-status"), list = $2("payment-alert-list"), refreshButton = $2("payment-alert-refresh");
@@ -2275,8 +2564,8 @@ function orderSupportLink(item, { customer: customer2 = false, language = "ms" }
 }
 
 // src/management-ui.mjs
-var money = (cents) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(cents / 100);
-var date = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) : "Belum bermula";
+var money2 = (cents) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(cents / 100);
+var date2 = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) : "Belum bermula";
 var stateLabels = { active: "Aktif", disabled: "Dinyahaktifkan", deleted: "Dipadam", pending: "Menunggu pengaktifan", expired: "Langganan tamat", nfc_only: "NFC sahaja \xB7 sekali bayar" };
 function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }) {
   const panel = document.createElement("section");
@@ -2380,11 +2669,11 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       $2("payment-quote").replaceChildren();
       for (const line of result.items) {
         const row = document.createElement("p");
-        row.textContent = line.name + " \xD7 " + line.quantity + " \xB7 " + money(line.totalCents);
+        row.textContent = line.name + " \xD7 " + line.quantity + " \xB7 " + money2(line.totalCents);
         $2("payment-quote").append(row);
       }
       const total = document.createElement("strong");
-      total.textContent = "Jumlah produk: " + money(result.amountCents);
+      total.textContent = "Jumlah produk: " + money2(result.amountCents);
       $2("payment-quote").append(total);
       if (config.manualEnabled !== false) {
         const image = "/assets/duitnow-original.jpeg";
@@ -2410,7 +2699,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       $2("manual-method").open = !settings.enabled;
       changedGatewayId = item.id;
     }
-    $2("gateway-order").textContent = checkout ? checkout.id + " \xB7 " + money(checkout.amountCents) + (checkout.invoice ? " \xB7 " + checkout.invoice : "") : "";
+    $2("gateway-order").textContent = checkout ? checkout.id + " \xB7 " + money2(checkout.amountCents) + (checkout.invoice ? " \xB7 " + checkout.invoice : "") : "";
     $2("gateway-status").textContent = checkout ? { creating: "Sedang menyediakan bil. Muat semula sebentar lagi.", pending: "Bayaran belum disahkan. Teruskan pembayaran atau semak status.", failed: "Cubaan bayaran tidak berjaya. Anda boleh mencuba semula pada bil yang sama.", paid: "Bayaran ToyyibPay disahkan.", cancelled: "Bil belum dibayar telah dibatalkan.", creation_failed: "Bil belum dapat disediakan. Anda boleh cuba semula.", review: "Bayaran diterima dan memerlukan tindakan super admin." }[checkout.status] || "" : "";
     const reviewable = settings.enabled && checkout && !["paid", "cancelled", "creation_failed"].includes(checkout.status);
     $2("gateway-check").hidden = !reviewable;
@@ -2481,7 +2770,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     orderSupport(item);
     $2("page-state").textContent = stateLabels[item.state] || item.state;
     for (const id of ["page-state", "subscription-summary"]) $2(id).dataset.state = item.state;
-    $2("subscription-summary").textContent = item.subscription?.plan === "annual" ? "Halaman tahunan \xB7 tamat " + date(item.subscription.expiresAt) : item.subscription?.plan === "nfc_only" ? "NFC terus ke Google Review. Tiada langganan halaman QR." : "Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.";
+    $2("subscription-summary").textContent = item.subscription?.plan === "annual" ? "Halaman tahunan \xB7 tamat " + date2(item.subscription.expiresAt) : item.subscription?.plan === "nfc_only" ? "NFC terus ke Google Review. Tiada langganan halaman QR." : "Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.";
     $2("google-listing-status").hidden = item.profile.googleStatus !== "pending";
     $2("direct-review-wrap").hidden = item.subscription?.plan !== "nfc_only" || !item.profile.google;
     if (item.profile.google) $2("direct-review").href = item.profile.google;
@@ -2524,8 +2813,8 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("payment-toggle").textContent = paymentOpen ? "Tutup borang bayaran" : prompt.label;
     $2("payment-toggle").setAttribute("aria-expanded", String(customer2 && paymentOpen));
     const payment = item.renewal;
-    $2("payment-summary").textContent = payment ? ({ pending: "Menunggu semakan bayaran", approved: "Bayaran disahkan", rejected: "Permohonan ditolak" }[payment.status] || payment.status) + " \xB7 " + money(payment.amountCents) + " \xB7 " + payment.reference + (payment.note ? " \xB7 " + payment.note : "") : "";
-    $2("review-details").textContent = payment ? "Rujukan: " + payment.reference + " \xB7 " + payment.paidDate + " \xB7 " + money(payment.amountCents) + " \xB7 " + payment.items.map((x) => x.name + " \xD7 " + x.quantity).join(", ") : "";
+    $2("payment-summary").textContent = payment ? ({ pending: "Menunggu semakan bayaran", approved: "Bayaran disahkan", rejected: "Permohonan ditolak" }[payment.status] || payment.status) + " \xB7 " + money2(payment.amountCents) + " \xB7 " + payment.reference + (payment.note ? " \xB7 " + payment.note : "") : "";
+    $2("review-details").textContent = payment ? "Rujukan: " + payment.reference + " \xB7 " + payment.paidDate + " \xB7 " + money2(payment.amountCents) + " \xB7 " + payment.items.map((x) => x.name + " \xD7 " + x.quantity).join(", ") : "";
     $2("bank-confirm").checked = false;
     $2("review-note").value = "";
     const selected2 = $2("payment-package").value, annual = !!item.subscription?.lastPaymentId && item.subscription.plan === "annual";
@@ -2534,7 +2823,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       if (product.id === "addons" && !item.subscription?.lastPaymentId || product.id !== "addons" && (annual && product.id !== "renew" || !annual && product.id === "renew")) continue;
       const option = document.createElement("option");
       option.value = product.id;
-      option.textContent = product.name + (product.id === "addons" ? "" : " \xB7 " + money(product.amountCents) + (product.months ? " / " + product.months + " bulan" : " \xB7 sekali bayar"));
+      option.textContent = product.name + (product.id === "addons" ? "" : " \xB7 " + money2(product.amountCents) + (product.months ? " / " + product.months + " bulan" : " \xB7 sekali bayar"));
       $2("payment-package").append(option);
     }
     if (!changed && selected2 && [...$2("payment-package").options].some((x) => x.value === selected2)) $2("payment-package").value = selected2;
@@ -2775,7 +3064,7 @@ function createGoogleListingTools({ input, name, onChange, search, lookup }) {
 }
 
 // src/customer-area.mjs
-var menus = [["package", "Status pakej", "\u25C8"], ["business", "Sunting perniagaan", "\u270E"], ["page", "Sunting paparan", "\u25A7"], ["my", "Halaman saya", "\u2197"]];
+var menus = [["package", "Status pakej", "\u25C8"], ["business", "Sunting perniagaan", "\u270E"], ["page", "Sunting paparan", "\u25A7"], ["orders", "Pesanan saya", "\u25A4"], ["my", "Halaman saya", "\u2197"]];
 function createCustomerArea({ coverNodes, onSelect }) {
   const $2 = (id) => document.getElementById(id), dashboard = $2("dashboard"), editor = $2("editor"), form = $2("edit-form");
   document.body.classList.add("customer-workspace");
@@ -2807,6 +3096,7 @@ function createCustomerArea({ coverNodes, onSelect }) {
   stage.id = "customer-stage";
   const packageView = document.createElement("section");
   packageView.id = "customer-package";
+  const orderView = $2("orders-panel");
   const myView = document.createElement("section");
   myView.id = "customer-my";
   const picker = document.createElement("select");
@@ -2829,7 +3119,7 @@ function createCustomerArea({ coverNodes, onSelect }) {
   closeMenu.textContent = "Tutup menu \xD7";
   nav.prepend(closeMenu);
   dashboard.prepend(bar, backdrop, nav, stage);
-  stage.append(empty, packageView, editor, myView);
+  stage.append(empty, packageView, editor, orderView, myView);
   const management2 = document.querySelector(".management-panel");
   packageView.append(management2);
   const subnav = document.createElement("nav");
@@ -2877,6 +3167,12 @@ function createCustomerArea({ coverNodes, onSelect }) {
   const statusHeading = $2("page-state").previousElementSibling;
   groups.overview.append(statusHeading);
   for (const id of ["page-state", "subscription-summary", "google-listing-status", "direct-review-wrap", "payment-summary", "renewal-reminder", "payment-disclosure"]) move(id, "overview");
+  const orderShortcut = document.createElement("button");
+  orderShortcut.type = "button";
+  orderShortcut.className = "secondary";
+  orderShortcut.textContent = "Buka Pesanan saya";
+  orderShortcut.onclick = () => open("orders", true);
+  groups.delivery.append(orderShortcut);
   move("admin-message-box", "messages");
   move("order-support", "delivery");
   move("gateway-panel", "gateway");
@@ -3013,6 +3309,7 @@ function createCustomerArea({ coverNodes, onSelect }) {
   function render2() {
     const active = !!selected2;
     empty.hidden = active;
+    orderView.hidden = !active || view !== "orders";
     packageView.hidden = !active || view !== "package";
     myView.hidden = view !== "my";
     editor.hidden = !active || !["business", "page"].includes(view);
@@ -3121,9 +3418,12 @@ var management = createManagementUI({ customer, api: (path, options) => api(base
   render();
   alerts?.refresh();
   customerArea?.update(item);
+  ordersUI.show(item);
   $("edit-title").textContent = item.profile.name;
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
 } });
+var ordersUI = createOrdersUI({ customer, api: (path, options) => api(base + path, options) });
+$("edit-form").before(ordersUI.panel);
 var alerts = customer ? null : createPaymentAlerts({ api, open: async (id) => {
   if (saving) return;
   const current = session;
@@ -3146,6 +3446,7 @@ function logout(message = "Anda telah log keluar.") {
   clearTimeout(expiryTimer);
   listingTools?.invalidate();
   management.clear();
+  ordersUI.clear();
   alerts?.stop();
   customerArea?.clear();
   $("dashboard").hidden = true;
@@ -3171,7 +3472,7 @@ async function api(path, { method = "GET", body, authenticated = true } = {}) {
   }
   return result;
 }
-var date2 = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" }) : "\u2014";
+var date3 = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" }) : "\u2014";
 function render() {
   const query = $("filter").value.trim().toLowerCase();
   const shown = records.filter((item) => (item.profile.name + " " + item.url).toLowerCase().includes(query));
@@ -3189,7 +3490,7 @@ function render() {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     const meta = document.createElement("p");
-    meta.textContent = (item.adminMessage && item.adminMessage.status !== "resolved" ? (customer ? "Mesej daripada super admin" : "Mesej pelanggan: " + (item.adminMessage.status === "replied" ? "balasan diterima" : "menunggu balasan")) + " \xB7 " : "") + (stateLabels[item.state] || "Aktif") + (item.profile.googleStatus === "pending" ? " \xB7 Google Review belum tersedia" : "") + (item.renewal?.status === "pending" ? " \xB7 Bayaran menunggu semakan" : "") + " \xB7 Dicipta " + date2(item.createdAt) + " \xB7 Dikemas kini " + date2(item.updatedAt) + (!customer ? " \xB7 " + (item.ownerEmail || "Gmail pemilik belum didaftarkan") : "");
+    meta.textContent = (item.adminMessage && item.adminMessage.status !== "resolved" ? (customer ? "Mesej daripada super admin" : "Mesej pelanggan: " + (item.adminMessage.status === "replied" ? "balasan diterima" : "menunggu balasan")) + " \xB7 " : "") + (stateLabels[item.state] || "Aktif") + (item.profile.googleStatus === "pending" ? " \xB7 Google Review belum tersedia" : "") + (item.renewal?.status === "pending" ? " \xB7 Bayaran menunggu semakan" : "") + " \xB7 Dicipta " + date3(item.createdAt) + " \xB7 Dikemas kini " + date3(item.updatedAt) + (!customer ? " \xB7 " + (item.ownerEmail || "Gmail pemilik belum didaftarkan") : "");
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Urus halaman";
@@ -3296,6 +3597,7 @@ async function edit(item) {
   if (!customer) $("editor").scrollIntoView({ behavior: "smooth", block: "start" });
   lockControls(false);
   await management.show(item);
+  ordersUI.show(item);
   customerArea?.update(item);
 }
 for (const [key, text] of Object.entries(fields)) {
