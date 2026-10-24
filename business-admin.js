@@ -2818,7 +2818,17 @@ function createCustomerArea({ coverNodes, onSelect }) {
   empty.className = "notice";
   empty.id = "customer-empty";
   empty.textContent = "Pilih halaman perniagaan untuk mengurus maklumat anda.";
-  dashboard.prepend(bar, nav, stage);
+  const backdrop = document.createElement("button");
+  backdrop.type = "button";
+  backdrop.className = "customer-menu-backdrop";
+  backdrop.tabIndex = -1;
+  backdrop.setAttribute("aria-label", "Tutup menu pelanggan");
+  const closeMenu = document.createElement("button");
+  closeMenu.type = "button";
+  closeMenu.className = "customer-menu-close";
+  closeMenu.textContent = "Tutup menu \xD7";
+  nav.prepend(closeMenu);
+  dashboard.prepend(bar, backdrop, nav, stage);
   stage.append(empty, packageView, editor, myView);
   const management2 = document.querySelector(".management-panel");
   packageView.append(management2);
@@ -2907,12 +2917,13 @@ function createCustomerArea({ coverNodes, onSelect }) {
   }
   paymentForm.prepend(paymentTabs);
   showCart();
-  const fieldGroups = { business: [["name", "tagline"], ["logo"], ["phone", "whatsapp"], ["website"], ["instagram", "facebook"], ["tiktok", "threads"], ["google"]], page: [["theme", "accent"], ["cover"], ["menu", "directions"], ["address", "hours"], ["promoTitle", "promoText"], ["promoURL"], ["promoStart", "promoEnd"]] };
+  const fieldGroups = { business: [["name", "tagline"], ["logo"], ["phone", "whatsapp"], ["website", "instagram", "facebook", "tiktok", "threads"], ["google"]], page: [["theme", "accent"], ["cover"], ["menu", "directions"], ["address", "hours"], ["promoTitle", "promoText"], ["promoURL"], ["promoStart", "promoEnd"]] };
   const pages = { business: [], page: [] };
   for (const [view2, steps] of Object.entries(fieldGroups)) for (const keys of steps) {
     const group = document.createElement("div");
     group.className = "customer-field-step";
     group.dataset.fieldView = view2;
+    if (keys.includes("instagram")) group.classList.add("customer-social-fields");
     for (const key of keys) {
       const input = $2("field-" + key), label = document.querySelector('label[for="field-' + key + '"]');
       const unit = document.createElement("div");
@@ -2929,7 +2940,7 @@ function createCustomerArea({ coverNodes, onSelect }) {
   fieldTabs.className = "customer-subnav customer-field-tabs";
   fieldTabs.setAttribute("aria-label", "Bahagian suntingan");
   form.prepend(fieldTabs);
-  const tabLabels = { business: ["Maklumat", "Logo", "Hubungi", "Laman web", "Instagram / Facebook", "TikTok / Threads", "Google Review"], page: ["Tema & warna", "Cover", "Menu & lokasi", "Alamat & waktu", "Promosi", "Pautan promosi", "Tarikh promosi"] };
+  const tabLabels = { business: ["Maklumat", "Logo", "Hubungi", "Social Media", "Google Review"], page: ["Tema & warna", "Cover", "Menu & lokasi", "Alamat & waktu", "Promosi", "Pautan promosi", "Tarikh promosi"] };
   let view = "package", sectionName = "overview", activeTab = { business: 0, page: 0 }, selected2 = null;
   for (const [name, labels] of Object.entries(tabLabels)) for (const [i, label] of labels.entries()) {
     const button = document.createElement("button");
@@ -2944,21 +2955,58 @@ function createCustomerArea({ coverNodes, onSelect }) {
     fieldTabs.append(button);
   }
   const toggle = $2("customer-menu-toggle");
+  function dismissMenu(restore = false) {
+    toggle.setAttribute("aria-expanded", "false");
+    nav.classList.remove("is-open");
+    backdrop.classList.remove("is-open");
+    nav.removeAttribute("role");
+    nav.removeAttribute("aria-modal");
+    stage.inert = false;
+    bar.inert = false;
+    document.querySelector(".app-header").inert = false;
+    if (restore) toggle.focus();
+  }
   toggle.onclick = () => {
-    const expanded = toggle.getAttribute("aria-expanded") !== "true";
-    toggle.setAttribute("aria-expanded", String(expanded));
-    nav.classList.toggle("is-open", expanded);
+    if (toggle.getAttribute("aria-expanded") === "true") {
+      dismissMenu(true);
+      return;
+    }
+    toggle.setAttribute("aria-expanded", "true");
+    nav.classList.add("is-open");
+    backdrop.classList.add("is-open");
+    if (matchMedia("(max-width:700px)").matches) {
+      nav.setAttribute("role", "dialog");
+      nav.setAttribute("aria-modal", "true");
+      stage.inert = true;
+      bar.inert = true;
+      document.querySelector(".app-header").inert = true;
+      closeMenu.focus();
+    }
   };
+  matchMedia("(max-width:700px)").addEventListener("change", () => dismissMenu());
+  closeMenu.onclick = () => dismissMenu(true);
+  backdrop.onclick = () => dismissMenu(true);
   document.addEventListener("keydown", (event) => {
+    if (toggle.getAttribute("aria-expanded") !== "true") return;
     if (event.key === "Escape") {
-      toggle.setAttribute("aria-expanded", "false");
-      nav.classList.remove("is-open");
+      dismissMenu(true);
+      return;
+    }
+    if (event.key === "Tab" && matchMedia("(max-width:700px)").matches) {
+      const buttons = [...nav.querySelectorAll("button:not(:disabled)")];
+      const first = buttons[0], last = buttons.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   });
   function open(next, focus = false) {
     view = next;
-    nav.classList.remove("is-open");
-    toggle.setAttribute("aria-expanded", "false");
+    dismissMenu();
     render2();
     if (focus) $2("customer-title").focus({ preventScroll: true });
   }
@@ -3034,7 +3082,7 @@ function createCustomerArea({ coverNodes, onSelect }) {
   }, clear() {
     selected2 = null;
     document.body.classList.remove("customer-session");
-    nav.classList.remove("is-open");
+    dismissMenu();
     view = "package";
     sectionName = "overview";
     activeTab = { business: 0, page: 0 };
