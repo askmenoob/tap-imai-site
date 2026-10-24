@@ -27,7 +27,7 @@ export function createDiscoveryRoutes({service,adminAuth,shortLinks,originURL,de
     const data=await body(req,action==='create'?24576:4096);
     if(action==='create'){
       if(!shortLinks){reply(res,503,{error:'Pautan pendek belum tersedia.'},origin);return true;}
-      if(!data.profile||typeof data.profile!=='object'||Array.isArray(data.profile)||Object.hasOwn(data.profile,'google')){reply(res,400,{error:'Maklumat perniagaan tidak sah.'},origin);return true;}
+      if(!data.profile||typeof data.profile!=='object'||Array.isArray(data.profile)||(Object.hasOwn(data.profile,'google')||Object.hasOwn(data.profile,'googleStatus'))){reply(res,400,{error:'Maklumat perniagaan tidak sah.'},origin);return true;}
       const google=service.reviewFromDraft(data.draftToken);
       const profile={...data.profile,google};
       const url=new URL('/?p='+Buffer.from(JSON.stringify(profile)).toString('base64url'),originURL);

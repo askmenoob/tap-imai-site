@@ -58,3 +58,5 @@ body.customer-session{height:100dvh;overflow:hidden;background:#f3f6f2}
 .customer-stage #fields input,.customer-stage #fields select{padding:9px 11px;font-size:14px;line-height:1.3}.customer-stage #fields input[type=color]{padding:4px;min-width:90px}
 
 .customer-field-tabs{margin-bottom:18px}.customer-payment-tabs{margin-bottom:18px}.customer-payment-tabs button{flex:1}.customer-stage .customer-field-tabs button{font-size:12px}.customer-stage .customer-payment-step{min-height:0}@media(max-width:700px){.customer-stage .customer-field-tabs button{font-size:10px;padding:7px 8px}.customer-field-tabs{gap:5px;margin-bottom:12px}.customer-payment-tabs{margin-bottom:12px}}
+
+.google-listing-tools label{display:block}.google-listing-tools input[type=checkbox]{width:auto;margin-right:8px}.google-listing-results{display:grid;gap:8px;margin-top:10px}

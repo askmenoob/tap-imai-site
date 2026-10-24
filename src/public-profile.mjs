@@ -15,6 +15,8 @@ export function decodeProfilePayload(payload) {
       if(raw[key]&&(!profileURL(raw[key])||typeof raw[key]!=='string'))throw 0;
       if(raw[key])profile[key]=profileURL(raw[key]);
     }
+    if(raw.googleStatus!==undefined&&raw.googleStatus!=='pending')throw 0;
+    if(raw.googleStatus==='pending'){if(profile.google)throw 0;profile.googleStatus='pending';return profile;}
     const review=new URL(profile.google);const host=review.hostname;
     if(!(((host==='google.com'||host.endsWith('.google.com')||host==='google.com.my'||host.endsWith('.google.com.my'))&&review.pathname.includes('/local/writereview')&&review.searchParams.get('placeid'))||(host==='g.page'&&/\/r\/[^/]+\/review\/?$/i.test(review.pathname))))throw 0;
     return profile;

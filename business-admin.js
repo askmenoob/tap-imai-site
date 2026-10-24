@@ -2282,7 +2282,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   const panel = document.createElement("section");
   panel.className = "management-panel";
   panel.innerHTML = `<section id="admin-message-box" class="admin-message-box" hidden aria-labelledby="admin-message-title"><h3 id="admin-message-title">Mesej daripada super admin</h3><p id="admin-message-text" data-no-i18n></p><p id="admin-message-time" class="help" data-no-i18n></p><p id="admin-message-state" role="status" aria-live="polite"></p><div id="admin-message-reply" hidden><strong>Balasan pelanggan</strong><p id="admin-message-reply-text" data-no-i18n></p></div><form id="message-reply-form" hidden><label for="message-reply-text">Nombor transaksi / balasan anda</label><textarea id="message-reply-text" required maxlength="500" rows="3"></textarea><button type="submit">Hantar balasan kepada super admin</button></form><button id="message-resolve" type="button" class="secondary" hidden>Tandakan selesai</button><a id="message-whatsapp" class="button secondary" href="https://wa.me/60103250032" target="_blank" rel="noopener noreferrer" hidden>Hubungi super admin di WhatsApp \u2197</a></section>
-  <form id="admin-message-form" class="admin-message-compose" ${customer2 ? "hidden" : ""}><h3>Hantar mesej kepada pelanggan</h3><label for="admin-message-input">Mesej / tindakan yang diperlukan</label><textarea id="admin-message-input" required maxlength="1000" rows="3" placeholder="Contoh: Sila berikan nombor transaksi bank untuk semakan bayaran."></textarea><p class="help">Mesej muncul pada halaman edit pelanggan. Mesej baharu menggantikan mesej semasa; rekod sebelumnya disimpan.</p><button type="submit">Hantar mesej</button></form><h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review \u2197</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej \u2197</a>
+  <form id="admin-message-form" class="admin-message-compose" ${customer2 ? "hidden" : ""}><h3>Hantar mesej kepada pelanggan</h3><label for="admin-message-input">Mesej / tindakan yang diperlukan</label><textarea id="admin-message-input" required maxlength="1000" rows="3" placeholder="Contoh: Sila berikan nombor transaksi bank untuk semakan bayaran."></textarea><p class="help">Mesej muncul pada halaman edit pelanggan. Mesej baharu menggantikan mesej semasa; rekod sebelumnya disimpan.</p><button type="submit">Hantar mesej</button></form><h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="google-listing-status" class="notice" hidden>Google Review belum tersedia. Super admin akan menyambungkan lokasi apabila tersedia di Google Maps.</p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review \u2197</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej \u2197</a>
   <div id="lifecycle-actions" class="actions" ${customer2 ? "hidden" : ""}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button></div>
   <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
   <p id="management-status" role="status" aria-live="polite"></p>
@@ -2482,8 +2482,10 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("page-state").textContent = stateLabels[item.state] || item.state;
     for (const id of ["page-state", "subscription-summary"]) $2(id).dataset.state = item.state;
     $2("subscription-summary").textContent = item.subscription?.plan === "annual" ? "Halaman tahunan \xB7 tamat " + date(item.subscription.expiresAt) : item.subscription?.plan === "nfc_only" ? "NFC terus ke Google Review. Tiada langganan halaman QR." : "Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.";
-    $2("direct-review-wrap").hidden = item.subscription?.plan !== "nfc_only";
-    $2("direct-review").href = item.profile.google;
+    $2("google-listing-status").hidden = item.profile.googleStatus !== "pending";
+    $2("direct-review-wrap").hidden = item.subscription?.plan !== "nfc_only" || !item.profile.google;
+    if (item.profile.google) $2("direct-review").href = item.profile.google;
+    else $2("direct-review").removeAttribute("href");
     $2("state-toggle").textContent = item.manualState === "disabled" ? "Aktifkan halaman" : "Nyahaktifkan halaman";
     $2("state-toggle").hidden = item.manualState === "deleted";
     $2("delete-open").hidden = item.manualState === "deleted";
@@ -2635,6 +2637,143 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   return { show, clear };
 }
 
+// src/google-listing-tools.mjs
+function createGoogleListingTools({ input, name, onChange, search, lookup }) {
+  const el = (tag, text) => {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    return node;
+  };
+  const panel = el("section");
+  panel.className = "notice google-listing-tools";
+  panel.append(el("h3", "Perniagaan belum ada di Google Maps?"));
+  const label = el("label"), pending = el("input");
+  pending.type = "checkbox";
+  pending.id = "google-listing-pending";
+  label.htmlFor = pending.id;
+  label.append(pending, document.createTextNode(" Google Review belum tersedia"));
+  panel.append(label);
+  const help = el("p", "Simpan halaman tanpa Google Review dahulu. Pin atau alamat sahaja tidak mencipta Place ID. Google menyemak penambahan tempat; pemilik mungkin perlu membuat pengesahan.");
+  panel.append(help);
+  const links = el("div");
+  links.className = "actions";
+  for (const [text, url] of [["Panduan tambah tempat di Google Maps \u2197", "https://support.google.com/maps/answer/6320846?hl=en"], ["Daftar Google Business Profile \u2197", "https://business.google.com/add"]]) {
+    const a = el("a", text);
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    links.append(a);
+  }
+  panel.append(links);
+  const query = el("input");
+  query.type = "search";
+  query.maxLength = 160;
+  query.id = "google-listing-query";
+  const qlabel = el("label", "Nama dan bandar / alamat untuk carian semula");
+  qlabel.htmlFor = query.id;
+  const find = el("button", "Cari semula di Google Maps");
+  find.type = "button";
+  find.className = "secondary";
+  const status = el("p");
+  status.setAttribute("role", "status");
+  const results = el("div");
+  results.className = "google-listing-results";
+  panel.append(qlabel, query, find, status, results);
+  let generation = 0, active = true, backup = "";
+  const sync = () => {
+    input.required = !pending.checked;
+    input.disabled = !active || pending.checked;
+  };
+  pending.onchange = () => {
+    generation++;
+    results.replaceChildren();
+    status.textContent = "";
+    find.disabled = !active;
+    if (pending.checked) {
+      backup = input.value;
+      input.value = "";
+    } else input.value = backup;
+    sync();
+    onChange();
+  };
+  find.onclick = async () => {
+    if (!active) return;
+    const term = query.value.trim() || name();
+    if (term.length < 3) {
+      status.textContent = "Masukkan nama dan lokasi perniagaan.";
+      return;
+    }
+    const current = ++generation;
+    find.disabled = true;
+    results.replaceChildren();
+    status.textContent = "Mencari perniagaan\u2026";
+    try {
+      const data = await search(term);
+      if (current !== generation || !active) return;
+      status.textContent = data.places?.length ? "Google Maps \xB7 Pilih perniagaan dan alamat yang tepat." : "Belum ditemui di Google Maps. Cuba lagi selepas tempat tersedia.";
+      for (const place of data.places || []) {
+        const choose = el("button", place.name + (place.address ? " \u2014 " + place.address : ""));
+        choose.type = "button";
+        choose.className = "secondary";
+        choose.onclick = async () => {
+          if (!active || current !== generation) return;
+          find.disabled = true;
+          for (const b of results.children) b.disabled = true;
+          status.textContent = "Mendapatkan pautan Google Review\u2026";
+          try {
+            const result = await lookup(place.token);
+            if (current !== generation || !active) return;
+            if (!result.profile?.google) throw new Error("Pautan Google Review belum tersedia.");
+            input.value = result.profile.google;
+            backup = input.value;
+            pending.checked = false;
+            sync();
+            onChange();
+            results.replaceChildren();
+            status.textContent = "Pautan Google Review dipilih. Tekan Simpan untuk menyambungkan pada URL dan QR yang sama.";
+          } catch (error) {
+            if (current === generation) status.textContent = error.message;
+          } finally {
+            if (current === generation) {
+              find.disabled = !active;
+              for (const b of results.children) b.disabled = !active;
+            }
+          }
+        };
+        results.append(choose);
+      }
+    } catch (error) {
+      if (current === generation) status.textContent = error.message;
+    } finally {
+      if (current === generation) find.disabled = !active;
+    }
+  };
+  return { panel, isPending: () => pending.checked, set(profile) {
+    generation++;
+    results.replaceChildren();
+    status.textContent = profile.googleStatus === "pending" ? "Google Review belum tersedia" : "Google Review telah disambungkan";
+    pending.checked = profile.googleStatus === "pending";
+    backup = profile.google || "";
+    query.value = profile.name || "";
+    sync();
+  }, lock(value) {
+    active = !value;
+    pending.disabled = value;
+    find.disabled = value;
+    query.disabled = value;
+    for (const b of results.children) b.disabled = value;
+    sync();
+  }, invalidate() {
+    generation++;
+    results.replaceChildren();
+  }, apply(profile) {
+    if (pending.checked) {
+      profile.google = "";
+      profile.googleStatus = "pending";
+    } else delete profile.googleStatus;
+  } };
+}
+
 // src/customer-area.mjs
 var menus = [["package", "Status pakej", "\u25C8"], ["business", "Sunting perniagaan", "\u270E"], ["page", "Sunting paparan", "\u25A7"], ["my", "Halaman saya", "\u2197"]];
 function createCustomerArea({ coverNodes, onSelect }) {
@@ -2727,7 +2866,7 @@ function createCustomerArea({ coverNodes, onSelect }) {
   };
   const statusHeading = $2("page-state").previousElementSibling;
   groups.overview.append(statusHeading);
-  for (const id of ["page-state", "subscription-summary", "direct-review-wrap", "payment-summary", "renewal-reminder", "payment-disclosure"]) move(id, "overview");
+  for (const id of ["page-state", "subscription-summary", "google-listing-status", "direct-review-wrap", "payment-summary", "renewal-reminder", "payment-disclosure"]) move(id, "overview");
   move("admin-message-box", "messages");
   move("order-support", "delivery");
   move("gateway-panel", "gateway");
@@ -2780,6 +2919,7 @@ function createCustomerArea({ coverNodes, onSelect }) {
       unit.className = "customer-field";
       unit.append(label, input);
       if (key === "cover") unit.append(...coverNodes);
+      if (key === "google" && $2("google-pending-note")) unit.append($2("google-pending-note"));
       group.append(unit);
     }
     $2("fields").append(group);
@@ -2910,6 +3050,7 @@ var customer = document.body.dataset.role === "user";
 var base = customer ? "/api/user" : "/api/admin";
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : window.SMARTTAP_IMPORT_CONFIG?.endpoint;
 var fields = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web", ...Object.fromEntries(Object.entries(appearanceFields).map(([key, spec]) => [key, spec.label])) };
+var listingTools = null;
 var credential = "";
 var records = [];
 var cursor = null;
@@ -2924,6 +3065,7 @@ function lockControls(value) {
   for (const id of ["save", "cancel", "refresh", "more", "save-owner", "owner-email"]) if ($(id)) $(id).disabled = value || id === "save" && customer && selected?.state !== "active";
   for (const field of Object.keys(fields)) if ($("field-" + field)) $("field-" + field).disabled = value || customer && selected?.state !== "active";
   for (const id of ["cover-file", "remove-cover"]) if ($(id)) $(id).disabled = value || customer && selected?.state !== "active";
+  listingTools?.lock(value);
 }
 var management = createManagementUI({ customer, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
   selected = item;
@@ -2954,6 +3096,7 @@ function logout(message = "Anda telah log keluar.") {
   selected = null;
   session++;
   clearTimeout(expiryTimer);
+  listingTools?.invalidate();
   management.clear();
   alerts?.stop();
   customerArea?.clear();
@@ -2998,7 +3141,7 @@ function render() {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     const meta = document.createElement("p");
-    meta.textContent = (item.adminMessage && item.adminMessage.status !== "resolved" ? (customer ? "Mesej daripada super admin" : "Mesej pelanggan: " + (item.adminMessage.status === "replied" ? "balasan diterima" : "menunggu balasan")) + " \xB7 " : "") + (stateLabels[item.state] || "Aktif") + (item.renewal?.status === "pending" ? " \xB7 Bayaran menunggu semakan" : "") + " \xB7 Dicipta " + date2(item.createdAt) + " \xB7 Dikemas kini " + date2(item.updatedAt) + (!customer ? " \xB7 " + (item.ownerEmail || "Gmail pemilik belum didaftarkan") : "");
+    meta.textContent = (item.adminMessage && item.adminMessage.status !== "resolved" ? (customer ? "Mesej daripada super admin" : "Mesej pelanggan: " + (item.adminMessage.status === "replied" ? "balasan diterima" : "menunggu balasan")) + " \xB7 " : "") + (stateLabels[item.state] || "Aktif") + (item.profile.googleStatus === "pending" ? " \xB7 Google Review belum tersedia" : "") + (item.renewal?.status === "pending" ? " \xB7 Bayaran menunggu semakan" : "") + " \xB7 Dicipta " + date2(item.createdAt) + " \xB7 Dikemas kini " + date2(item.updatedAt) + (!customer ? " \xB7 " + (item.ownerEmail || "Gmail pemilik belum didaftarkan") : "");
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Urus halaman";
@@ -3080,6 +3223,12 @@ async function edit(item) {
   $("save-status").textContent = "";
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
   for (const field of Object.keys(fields)) $("field-" + field).value = item.profile[field] || (field === "theme" ? "classic" : field === "accent" ? "#20543e" : "");
+  listingTools?.set(item.profile);
+  if (customer) {
+    $("field-google").required = item.profile.googleStatus !== "pending";
+    $("field-google").readOnly = item.profile.googleStatus === "pending";
+    $("google-pending-note").hidden = item.profile.googleStatus !== "pending";
+  }
   if ($("owner-email")) {
     $("owner-email").value = item.ownerEmail || "";
     $("owner-status").textContent = item.ownerEmail ? "Pemilik boleh login di tap.imai.my/edit dengan Gmail ini." : "Daftarkan Gmail supaya pelanggan boleh menyunting halaman ini.";
@@ -3144,6 +3293,19 @@ for (const [key, text] of Object.entries(fields)) {
     $("save-status").textContent = "Ada perubahan yang belum disimpan.";
   });
   $("fields").append(label, input);
+}
+if (!customer) {
+  listingTools = createGoogleListingTools({ input: $("field-google"), name: () => $("field-name").value, onChange: () => {
+    $("save-status").textContent = "Ada perubahan yang belum disimpan.";
+  }, search: (query) => api("/api/admin/search", { method: "POST", body: { query } }), lookup: (token) => api("/api/admin/import", { method: "POST", body: { token } }) });
+  $("edit-form").prepend(listingTools.panel);
+} else {
+  const note = document.createElement("p");
+  note.id = "google-pending-note";
+  note.className = "notice";
+  note.textContent = "Google Review belum tersedia. Hubungi super admin untuk menyambungkan lokasi apabila tersedia di Google Maps.";
+  note.hidden = true;
+  $("field-google").after(note);
 }
 var coverLabel = document.createElement("label");
 coverLabel.htmlFor = "cover-file";
@@ -3216,7 +3378,13 @@ $("edit-form").addEventListener("submit", async (event) => {
   const item = selected, current = session;
   const profile = { v: 1 };
   for (const key of Object.keys(fields)) profile[key] = $("field-" + key).value.normalize("NFC").trim();
+  listingTools?.apply(profile);
+  if (customer && item.profile.googleStatus === "pending") {
+    profile.google = "";
+    profile.googleStatus = "pending";
+  }
   if (malaysiaPhone(profile.phone)) profile.phone = malaysiaPhone(profile.phone);
+  listingTools?.lock(true);
   saving = true;
   $("save").disabled = true;
   $("cancel").disabled = true;
@@ -3234,6 +3402,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     customerArea?.update(updated);
     $("edit-title").textContent = updated.profile.name;
     for (const key of Object.keys(fields)) $("field-" + key).value = updated.profile[key] || (key === "theme" ? "classic" : key === "accent" ? "#20543e" : "");
+    listingTools?.set(updated.profile);
     $("save-status").textContent = "Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.";
   } catch (error) {
     $("save-status").textContent = error.message + (error.status === 409 ? " Salin perubahan anda sebelum memuat semula senarai." : "");
@@ -3245,6 +3414,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     $("more").disabled = false;
     if ($("save-owner")) $("save-owner").disabled = false;
     for (const field of Object.keys(fields)) $("field-" + field).disabled = false;
+    listingTools?.lock(false);
   }
 });
 $("owner-form")?.addEventListener("submit", async (event) => {

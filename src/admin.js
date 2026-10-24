@@ -4,23 +4,25 @@ import QRCode from 'qrcode';
 import {malaysiaPhone,whatsappFromPhone} from '../import-service/contacts.mjs';
 import {googleLogin} from './google-login.mjs';
 import {createManagementUI,stateLabels} from './management-ui.mjs';
+import {createGoogleListingTools} from './google-listing-tools.mjs';
 import {createCustomerArea} from './customer-area.mjs';
 
 const $=id=>document.getElementById(id);
 const customer=document.body.dataset.role==='user',base=customer?'/api/user':'/api/admin';
 const endpoint=location.hostname==='127.0.0.1'?location.origin:window.SMARTTAP_IMPORT_CONFIG?.endpoint;
 const fields={name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web',...Object.fromEntries(Object.entries(appearanceFields).map(([key,spec])=>[key,spec.label]))};
+let listingTools=null;
 let credential='',records=[],cursor=null,selected=null,expiryTimer,session=0,busy=false,saving=false,customerArea=null;
 function lockControls(value){
   saving=value;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])if($(id))$(id).disabled=value||(id==='save'&&customer&&selected?.state!=='active');
   for(const field of Object.keys(fields))if($('field-'+field))$('field-'+field).disabled=value||(customer&&selected?.state!=='active');
-  for(const id of ['cover-file','remove-cover'])if($(id))$(id).disabled=value||(customer&&selected?.state!=='active');
+  for(const id of ['cover-file','remove-cover'])if($(id))$(id).disabled=value||(customer&&selected?.state!=='active');listingTools?.lock(value);
 }
 const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();alerts?.refresh();customerArea?.update(item);$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
 const alerts=customer?null:createPaymentAlerts({api,open:async id=>{if(saving)return;const current=session;const item=await api(base+'/links/'+id);if(current!==session||saving)return;await edit(item);},canOpen:()=>!saving});
 function logout(message='Anda telah log keluar.'){
   coverPreview.hidden=true;coverStatus.textContent='';if(previewURL){URL.revokeObjectURL(previewURL);previewURL=null;}credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
-  management.clear();alerts?.stop();customerArea?.clear();
+  listingTools?.invalidate();management.clear();alerts?.stop();customerArea?.clear();
   $('dashboard').hidden=true;$('editor').hidden=true;$('login-panel').hidden=false;$('records').replaceChildren();
   for(const field of Object.keys(fields))$('field-'+field).value='';
   if($('owner-email'))$('owner-email').value='';
@@ -42,7 +44,7 @@ function render(){
     const row=document.createElement('article');row.className='record';const info=document.createElement('div');info.className='record-info';
     const title=document.createElement('h3');title.textContent=item.profile.name;
     const link=document.createElement('a');link.href=item.url;link.textContent=item.url;link.target='_blank';link.rel='noopener noreferrer';
-    const meta=document.createElement('p');meta.textContent=(item.adminMessage&&item.adminMessage.status!=='resolved'?(customer?'Mesej daripada super admin':'Mesej pelanggan: '+(item.adminMessage.status==='replied'?'balasan diterima':'menunggu balasan'))+' · ':'')+(stateLabels[item.state]||'Aktif')+(item.renewal?.status==='pending'?' · Bayaran menunggu semakan':'')+' · Dicipta '+date(item.createdAt)+' · Dikemas kini '+date(item.updatedAt)+(!customer?' · '+(item.ownerEmail||'Gmail pemilik belum didaftarkan'):'');
+    const meta=document.createElement('p');meta.textContent=(item.adminMessage&&item.adminMessage.status!=='resolved'?(customer?'Mesej daripada super admin':'Mesej pelanggan: '+(item.adminMessage.status==='replied'?'balasan diterima':'menunggu balasan'))+' · ':'')+(stateLabels[item.state]||'Aktif')+(item.profile.googleStatus==='pending'?' · Google Review belum tersedia':'')+(item.renewal?.status==='pending'?' · Bayaran menunggu semakan':'')+' · Dicipta '+date(item.createdAt)+' · Dikemas kini '+date(item.updatedAt)+(!customer?' · '+(item.ownerEmail||'Gmail pemilik belum didaftarkan'):'');
     const button=document.createElement('button');button.type='button';button.textContent='Urus halaman';button.setAttribute('aria-label','Urus '+item.profile.name);button.addEventListener('click',()=>edit(item));
     info.append(title,link,meta);row.append(info,button);$('records').append(row);
   }
@@ -77,6 +79,7 @@ async function edit(item){
   coverPreview.hidden=!item.profile.cover;if(item.profile.cover)coverPreview.src=item.profile.cover;coverStatus.textContent='';selected=item;$('edit-title').textContent=item.profile.name;$('share').value=item.url;$('open').href=item.url;$('copy-status').textContent='';$('save-status').textContent='';
   if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';
   for(const field of Object.keys(fields))$('field-'+field).value=item.profile[field]||(field==='theme'?'classic':field==='accent'?'#20543e':'');
+  listingTools?.set(item.profile);if(customer){$('field-google').required=item.profile.googleStatus!=='pending';$('field-google').readOnly=item.profile.googleStatus==='pending';$('google-pending-note').hidden=item.profile.googleStatus!=='pending';}
   if($('owner-email')){$('owner-email').value=item.ownerEmail||'';$('owner-status').textContent=item.ownerEmail?'Pemilik boleh login di tap.imai.my/edit dengan Gmail ini.':'Daftarkan Gmail supaya pelanggan boleh menyunting halaman ini.';}
   $('editor').hidden=false;$('download').removeAttribute('href');$('qr').removeAttribute('src');
   try{const png=await QRCode.toDataURL(item.url,{width:1024,margin:4,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}});if(selected?.id===item.id){$('qr').src=png;$('download').href=png;}}
@@ -96,6 +99,8 @@ for(const [key,text] of Object.entries(fields)){
   if(key==='theme')input.addEventListener('change',()=>{$('field-accent').value=({classic:'#20543e',dark:'#91c8ad',bright:'#7040bb'})[input.value];});
   input.addEventListener('input',()=>{$('save-status').textContent='Ada perubahan yang belum disimpan.';});$('fields').append(label,input);
 }
+if(!customer){listingTools=createGoogleListingTools({input:$('field-google'),name:()=>$('field-name').value,onChange:()=>{$('save-status').textContent='Ada perubahan yang belum disimpan.';},search:query=>api('/api/admin/search',{method:'POST',body:{query}}),lookup:token=>api('/api/admin/import',{method:'POST',body:{token}})});$('edit-form').prepend(listingTools.panel);}
+else {const note=document.createElement('p');note.id='google-pending-note';note.className='notice';note.textContent='Google Review belum tersedia. Hubungi super admin untuk menyambungkan lokasi apabila tersedia di Google Maps.';note.hidden=true;$('field-google').after(note);}
 const coverLabel=document.createElement('label');coverLabel.htmlFor='cover-file';coverLabel.textContent='Muat naik cover daripada peranti';
 const coverFile=document.createElement('input');coverFile.id='cover-file';coverFile.type='file';coverFile.accept='image/jpeg,image/png,image/webp';
 const coverHelp=document.createElement('p');coverHelp.className='help';coverHelp.textContent='JPG, PNG atau WebP. Had asal 5 MB / 25 megapiksel. Pelayan mengecilkan kepada maksimum 1600 piksel dan 500 KB. Cover disimpan terus; maklumat lain gunakan butang Simpan.';
@@ -121,17 +126,19 @@ coverFile.addEventListener('change',async()=>{
 $('edit-form').addEventListener('submit',async event=>{
   event.preventDefault();if(!selected)return;const item=selected,current=session;const profile={v:1};
   for(const key of Object.keys(fields))profile[key]=$('field-'+key).value.normalize('NFC').trim();
+  listingTools?.apply(profile);if(customer&&item.profile.googleStatus==='pending'){profile.google='';profile.googleStatus='pending';}
   if(malaysiaPhone(profile.phone))profile.phone=malaysiaPhone(profile.phone);
-  saving=true;$('save').disabled=true;$('cancel').disabled=true;$('refresh').disabled=true;$('more').disabled=true;if($('save-owner'))$('save-owner').disabled=true;
+  listingTools?.lock(true);saving=true;$('save').disabled=true;$('cancel').disabled=true;$('refresh').disabled=true;$('more').disabled=true;if($('save-owner'))$('save-owner').disabled=true;
   for(const field of Object.keys(fields))$('field-'+field).disabled=true;
   $('save-status').textContent='Menyimpan pada URL yang sama…';
   try{
     const updated=await api(base+'/links/'+item.id,{method:'PUT',body:{profile,revision:item.revision}});if(current!==session)return;
     records=records.map(record=>record.id===updated.id?updated:record);selected=updated;render();customerArea?.update(updated);$('edit-title').textContent=updated.profile.name;
     for(const key of Object.keys(fields))$('field-'+key).value=updated.profile[key]||(key==='theme'?'classic':key==='accent'?'#20543e':'');
+    listingTools?.set(updated.profile);
     $('save-status').textContent='Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.';
   }catch(error){$('save-status').textContent=error.message+(error.status===409?' Salin perubahan anda sebelum memuat semula senarai.':'');}
-  finally{saving=false;$('save').disabled=false;$('cancel').disabled=false;$('refresh').disabled=false;$('more').disabled=false;if($('save-owner'))$('save-owner').disabled=false;for(const field of Object.keys(fields))$('field-'+field).disabled=false;}
+  finally{saving=false;$('save').disabled=false;$('cancel').disabled=false;$('refresh').disabled=false;$('more').disabled=false;if($('save-owner'))$('save-owner').disabled=false;for(const field of Object.keys(fields))$('field-'+field).disabled=false;listingTools?.lock(false);}
 });
 $('owner-form')?.addEventListener('submit',async event=>{
   event.preventDefault();if(!selected||saving)return;const item=selected,current=session;const email=$('owner-email').value.trim().toLowerCase();
