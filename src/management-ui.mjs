@@ -1,3 +1,5 @@
+import {createAdminSubscriptionUI} from './admin-subscription-ui.mjs';
+import {hasEntitlement,hasAnnualEntitlement} from '../import-service/page-state.mjs';
 import {paymentPrompt} from './payment-prompt.mjs';
 import {orderSupportLink} from './order-support.mjs';
 const money=cents=>new Intl.NumberFormat('ms-MY',{style:'currency',currency:'MYR'}).format(cents/100);
@@ -24,9 +26,10 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
     $('payment-toggle').setAttribute('aria-expanded',String(customer&&open));$('payment-toggle').textContent=open?'Tutup borang bayaran':paymentPrompt(current||{}).label;
     $('payment-qr').removeAttribute('src');$('payment-download').removeAttribute('href');$('payment-open').removeAttribute('href');$('payment-submit').disabled=true;$('gateway-pay').disabled=true;
   }
+  const subscriptionUI=createAdminSubscriptionUI({customer,onSubmit:data=>action('/subscription',{...data,revision:current.revision},'Langganan dikemas kini oleh super admin. URL dan QR kekal sama.')});$('lifecycle-actions').before(subscriptionUI.panel);
   const today=()=>new Date(Date.now()+8*3600000).toISOString().slice(0,10);
   const options=()=>({package:$('payment-package').value,extraNfcQty:Number($('payment-nfc').value),stickerQty:Number($('payment-stickers').value)});
-  function clear(){messageSequence++;current=null;$('admin-message-box').hidden=true;$('admin-message-text').textContent='';$('admin-message-reply-text').textContent='';$('message-reply-text').value='';$('admin-message-input').value='';gatewaySequence++;$('gateway-panel').hidden=true;$('gateway-order').textContent='';$('gateway-status').textContent='';$('gateway-continue').removeAttribute('href');paymentAvailable=false;paymentVisibility(!customer);$('payment-disclosure').hidden=true;$('renewal-reminder').hidden=true;$('payment-reference').value='';$('review-note').value='';$('delete-form').hidden=true;$('order-support').hidden=true;$('order-whatsapp').removeAttribute('href');}
+  function clear(){subscriptionUI.clear();messageSequence++;current=null;$('admin-message-box').hidden=true;$('admin-message-text').textContent='';$('admin-message-reply-text').textContent='';$('message-reply-text').value='';$('admin-message-input').value='';gatewaySequence++;$('gateway-panel').hidden=true;$('gateway-order').textContent='';$('gateway-status').textContent='';$('gateway-continue').removeAttribute('href');paymentAvailable=false;paymentVisibility(!customer);$('payment-disclosure').hidden=true;$('renewal-reminder').hidden=true;$('payment-reference').value='';$('review-note').value='';$('delete-form').hidden=true;$('order-support').hidden=true;$('order-whatsapp').removeAttribute('href');}
   function showMessage(item){
     const message=item.adminMessage,note=!message?item.renewal?.note:'';
     const visible=!!(message&&(!customer||message.status!=='resolved')||note);
@@ -79,7 +82,7 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
   }
   async function gatewayAction(kind){
     if(working||!current||!config?.gateway?.enabled)return;if(kind==='create'&&!quote)return;
-    working=true;onBusy(true);const item=current,version=++gatewaySequence;
+    working=true;subscriptionUI.busy(true);onBusy(true);const item=current,version=++gatewaySequence;
     $('gateway-status').textContent=kind==='create'?'Menyediakan bil ToyyibPay…':'Menyemak status ToyyibPay…';
     for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=true;
     try{
@@ -89,9 +92,10 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
       onUpdate(updated);await show(updated);
       if(checkout.paymentUrl){const url=paymentURL(checkout.paymentUrl);$('gateway-continue').href=url;$('gateway-continue').hidden=false;if(kind==='create')location.assign(url);}
     }catch(error){if(current?.id===item.id&&version===gatewaySequence)$('gateway-status').textContent=error.message;}
-    finally{working=false;onBusy(false);for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=false;$('gateway-pay').disabled=!quote||!config?.gateway?.enabled;if(!quote)$('payment-submit').disabled=true;}
+    finally{working=false;onBusy(false);for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=false;$('gateway-pay').disabled=!quote||!config?.gateway?.enabled;if(!quote)$('payment-submit').disabled=true;subscriptionUI.busy(false);}
   }
   async function show(item){
+    subscriptionUI.set(item);
     const changed=current?.id!==item.id,messageChanged=current?.adminMessage?.id!==item.adminMessage?.id,oldStatus=current?.renewal?.status;current=item;if(changed||messageChanged){$('message-reply-text').value='';$('management-status').textContent='';}showMessage(item);if(changed){messageSequence++;$('message-reply-text').value='';$('admin-message-input').value='';gatewaySequence++;$('gateway-panel').hidden=true;$('gateway-order').textContent='';$('gateway-status').textContent='';$('gateway-continue').removeAttribute('href');paymentAvailable=false;paymentVisibility(!customer);$('payment-disclosure').hidden=true;$('renewal-reminder').hidden=true;}orderSupport(item);$('page-state').textContent=stateLabels[item.state]||item.state;
     for(const id of ['page-state','subscription-summary'])$(id).dataset.state=item.state;
     $('subscription-summary').textContent=item.subscription?.plan==='annual'?'Halaman tahunan · tamat '+date(item.subscription.expiresAt):item.subscription?.plan==='nfc_only'?'NFC terus ke Google Review. Tiada langganan halaman QR.':'Rekod sedia ada. Pelan tahunan belum direkodkan; status asal dikekalkan.';
@@ -110,18 +114,18 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
     const payment=item.renewal;$('payment-summary').textContent=payment?({pending:'Menunggu semakan bayaran',approved:'Bayaran disahkan',rejected:'Permohonan ditolak'}[payment.status]||payment.status)+' · '+money(payment.amountCents)+' · '+payment.reference+(payment.note?' · '+payment.note:''):'';
     $('review-details').textContent=payment?'Rujukan: '+payment.reference+' · '+payment.paidDate+' · '+money(payment.amountCents)+' · '+payment.items.map(x=>x.name+' × '+x.quantity).join(', '):'';
     $('bank-confirm').checked=false;$('review-note').value='';
-    const selected=$('payment-package').value,annual=!!item.subscription?.lastPaymentId&&item.subscription.plan==='annual';$('payment-package').replaceChildren();
-    for(const product of config.packages){if(product.id==='addons'&&!item.subscription?.lastPaymentId||product.id!=='addons'&&(annual&&product.id!=='renew'||!annual&&product.id==='renew'))continue;const option=document.createElement('option');option.value=product.id;option.textContent=product.name+(product.id==='addons'?'': ' · '+money(product.amountCents)+(product.months?' / '+product.months+' bulan':' · sekali bayar'));$('payment-package').append(option);}
+    const selected=$('payment-package').value,annual=hasAnnualEntitlement(item);$('payment-package').replaceChildren();
+    for(const product of config.packages){if(product.id==='addons'&&!hasEntitlement(item)||product.id!=='addons'&&(annual&&product.id!=='renew'||!annual&&product.id==='renew'))continue;const option=document.createElement('option');option.value=product.id;option.textContent=product.name+(product.id==='addons'?'': ' · '+money(product.amountCents)+(product.months?' / '+product.months+' bulan':' · sekali bayar'));$('payment-package').append(option);}
     if(!changed&&selected&&[...$('payment-package').options].some(x=>x.value===selected))$('payment-package').value=selected;
     if(changed){const params=new URLSearchParams(location.search);const kind=params.get('package');if(kind&&[...$('payment-package').options].some(x=>x.value===kind)){$('payment-package').value=kind;if(customer&&paymentAvailable)paymentVisibility(true);}for(const [id,key,max] of [['payment-nfc','extraNfcQty',10],['payment-stickers','stickerQty',200]]){const n=Number(params.get(key)||0);if(Number.isInteger(n)&&n>=0&&n<=max)$(id).value=String(n);}}
     const returning=new URLSearchParams(location.search).get('payment');if(customer&&config.gateway?.enabled&&returning===item.checkout?.id&&gatewayReturnChecked!==returning){gatewayReturnChecked=returning;queueMicrotask(()=>gatewayAction('status'));}
     if(oldStatus==='pending'&&payment?.status==='approved'){$('payment-reference').value='';$('payment-nfc').value='0';$('payment-stickers').value='0';}if(!$('payment-form').hidden)await cart();
   }
   async function action(path,body,message){
-    if(working||!current)return;working=true;onBusy(true);const id=current.id,version=messageSequence;$('management-status').textContent='Menyimpan…';for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=true;
+    if(working||!current)return;working=true;subscriptionUI.busy(true);onBusy(true);const id=current.id,version=messageSequence;$('management-status').textContent='Menyimpan…';for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=true;
     try{const updated=await api('/links/'+id+path,{method:'POST',body});if(current?.id!==id||version!==messageSequence)return;onUpdate(updated);await show(updated);if(path==='/message'&&body.action==='send')$('admin-message-input').value='';if(path==='/message-reply')$('message-reply-text').value='';$('management-status').textContent=message;}
     catch(error){$('management-status').textContent=error.message;}
-    finally{working=false;onBusy(false);for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=false;if(!quote)$('payment-submit').disabled=true;}
+    finally{working=false;onBusy(false);for(const node of panel.querySelectorAll('button,input,select,textarea'))node.disabled=false;if(!quote)$('payment-submit').disabled=true;subscriptionUI.busy(false);}
   }
   $('state-toggle').onclick=()=>action('/state',{state:current.manualState==='disabled'?'active':'disabled',revision:current.revision},'Status halaman dikemas kini. URL dan QR kekal sama.');
   $('state-restore').onclick=()=>action('/state',{state:'disabled',revision:current.revision},'Halaman dipulihkan sebagai nyahaktif. Semak langganan sebelum mengaktifkan.');

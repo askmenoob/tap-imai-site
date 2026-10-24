@@ -17,6 +17,18 @@ async function setup(){
   return {store,customers,bills,provider,gateway,page,calls:()=>calls};
 }
 const begin=ctx=>ctx.gateway.create(ctx.page.id,{package:'bundle',revision:ctx.page.revision},alice);
+
+test('admin-granted annual subscriptions accept RM30 renewals and paid add-ons without losing the granted year',async()=>{
+ const ctx=await setup(),management=createManagementService({store:ctx.store,now,enabled:true,manualEnabled:false});
+ const granted=await management.subscription(ctx.page.id,{action:'extend',note:'Approved complimentary subscription',revision:ctx.page.revision},admin);
+ assert.equal(ctx.bills.size,0);assert.equal(granted.subscription.lastPaymentId,undefined);
+ assert.equal((await management.quote(granted.id,{package:'renew'},alice)).amountCents,3000);
+ const addon=await ctx.gateway.create(granted.id,{package:'addons',extraNfcQty:1,revision:granted.revision},alice);paid(ctx,addon);
+ const paidAddon=await ctx.gateway.status(addon.id,alice);assert.equal(paidAddon.page.subscription.expiresAt,granted.subscription.expiresAt);assert.equal(paidAddon.page.subscription.lastGrantId,granted.subscription.lastGrantId);
+ const renewal=await ctx.gateway.create(granted.id,{package:'renew',revision:paidAddon.page.revision},alice);assert.equal(renewal.amountCents,3000);paid(ctx,renewal);
+ const paidRenewal=await ctx.gateway.status(renewal.id,alice);assert.equal(paidRenewal.page.subscription.expiresAt,'2028-10-24T08:00:00.000Z');assert.equal(paidRenewal.page.subscription.lastPaymentId,renewal.id);assert.equal(paidRenewal.page.subscription.source,undefined);
+ const again=await ctx.gateway.status(renewal.id,alice);assert.equal(again.page.subscription.expiresAt,paidRenewal.page.subscription.expiresAt);
+});
 function paid(ctx,checkout,overrides={}){const b=ctx.bills.get(checkout.billCode);b.transactions=[{billpaymentStatus:'1',billExternalReferenceNo:checkout.id,billpaymentAmount:(checkout.amountCents/100).toFixed(2),billpaymentInvoiceNo:'TP'+checkout.id,...overrides}];}
 function callback(order,overrides={}){const data={order_id:order.id,billcode:order.billCode,amount:(order.amountCents/100).toFixed(2),status:'1',refno:'TP'+order.id,...overrides};data.hash=createHash('md5').update(secret+data.status+data.order_id+data.refno+'ok').digest('hex');return data;}
 

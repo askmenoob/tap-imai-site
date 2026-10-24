@@ -1,3 +1,5 @@
+export const hasEntitlement=record=>!!(record.subscription?.lastPaymentId||record.subscription?.lastGrantId);
+export const hasAnnualEntitlement=record=>record.subscription?.plan==='annual'&&hasEntitlement(record);
 export function pageState(record,now=Date.now()){
   const state=record.lifecycle?.state||'active';
   if(state==='deleted'||state==='disabled')return state;

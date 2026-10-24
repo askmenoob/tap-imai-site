@@ -122,6 +122,12 @@ Authenticated POST /api/{admin,user}/links/:id/cover accepts raw JPEG/PNG/WebP a
 
 The PWA installer targets only the top-level application header, keeping install controls out of business profile cards.
 
+## Super-admin subscription adjustments
+
+The admin editor can activate/extend an annual subscription by 12 calendar months or set an explicit future expiry date (inclusive until 23:59:59.999 Malaysia time). POST `/api/admin/links/:id/subscription` requires the existing verified Google admin identity, allowed origin, JSON, current page revision, registered owner, and a required internal reason (up to 200 characters). Customer requests to the equivalent endpoint are denied. No provider call, bank-reference claim, bill, payment receipt or physical order is created. Payment/manual-QR flags are unaffected. Pending payment reviews or non-terminal gateway bills must be completed/cancelled before an adjustment; conditional writes prevent concurrent edits or duplicate retries from extending twice.
+
+Grants record a distinct `lastGrantId` and `source:admin`, never a fabricated `lastPaymentId`. A before-change archive and private `subscriptionAdjustment` capture the operator, reason, old/new expiry and timestamp; only admin views receive that adjustment. Owners see the new expiry and its admin source. Disabled pages stay disabled; deleted/unassigned pages cannot receive grants. Existing annual time is preserved for the 12-month action, and leap-day anniversaries are clamped. Admin-granted annual pages qualify for RM30 renewals/add-ons, and paid add-ons preserve their annual entitlement.
+
 ## Universal menu and service catalogue (25 October 2026)
 
 The existing Menu & location editor supports no menu, an external HTTPS link, or a built-in catalogue at `/menu/?s=<same-short-id>`. Owners and admins can choose 13 business templates, customise the button label and categories, and maintain up to 50 ordered products/services. Price modes are fixed, starting from, request a quote and free; pricing can be per unit/hour/session/day/night/month/project. Templates supply category suggestions only, never fabricated services or prices. Hidden items are omitted from public JSON; unavailable items remain visible without an enquiry button. The public catalogue has search, category filtering and Malay/English controls. WhatsApp buttons open a user-reviewed enquiry draft; no message is sent by the application.
