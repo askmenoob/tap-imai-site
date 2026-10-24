@@ -101,3 +101,14 @@ test('message validation, stale revisions, deleted pages and owner changes fail 
   page=await ctx.management.state(page.id,{state:'deleted',confirmName:profile.name,revision:page.revision},admin);
   await assert.rejects(ctx.management.message(page.id,{action:'send',text:'Deleted',revision:page.revision},admin),e=>e.status===409);
 });
+
+
+test('ToyyibPay-only mode disables new manual payments and QR disclosure while preserving old payment review',async()=>{
+  const ctx=setup();let page=await ctx.customers.register({url,email:alice.email},admin);page=await request(ctx,page);
+  const service=createManagementService({store:ctx.store,now:ctx.now,enabled:true,manualEnabled:false});
+  assert.equal(service.config().manualEnabled,false);assert.equal('qrPayload' in service.config(),false);assert.equal('payee' in service.config(),false);
+  await assert.rejects(service.request(page.id,{reference:'NEW-BANK',paidDate:'2026-10-23',package:'bundle',amountCents:10000,revision:page.revision},alice),e=>e.status===410);
+  assert.equal((await service.quote(page.id,{package:'bundle'},alice)).amountCents,10000);
+  const approved=await service.decide(page.id,{requestId:page.renewal.id,decision:'approve',confirmBank:true,revision:page.revision},admin);
+  assert.equal(approved.renewal.status,'approved');assert.equal(approved.subscription.expiresAt,'2027-10-23T08:00:00.000Z');
+});

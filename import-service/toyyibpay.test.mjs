@@ -112,3 +112,11 @@ test('owner reassignment during provider bill creation does not return checkout 
   await assert.rejects(begin(ctx),e=>e.status===404);
   const current=await ctx.customers.get(ctx.page.id,bob);assert.equal(current.checkout,null);
 });
+
+
+test('explicit settlement-hold acceptance permits live checkout without falsely marking the merchant verified',async()=>{
+  const ctx=await setup();const service=createToyyibCheckout({store:ctx.store,provider:ctx.provider,secretKey:secret,categoryCode:category,enabled:true,accountVerified:false,settlementHoldAccepted:true,now});
+  assert.equal(service.config().enabled,true);assert.equal(service.config().settlementHold,true);
+  const checkout=await service.create(ctx.page.id,{package:'bundle',revision:ctx.page.revision,expectedAmountCents:10000},alice);
+  assert.equal(checkout.paymentUrl,'https://toyyibpay.com/'+checkout.billCode);assert.equal(checkout.amountCents,10000);
+});

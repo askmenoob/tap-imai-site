@@ -44,10 +44,10 @@ export function createToyyibProvider({secretKey,categoryCode,mode='live',fetcher
     async qrStatus(){const data=await call('checkDuitNowQRStatus',{userSecretKey:secretKey});if(data.status!=='success')throw fail(502,'Status DuitNow QR belum dapat disahkan.');return data.duitnowqr_activated===true;},
   };
 }
-export function createToyyibCheckout({store,provider,secretKey='',categoryCode='',enabled=false,accountVerified=false,duitNowQR=false,origin='https://tap.imai.my',apiOrigin='https://tap-business-import-262870839474.asia-southeast1.run.app',now=Date.now,newId=()=> 'ST'+randomBytes(12).toString('hex')}){
+export function createToyyibCheckout({store,provider,secretKey='',categoryCode='',enabled=false,accountVerified=false,settlementHoldAccepted=false,duitNowQR=false,origin='https://tap.imai.my',apiOrigin='https://tap-business-import-262870839474.asia-southeast1.run.app',now=Date.now,newId=()=> 'ST'+randomBytes(12).toString('hex')}){
   const catalog=createCatalog(),flights=new Map(),lastChecks=new Map();
-  const configured=!!(secretKey&&categoryCode&&provider),operational=!!(configured&&enabled&&(provider.mode==='sandbox'||accountVerified));
-  const ready=()=>{if(!operational)throw fail(503,'Pembayaran ToyyibPay belum dibuka. Gunakan bayaran manual atau hubungi super admin.');};
+  const configured=!!(secretKey&&categoryCode&&provider),operational=!!(configured&&enabled&&(provider.mode==='sandbox'||accountVerified||settlementHoldAccepted));
+  const ready=()=>{if(!operational)throw fail(503,'Pembayaran ToyyibPay belum dibuka. Hubungi super admin.');};
   const view=(id,item,actor)=>pageView({id,...item},origin,actor.role==='admin',now());
   async function owned(id,actor){
     validId(id);const page=await store.getVersion(id);if(!page||page.record.lifecycle?.state==='deleted')throw fail(404,'Halaman tidak tersedia.');
@@ -104,7 +104,7 @@ export function createToyyibCheckout({store,provider,secretKey='',categoryCode='
     flights.set(id,work);try{return await work;}finally{if(flights.get(id)===work)flights.delete(id);}
   }
   return {
-    config(){return {enabled:operational,configured,mode:provider?.mode||'live',duitNowQR:operational&&duitNowQR,reason:operational?'ready':configured&&!accountVerified&&provider?.mode==='live'?'awaiting_verification':'not_enabled'};},
+    config(){return {enabled:operational,configured,mode:provider?.mode||'live',duitNowQR:operational&&duitNowQR,settlementHold:operational&&provider?.mode==='live'&&!accountVerified,reason:operational?'ready':configured&&!accountVerified&&provider?.mode==='live'?'awaiting_verification':'not_enabled'};},
     async create(id,data={},actor){
       ready();if(Object.keys(data).some(key=>!['package','extraNfcQty','stickerQty','revision','expectedAmountCents'].includes(key)))throw fail(400,'Maklumat pesanan tidak sah.');
       const previous=await owned(id,actor);if(!previous.record.ownerEmail)throw fail(409,'Daftarkan Gmail pemilik dahulu.');
