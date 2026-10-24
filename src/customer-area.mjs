@@ -34,10 +34,9 @@ export function createCustomerArea({coverNodes,onSelect}){
  const paymentForm=$('payment-form'),paymentChildren=[...paymentForm.children];
  const cart=document.createElement('div'),checkout=document.createElement('div');cart.className=checkout.className='customer-payment-step';
  let confirm=false;for(const node of paymentChildren){if(node.id==='payment-quote')confirm=true;(confirm?checkout:cart).append(node);}paymentForm.prepend(cart,checkout);
- const paymentPager=document.createElement('div');paymentPager.className='customer-step-controls';
- paymentPager.innerHTML='<button type="button" class="secondary" id="customer-cart-back">Sebelum</button><span id="customer-cart-step"></span><button type="button" class="secondary" id="customer-cart-next">Seterusnya</button>';paymentForm.append(paymentPager);
- let paymentStep=0;const showCart=()=>{cart.hidden=paymentStep!==0;checkout.hidden=paymentStep!==1;$('customer-cart-back').disabled=paymentStep===0;$('customer-cart-next').disabled=paymentStep===1;$('customer-cart-step').textContent=paymentStep===0?'1 / 2':'2 / 2';};
- $('customer-cart-back').onclick=()=>{paymentStep=0;showCart();};$('customer-cart-next').onclick=()=>{paymentStep=1;showCart();};showCart();
+ const paymentTabs=document.createElement('nav');paymentTabs.className='customer-subnav customer-payment-tabs';paymentTabs.setAttribute('aria-label','Bahagian pembelian');
+ let paymentTab=0;const showCart=()=>{cart.hidden=paymentTab!==0;checkout.hidden=paymentTab!==1;for(const [i,button] of [...paymentTabs.children].entries())button.setAttribute('aria-current',i===paymentTab?'page':'false');};
+ for(const [i,label] of ['Pesanan','Jumlah & bayaran'].entries()){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>{paymentTab=i;showCart();};paymentTabs.append(button);}paymentForm.prepend(paymentTabs);showCart();
  const fieldGroups={business:[['name','tagline'],['logo'],['phone','whatsapp'],['website'],['instagram','facebook'],['tiktok','threads'],['google']],page:[['theme','accent'],['cover'],['menu','directions'],['address','hours'],['promoTitle','promoText'],['promoURL'],['promoStart','promoEnd']]};
  const pages={business:[],page:[]};
  for(const [view,steps] of Object.entries(fieldGroups))for(const keys of steps){
@@ -45,9 +44,10 @@ export function createCustomerArea({coverNodes,onSelect}){
   for(const key of keys){const input=$('field-'+key),label=document.querySelector('label[for="field-'+key+'"]');const unit=document.createElement('div');unit.className='customer-field';unit.append(label,input);if(key==='cover')unit.append(...coverNodes);group.append(unit);}
   $('fields').append(group);pages[view].push(group);
  }
- const pager=document.createElement('div');pager.className='customer-step-controls';pager.innerHTML='<button type="button" class="secondary" id="customer-prev">Sebelum</button><span id="customer-step" role="status"></span><button type="button" class="secondary" id="customer-next">Seterusnya</button>';form.prepend(pager);
- let view='package',sectionName='overview',step={business:0,page:0},selected=null;
- $('customer-prev').onclick=()=>{if(step[view]>0)step[view]--;render();};$('customer-next').onclick=()=>{if(step[view]<pages[view].length-1)step[view]++;render();};
+ const fieldTabs=document.createElement('nav');fieldTabs.className='customer-subnav customer-field-tabs';fieldTabs.setAttribute('aria-label','Bahagian suntingan');form.prepend(fieldTabs);
+ const tabLabels={business:['Maklumat','Logo','Hubungi','Laman web','Instagram / Facebook','TikTok / Threads','Google Review'],page:['Tema & warna','Cover','Menu & lokasi','Alamat & waktu','Promosi','Pautan promosi','Tarikh promosi']};
+ let view='package',sectionName='overview',activeTab={business:0,page:0},selected=null;
+ for(const [name,labels] of Object.entries(tabLabels))for(const [i,label] of labels.entries()){const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.fieldView=name;button.dataset.index=String(i);button.onclick=()=>{activeTab[name]=i;render();};fieldTabs.append(button);}
  const toggle=$('customer-menu-toggle');toggle.onclick=()=>{const expanded=toggle.getAttribute('aria-expanded')!=='true';toggle.setAttribute('aria-expanded',String(expanded));nav.classList.toggle('is-open',expanded);};
  document.addEventListener('keydown',event=>{if(event.key==='Escape'){toggle.setAttribute('aria-expanded','false');nav.classList.remove('is-open');}});
  function open(next,focus=false){view=next;nav.classList.remove('is-open');toggle.setAttribute('aria-expanded','false');render();if(focus)$('customer-title').focus({preventScroll:true});}
@@ -55,15 +55,15 @@ export function createCustomerArea({coverNodes,onSelect}){
   const active=!!selected;empty.hidden=active;packageView.hidden=!active||view!=='package';myView.hidden=view!=='my';editor.hidden=!active||!['business','page'].includes(view);
   for(const b of nav.querySelectorAll('[data-view]')){b.setAttribute('aria-current',b.dataset.view===view?'page':'false');b.disabled=!active&&b.dataset.view!=='my';}
   const title=menus.find(m=>m[0]===view)[1];if($('customer-title').textContent!==title)$('customer-title').textContent=title;
-  for(const [name,sections] of Object.entries(pages))sections.forEach((node,i)=>{node.hidden=view!==name||i!==step[name];});
-  if(['business','page'].includes(view)){$('customer-prev').disabled=step[view]===0;$('customer-next').disabled=step[view]===pages[view].length-1;$('customer-step').textContent=(step[view]+1)+' / '+pages[view].length;}
+  for(const [name,sections] of Object.entries(pages))sections.forEach((node,i)=>{node.hidden=view!==name||i!==activeTab[name];});
+  for(const button of fieldTabs.children){button.hidden=button.dataset.fieldView!==view;button.setAttribute('aria-current',Number(button.dataset.index)===activeTab[button.dataset.fieldView]?'page':'false');}
   for(const [name,node] of Object.entries(groups)){const hide=name!==sectionName;if(node.hidden!==hide)node.hidden=hide;}
   for(const b of subnav.children)b.setAttribute('aria-current',b.dataset.section===sectionName?'page':'false');
   for(const [name,id] of Object.entries({messages:'admin-message-box',delivery:'order-support',gateway:'gateway-panel'}))emptySections[name].hidden=!$(id).hidden;
   const unread=!!selected?.adminMessage&&selected.adminMessage.status!=='resolved';messageAlert.hidden=!unread;subnav.querySelector('[data-section="messages"]').dataset.unread=String(unread);
  }
- // Native validation must first reveal the relevant step; hidden fields stay editable and are still saved together.
- form.noValidate=true;form.addEventListener('submit',event=>{const invalid=[...form.querySelectorAll('input,select,textarea')].find(input=>!input.disabled&&!input.checkValidity());if(invalid){event.preventDefault();event.stopImmediatePropagation();for(const [name,sections] of Object.entries(pages)){const at=sections.findIndex(group=>group.contains(invalid));if(at>=0){view=name;step[name]=at;break;}}render();invalid.focus();invalid.reportValidity();}},true);
+ // Native validation must first reveal the relevant section; hidden fields stay editable and are still saved together.
+ form.noValidate=true;form.addEventListener('submit',event=>{const invalid=[...form.querySelectorAll('input,select,textarea')].find(input=>!input.disabled&&!input.checkValidity());if(invalid){event.preventDefault();event.stopImmediatePropagation();for(const [name,sections] of Object.entries(pages)){const at=sections.findIndex(group=>group.contains(invalid));if(at>=0){view=name;activeTab[name]=at;break;}}render();invalid.focus();invalid.reportValidity();}},true);
  $('cancel').addEventListener('click',()=>open('my'));
- return {update(item){if(!selected)view='package';selected=item;$('customer-business-name').textContent=item.profile.name;picker.value=item.id;document.body.classList.add('customer-session');render();},list(items){const current=picker.value;picker.replaceChildren();for(const item of items){const option=document.createElement('option');option.value=item.id;option.textContent=item.profile.name;picker.append(option);}picker.value=selected?.id||current;document.body.classList.add('customer-session');if(!selected)view='my';render();},clear(){selected=null;document.body.classList.remove('customer-session');nav.classList.remove('is-open');view='package';sectionName='overview';step={business:0,page:0};paymentStep=0;showCart();render();},open};
+ return {update(item){if(!selected)view='package';selected=item;$('customer-business-name').textContent=item.profile.name;picker.value=item.id;document.body.classList.add('customer-session');render();},list(items){const current=picker.value;picker.replaceChildren();for(const item of items){const option=document.createElement('option');option.value=item.id;option.textContent=item.profile.name;picker.append(option);}picker.value=selected?.id||current;document.body.classList.add('customer-session');if(!selected)view='my';render();},clear(){selected=null;document.body.classList.remove('customer-session');nav.classList.remove('is-open');view='package';sectionName='overview';activeTab={business:0,page:0};paymentTab=0;showCart();render();},open};
 }
