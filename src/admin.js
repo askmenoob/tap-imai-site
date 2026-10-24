@@ -4,22 +4,23 @@ import QRCode from 'qrcode';
 import {malaysiaPhone,whatsappFromPhone} from '../import-service/contacts.mjs';
 import {googleLogin} from './google-login.mjs';
 import {createManagementUI,stateLabels} from './management-ui.mjs';
+import {createCustomerArea} from './customer-area.mjs';
 
 const $=id=>document.getElementById(id);
 const customer=document.body.dataset.role==='user',base=customer?'/api/user':'/api/admin';
 const endpoint=location.hostname==='127.0.0.1'?location.origin:window.SMARTTAP_IMPORT_CONFIG?.endpoint;
 const fields={name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web',...Object.fromEntries(Object.entries(appearanceFields).map(([key,spec])=>[key,spec.label]))};
-let credential='',records=[],cursor=null,selected=null,expiryTimer,session=0,busy=false,saving=false;
+let credential='',records=[],cursor=null,selected=null,expiryTimer,session=0,busy=false,saving=false,customerArea=null;
 function lockControls(value){
   saving=value;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])if($(id))$(id).disabled=value||(id==='save'&&customer&&selected?.state!=='active');
   for(const field of Object.keys(fields))if($('field-'+field))$('field-'+field).disabled=value||(customer&&selected?.state!=='active');
   for(const id of ['cover-file','remove-cover'])if($(id))$(id).disabled=value||(customer&&selected?.state!=='active');
 }
-const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();alerts?.refresh();$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
+const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();alerts?.refresh();customerArea?.update(item);$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
 const alerts=customer?null:createPaymentAlerts({api,open:async id=>{if(saving)return;const current=session;const item=await api(base+'/links/'+id);if(current!==session||saving)return;await edit(item);},canOpen:()=>!saving});
 function logout(message='Anda telah log keluar.'){
   coverPreview.hidden=true;coverStatus.textContent='';if(previewURL){URL.revokeObjectURL(previewURL);previewURL=null;}credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
-  management.clear();alerts?.stop();
+  management.clear();alerts?.stop();customerArea?.clear();
   $('dashboard').hidden=true;$('editor').hidden=true;$('login-panel').hidden=false;$('records').replaceChildren();
   for(const field of Object.keys(fields))$('field-'+field).value='';
   if($('owner-email'))$('owner-email').value='';
@@ -48,6 +49,7 @@ function render(){
   $('list-status').textContent=records.length+' halaman dimuatkan'+(query?' · '+shown.length+' padanan':'')+'.';
   if(!shown.length){const empty=document.createElement('p');empty.textContent=query?'Tiada padanan dalam senarai yang dimuatkan.':customer?'Tiada halaman didaftarkan untuk Gmail ini. Hubungi super admin untuk mendaftarkan Gmail yang betul.':'Belum ada pautan dijana.';$('records').append(empty);}
   $('more').hidden=!cursor;$('list-hint').textContent=cursor?'Ada rekod lain. Tekan Muatkan lagi untuk melihat dan mencari dalam rekod berikutnya.':'Semua rekod telah dimuatkan.';
+  customerArea?.list(records);
 }
 async function load(reset=false){
   if(busy||saving)return;busy=true;const current=session;$('refresh').disabled=true;$('more').disabled=true;$('list-status').textContent='Memuatkan rekod…';
@@ -79,8 +81,8 @@ async function edit(item){
   $('editor').hidden=false;$('download').removeAttribute('href');$('qr').removeAttribute('src');
   try{const png=await QRCode.toDataURL(item.url,{width:1024,margin:4,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}});if(selected?.id===item.id){$('qr').src=png;$('download').href=png;}}
   catch{$('copy-status').textContent='QR belum dapat disediakan. URL pelanggan masih sama.';}
-  $('editor').scrollIntoView({behavior:'smooth',block:'start'});
-  lockControls(false);await management.show(item);
+  if(!customer)$('editor').scrollIntoView({behavior:'smooth',block:'start'});
+  lockControls(false);await management.show(item);customerArea?.update(item);
 }
 for(const [key,text] of Object.entries(fields)){
   const label=document.createElement('label');label.htmlFor='field-'+key;label.textContent=text+(['name','google'].includes(key)?' *':'');
@@ -125,7 +127,7 @@ $('edit-form').addEventListener('submit',async event=>{
   $('save-status').textContent='Menyimpan pada URL yang sama…';
   try{
     const updated=await api(base+'/links/'+item.id,{method:'PUT',body:{profile,revision:item.revision}});if(current!==session)return;
-    records=records.map(record=>record.id===updated.id?updated:record);selected=updated;render();$('edit-title').textContent=updated.profile.name;
+    records=records.map(record=>record.id===updated.id?updated:record);selected=updated;render();customerArea?.update(updated);$('edit-title').textContent=updated.profile.name;
     for(const key of Object.keys(fields))$('field-'+key).value=updated.profile[key]||(key==='theme'?'classic':key==='accent'?'#20543e':'');
     $('save-status').textContent='Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.';
   }catch(error){$('save-status').textContent=error.message+(error.status===409?' Salin perubahan anda sebelum memuat semula senarai.':'');}
@@ -142,8 +144,9 @@ $('owner-form')?.addEventListener('submit',async event=>{
   finally{saving=false;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])$(id).disabled=false;}
 });
 $('filter').addEventListener('input',render);$('refresh').addEventListener('click',()=>{load(true);alerts?.refresh();});$('more').addEventListener('click',()=>load());
-$('cancel').addEventListener('click',()=>{selected=null;$('editor').hidden=true;});$('logout').addEventListener('click',()=>logout());
+$('cancel').addEventListener('click',()=>{if(customerArea){customerArea.open('my');return;}selected=null;$('editor').hidden=true;});$('logout').addEventListener('click',()=>logout());
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('share').value);$('copy-status').textContent='Pautan disalin.';}catch{$('share').focus();$('share').select();$('copy-status').textContent='Pilih dan salin pautan secara manual.';}});
+if(customer)customerArea=createCustomerArea({coverNodes:[coverLabel,coverFile,coverHelp,coverPreview,removeCover,coverStatus],onSelect:async id=>{if(saving)return;try{await edit(await api(base+'/links/'+id));}catch(error){$('list-status').textContent=error.message;}}});
 try{
   const config=await api(base+'/config',{authenticated:false});
   if(config.demo&&location.hostname==='127.0.0.1'){
