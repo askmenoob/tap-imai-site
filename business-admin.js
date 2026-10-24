@@ -2258,6 +2258,22 @@ function paymentPrompt(item, now = Date.now()) {
   };
 }
 
+// src/order-support.mjs
+function orderSupportLink(item, { customer: customer2 = false, language = "ms" } = {}) {
+  const approved = item.renewal?.status === "approved" ? item.renewal : null;
+  const id = approved?.id || item.subscription?.lastPaymentId;
+  if (!customer2 || typeof id !== "string" || !id || item.manualState === "deleted") return null;
+  const shipping = approved?.provider === "toyyibpay" && !!(approved.includesPhysical || approved.items?.some((line) => ["bundle", "nfc", "extra_nfc", "table_sticker"].includes(line.id) && line.quantity > 0));
+  const en = language === "en";
+  const lines = [shipping ? en ? "Hello SmartTap super admin, my payment is confirmed. Here are the delivery details for my NFC order." : "Salam super admin SmartTap, bayaran saya telah disahkan. Berikut maklumat penghantaran pesanan NFC saya." : en ? "Hello SmartTap super admin, I would like to ask about my confirmed order." : "Salam super admin SmartTap, saya ingin bertanya tentang pesanan yang telah disahkan.", (en ? "Business: " : "Perniagaan: ") + item.profile.name, (en ? "Order ID: " : "ID pesanan: ") + id];
+  if (approved?.items?.length) lines.push((en ? "Order: " : "Pesanan: ") + approved.items.map((line) => line.name + " \xD7 " + line.quantity).join(", "));
+  if (shipping) lines.push((en ? "Payment reference: " : "Rujukan bayaran: ") + approved.reference, "", ...en ? ["Recipient name: ", "Contact number: ", "Delivery address: ", "Postcode: ", "City: ", "State: ", "Delivery notes (optional): "] : ["Nama penerima: ", "Nombor telefon: ", "Alamat penghantaran: ", "Poskod: ", "Bandar: ", "Negeri: ", "Nota penghantaran (pilihan): "], "");
+  lines.push((en ? "Page link: " : "Pautan halaman: ") + item.url);
+  const url = new URL("https://wa.me/60103250032");
+  url.searchParams.set("text", lines.join("\n"));
+  return { url: url.href, shipping };
+}
+
 // src/management-ui.mjs
 var money = (cents) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(cents / 100);
 var date = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) : "Belum bermula";
@@ -2335,18 +2351,20 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("message-whatsapp").hidden = !customer2 || !!message;
   }
   function orderSupport(item) {
-    const approved = item.renewal?.status === "approved" ? item.renewal : null, orderId = approved?.id || item.subscription?.lastPaymentId;
-    const visible = customer2 && typeof orderId === "string" && !!orderId && item.manualState !== "deleted";
+    const support = orderSupportLink(item, { customer: customer2, language: document.documentElement.lang });
+    const visible = !!support;
     $2("order-support").hidden = !visible;
     $2("order-whatsapp").removeAttribute("href");
     if (!visible) return;
-    const lines = ["Salam super admin SmartTap, saya ingin bertanya tentang pesanan yang telah disahkan.", "Perniagaan: " + item.profile.name, "ID pesanan: " + orderId];
-    if (approved?.items?.length) lines.push("Pesanan: " + approved.items.map((line) => line.name + " \xD7 " + line.quantity).join(", "));
-    lines.push("Pautan halaman: " + item.url);
-    const link = new URL("https://wa.me/60103250032");
-    link.searchParams.set("text", lines.join("\n"));
-    $2("order-whatsapp").href = link.href;
+    $2("order-whatsapp").href = support.url;
+    $2("order-support").querySelector("h4").textContent = support.shipping ? "Hantar alamat penghantaran" : "Pertanyaan pesanan";
+    $2("order-support").querySelector("p").textContent = support.shipping ? "Bayaran ToyyibPay anda telah disahkan. Hantar nama penerima, nombor telefon dan alamat penghantaran untuk pesanan NFC anda kepada super admin." : "Hubungi super admin tentang pesanan yang telah disahkan, termasuk penyediaan NFC dan penghantaran.";
+    $2("order-whatsapp").textContent = support.shipping ? "Hantar alamat melalui WhatsApp \u2197" : "WhatsApp super admin tentang pesanan \u2197";
+    $2("order-support").querySelector(".help").textContent = support.shipping ? "Draf mengandungi butiran pesanan dan ruang alamat. Lengkapkan alamat, semak dan hantar sendiri dalam WhatsApp." : "Draf mesej disediakan dengan nama perniagaan dan ID pesanan. Semak dan hantar sendiri dalam WhatsApp.";
   }
+  window.addEventListener("smarttap:language", () => {
+    if (current) orderSupport(current);
+  });
   async function cart() {
     quote = null;
     $2("gateway-pay").disabled = true;

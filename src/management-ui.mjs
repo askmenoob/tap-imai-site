@@ -1,4 +1,5 @@
 import {paymentPrompt} from './payment-prompt.mjs';
+import {orderSupportLink} from './order-support.mjs';
 const money=cents=>new Intl.NumberFormat('ms-MY',{style:'currency',currency:'MYR'}).format(cents/100);
 const date=value=>value?new Date(value).toLocaleDateString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',day:'numeric',month:'long',year:'numeric'}):'Belum bermula';
 export const stateLabels={active:'Aktif',disabled:'Dinyahaktifkan',deleted:'Dipadam',pending:'Menunggu pengaktifan',expired:'Langganan tamat',nfc_only:'NFC sahaja · sekali bayar'};
@@ -41,14 +42,16 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
     $('message-whatsapp').hidden=!customer||!!message;
   }
   function orderSupport(item){
-    const approved=item.renewal?.status==='approved'?item.renewal:null,orderId=approved?.id||item.subscription?.lastPaymentId;
-    const visible=customer&&typeof orderId==='string'&&!!orderId&&item.manualState!=='deleted';
+    const support=orderSupportLink(item,{customer,language:document.documentElement.lang});
+    const visible=!!support;
     $('order-support').hidden=!visible;$('order-whatsapp').removeAttribute('href');if(!visible)return;
-    const lines=['Salam super admin SmartTap, saya ingin bertanya tentang pesanan yang telah disahkan.','Perniagaan: '+item.profile.name,'ID pesanan: '+orderId];
-    if(approved?.items?.length)lines.push('Pesanan: '+approved.items.map(line=>line.name+' × '+line.quantity).join(', '));
-    lines.push('Pautan halaman: '+item.url);
-    const link=new URL('https://wa.me/60103250032');link.searchParams.set('text',lines.join('\n'));$('order-whatsapp').href=link.href;
+    $('order-whatsapp').href=support.url;
+    $('order-support').querySelector('h4').textContent=support.shipping?'Hantar alamat penghantaran':'Pertanyaan pesanan';
+    $('order-support').querySelector('p').textContent=support.shipping?'Bayaran ToyyibPay anda telah disahkan. Hantar nama penerima, nombor telefon dan alamat penghantaran untuk pesanan NFC anda kepada super admin.':'Hubungi super admin tentang pesanan yang telah disahkan, termasuk penyediaan NFC dan penghantaran.';
+    $('order-whatsapp').textContent=support.shipping?'Hantar alamat melalui WhatsApp ↗':'WhatsApp super admin tentang pesanan ↗';
+    $('order-support').querySelector('.help').textContent=support.shipping?'Draf mengandungi butiran pesanan dan ruang alamat. Lengkapkan alamat, semak dan hantar sendiri dalam WhatsApp.':'Draf mesej disediakan dengan nama perniagaan dan ID pesanan. Semak dan hantar sendiri dalam WhatsApp.';
   }
+  window.addEventListener('smarttap:language',()=>{if(current)orderSupport(current);});
   async function cart(){
     quote=null;$('gateway-pay').disabled=true;$('payment-submit').disabled=true;$('payment-instructions').hidden=true;const item=current,version=++sequence;if(!item||!config?.enabled||!paymentAvailable||(customer&&!paymentOpen))return;
     $('payment-quote').textContent='Mengira jumlah…';
