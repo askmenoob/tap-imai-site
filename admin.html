@@ -8,17 +8,18 @@
   <link rel="stylesheet" href="business-import.css?v=commerce-20261023-1">
   <link rel="stylesheet" href="business-admin.css?v=payment-disclosure-20261024-1">
   <script src="import-config.js"></script><script type="module" src="business-admin.js?v=payment-disclosure-20261024-1"></script>
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="/assets/app-icon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/assets/app-icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest?v=smarttap-brand-20261024-1">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=smarttap-brand-20261024-1">
+<link rel="icon" href="/favicon.ico?v=smarttap-brand-20261024-1" sizes="16x16 32x32">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/app-icon-180.png?v=smarttap-brand-20261024-1">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="SmartTap">
 <link rel="stylesheet" href="/pwa.css?v=layout-20261024-1">
 <script defer src="/pwa.js?v=layout-20261024-1"></script>
-<link rel="stylesheet" href="/language.css?v=layout-20261024-1"><script type="module" src="/language.js?v=layout-20261024-1"></script></head>
+<link rel="stylesheet" href="/language.css?v=smarttap-brand-20261024-1"><script type="module" src="/language.js?v=layout-20261024-1"></script></head>
 <body data-role="admin">
-  <header class="app-header"><a class="brand" href="./setup.html">◈ SMART<span>TAP</span></a><nav class="app-nav"><a href="./setup.html?register=1">Daftar pelanggan ↗</a></nav><div class="app-tools"></div></header>
+  <header class="app-header"><a class="brand" href="./setup.html"><img class="brand-icon" src="/assets/smarttap-mark.png?v=smarttap-brand-20261024-1" alt="" width="36" height="36"><span class="brand-wordmark">SMART<span>TAP</span></span></a><nav class="app-nav"><a href="./setup.html?register=1">Daftar pelanggan ↗</a></nav><div class="app-tools"></div></header>
   <main>
     <section class="intro"><p class="eyebrow">RUANG PENGURUSAN</p><h1>Semua pautan.<br><em>Satu tempat untuk urus.</em></h1><p>Sunting maklumat perniagaan pada pautan yang sama. Pelanggan boleh terus menggunakan QR yang telah dicetak.</p></section>
     <p id="demo" class="notice" hidden>DEMO TEMPATAN — rekod contoh sahaja. Login Google dan simpanan sebenar tidak digunakan.</p>
@@ -27,6 +28,6 @@
       <section class="panel"><div class="admin-heading"><div><p class="eyebrow">SUPER ADMIN</p><p id="identity"></p></div><button id="logout" class="secondary">Log keluar</button></div><div class="actions"><button id="refresh" class="secondary">Muat semula senarai</button><a class="button secondary" href="./setup.html?register=1" target="_blank" rel="noopener noreferrer">Daftar pelanggan baharu ↗</a></div><p id="list-status" role="status" aria-live="polite"></p><label for="filter">Cari nama atau URL dalam senarai yang dimuatkan</label><input id="filter" type="search" placeholder="Taip nama perniagaan atau kod pautan" autocomplete="off"><div id="records"></div><button id="more" class="secondary" hidden>Muatkan lagi</button><p id="list-hint" class="help"></p></section>
       <section id="editor" class="panel" hidden><p class="eyebrow">SUNTING HALAMAN</p><h2 id="edit-title"></h2><p class="notice">URL pendek dan QR kekal sama selepas simpan. Salinan maklumat sebelumnya disimpan untuk pemulihan.</p><div id="public-sharing"><label for="share">Pautan pelanggan</label><input id="share" readonly><div class="actions"><button id="copy" class="secondary">Salin pautan</button><a id="open" class="button secondary" target="_blank" rel="noopener noreferrer">Buka halaman ↗</a><a id="download" class="button secondary" download="smarttap-qr.png">Muat turun QR PNG</a></div><img id="qr" alt="QR pautan pelanggan yang kekal sama"><p id="copy-status" role="status"></p></div><form id="owner-form" class="owner-panel"><h3>Gmail pemilik halaman</h3><p class="help">Hanya super admin boleh menetapkan atau menukar pemilik. Gmail ini digunakan untuk login pelanggan di <a href="/edit">tap.imai.my/edit</a>. Pertukaran Gmail menarik balik akses pemilik lama.</p><label for="owner-email">Gmail pelanggan</label><input id="owner-email" type="email" autocomplete="off" required maxlength="100" placeholder="pelanggan@gmail.com"><button id="save-owner">Daftar / kemas kini Gmail</button><p id="owner-status" role="status" aria-live="polite"></p></form><form id="edit-form"><div id="fields"></div><div class="actions"><button id="save">Simpan pada URL yang sama</button><button id="cancel" class="secondary" type="button">Tutup suntingan</button></div><p id="save-status" role="status" aria-live="polite"></p></form></section>
     </div>
-    <footer><span>◈ SMARTTAP</span><span><a href="./privacy.html">Privasi</a> · <a href="./setup.html">Kembali ke pencipta halaman</a></span></footer>
+    <footer><span class="brand-lockup"><img class="brand-icon" src="/assets/smarttap-mark.png?v=smarttap-brand-20261024-1" alt="" width="20" height="20"><span>SMARTTAP</span></span><span><a href="./privacy.html">Privasi</a> · <a href="./setup.html">Kembali ke pencipta halaman</a></span></footer>
   </main>
 </body></html>

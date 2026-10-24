@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "name": "SmartTap — NFC & QR",
+  "name": "SmartTap â€” NFC & QR",
   "short_name": "SmartTap",
   "description": "Urus halaman perniagaan, pautan QR dan langganan SmartTap anda.",
   "lang": "ms",
@@ -11,12 +11,33 @@
   "theme_color": "#173b33",
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/assets/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/assets/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "/assets/app-icon-192.png?v=smarttap-brand-20261024-1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/app-icon-512.png?v=smarttap-brand-20261024-1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/app-icon-maskable-512.png?v=smarttap-brand-20261024-1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "Sunting halaman saya", "url": "/edit/" },
-    { "name": "Super admin", "url": "/admin.html" },
-    { "name": "Pakej SmartTap", "url": "/subscribe/" }
+    {
+      "name": "Sunting halaman saya",
+      "url": "/edit/"
+    },
+    {
+      "name": "Pakej SmartTap",
+      "url": "/subscribe/"
+    }
   ]
 }
