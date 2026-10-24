@@ -1,3 +1,5 @@
+import {createServiceCatalog} from './service-catalog.mjs';
+import {createCatalogRoutes} from './service-catalog-routes.mjs';
 import {createOrdersService} from './orders.mjs';
 import {createCoverMedia,createCloudMediaStore,MAX_COVER_INPUT} from './cover-media.mjs';
 import http from 'node:http';
@@ -24,6 +26,7 @@ const demo = preview && process.env.PREVIEW_DEMO === '1';
 const paymentsEnabled=demo||process.env.PAYMENTS_ENABLED==='true';
 const newSubscription=paymentsEnabled?{plan:'annual',startsAt:null,expiresAt:null}:null;
 const port = Number(process.env.PORT || 8787);
+const mediaOrigin=preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app';
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const key = (process.env.GOOGLE_PLACES_API_KEY || '').trim();
 const secret = (process.env.IMPORT_SIGNING_SECRET || (preview ? randomBytes(32).toString('hex') : '')).trim();
@@ -37,8 +40,8 @@ const adminClientId=(process.env.ADMIN_GOOGLE_CLIENT_ID||'').trim();
 const adminEmails=(process.env.ADMIN_EMAILS||'').split(',');
 const adminAuth=createGoogleAdminAuth({clientId:adminClientId,emails:adminEmails});
 const userAuth=createGoogleUserAuth({clientId:adminClientId});
-const admin=linkStore?createAdminService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
-const customers=linkStore?createCustomerService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription}):null;
+const admin=linkStore?createAdminService({store:linkStore,mediaOrigin,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
+const customers=linkStore?createCustomerService({store:linkStore,mediaOrigin,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription}):null;
 const management=linkStore?createManagementService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',enabled:paymentsEnabled,manualEnabled:process.env.MANUAL_PAYMENTS_ENABLED==='true',qrPayload:paymentQR}):null;
 const toyMode=process.env.TOYYIBPAY_MODE||'live';
 if(!preview&&toyMode!=='live')throw new Error('ToyyibPay sandbox requires an isolated preview environment.');
@@ -49,10 +52,12 @@ const toyProvider=toyDemo?.provider||(toySecret&&toyCategory?createToyyibProvide
 const gateway=linkStore?createToyyibCheckout({store:linkStore,provider:toyProvider,secretKey:toySecret,categoryCode:toyCategory,enabled:demo||process.env.TOYYIBPAY_ENABLED==='true',accountVerified:process.env.TOYYIBPAY_ACCOUNT_VERIFIED==='true',settlementHoldAccepted:process.env.TOYYIBPAY_SETTLEMENT_HOLD_ACCEPTED==='true',duitNowQR:demo||process.env.TOYYIBPAY_DUITNOW_QR==='true',origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',apiOrigin:preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app'}):null;
 const orders=linkStore?createOrdersService({store:linkStore}):null;
 const accountRoutes=createAccountRoutes({orders,adminAuth,userAuth,admin,customers,management,gateway,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
-const mediaOrigin=preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app';
+
 const demoMedia=new Map();
 const mediaStore=demo?{put:async(name,bytes)=>demoMedia.set(name,bytes),get:async name=>demoMedia.get(name)}:process.env.SHORT_LINK_BUCKET?createCloudMediaStore({bucket:process.env.SHORT_LINK_BUCKET,getToken:runtimeToken}):null;
 const coverMedia=linkStore&&mediaStore?createCoverMedia({store:linkStore,mediaStore,mediaOrigin,origin:preview?mediaOrigin:'https://tap.imai.my'}):null;
+const serviceCatalog=linkStore&&mediaStore?createServiceCatalog({store:linkStore,mediaStore,mediaOrigin,origin:preview?mediaOrigin:'https://tap.imai.my'}):null;
+const catalogRoutes=createCatalogRoutes({catalog:serviceCatalog,adminAuth,userAuth,demo,reply});
 const demoLogo = 'https://placehold.co/160x160/173b33/ffffff.png?text=DEMO';
 const fixture = {
   suggest:async query => query.toLowerCase().includes('tiada') ? [] : [
@@ -118,6 +123,7 @@ const server = http.createServer(async (req,res) => {
       const bytes=await coverMedia.read(path.slice('/api/media/'.length));
       res.writeHead(200,{'content-type':'image/webp','content-length':bytes.length,'cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'",...(origin?{'access-control-allow-origin':origin,vary:'Origin'}:{})});res.end(req.method==='HEAD'?undefined:bytes);return;
     }
+    if(await catalogRoutes(req,res,{path,origin}))return;
     if(await discoveryRoutes(req,res,{path,origin}))return;
     if(await accountRoutes(req,res,{path,origin}))return;
     if(path.startsWith('/api/links/')&&req.method==='GET') {
@@ -141,9 +147,9 @@ const server = http.createServer(async (req,res) => {
     if (preview && ['GET','HEAD'].includes(req.method)) {
       if(path==='/edit'||path==='/subscribe'){res.writeHead(301,{location:path+'/'});res.end();return;}
       if(path==='/edit/')req.url='/edit/index.html';
-      const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path==='/subscribe/'?'/subscribe/index.html':path).slice(1);
+      const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path==='/subscribe/'?'/subscribe/index.html':path==='/menu/'?'/menu/index.html':path).slice(1);
       const file = resolve(root, relative);
-      if (!file.startsWith(root + sep) || !/^(?:index\.html|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|admin-entry\.js|manifest\.webmanifest|favicon\.ico|pwa\.(?:js|css)|language\.(?:js|css)|language-catalog\.mjs|sw\.js|offline\.html|business-(?:import|logo|entry|admin|subscribe|page)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
+      if (!file.startsWith(root + sep) || !/^(?:index\.html|menu\/(?:index\.html|menu\.css|menu\.js)|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|admin-entry\.js|manifest\.webmanifest|favicon\.ico|pwa\.(?:js|css)|language\.(?:js|css)|language-catalog\.mjs|sw\.js|offline\.html|business-(?:import|logo|entry|admin|subscribe|page)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
       const bytes = await readFile(file);
       res.writeHead(200, { 'content-type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.mjs':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.png':'image/png','.ico':'image/x-icon','.jpeg':'image/jpeg'})[extname(file)] || 'application/octet-stream', 'cache-control':'no-store' });
       res.end(req.method === 'HEAD' ? undefined : bytes); return;

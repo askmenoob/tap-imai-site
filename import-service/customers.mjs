@@ -1,3 +1,4 @@
+import {applyServiceCatalog} from './service-catalog-schema.mjs';
 import {randomBytes} from 'node:crypto';
 import {gmailAddress,ownerKey} from './identity.mjs';
 import {validId,pageView,profileURL,savePage} from './admin.mjs';
@@ -10,7 +11,7 @@ function requireAdmin(actor){if(actor?.role!=='admin'||!actor.email)throw fail(4
 function userKey(actor){if(actor?.role!=='user')throw fail(403,'Login Gmail diperlukan.');return ownerKey(actor.email);}
 function owns(record,key){try{return !!record.ownerEmail&&ownerKey(record.ownerEmail)===key;}catch{return false;}}
 function validCursor(cursor){if(cursor!==undefined&&cursor!==null&&(typeof cursor!=='string'||cursor.length>2048||!/^[-A-Za-z0-9_+/=]*$/.test(cursor)))throw fail(400,'Halaman senarai tidak sah.');}
-export function createCustomerService({store,origin='https://tap.imai.my',now=Date.now,newId=()=>randomBytes(12).toString('base64url'),newSubscription=null}){
+export function createCustomerService({store,origin='https://tap.imai.my',mediaOrigin='https://tap-business-import-262870839474.asia-southeast1.run.app',now=Date.now,newId=()=>randomBytes(12).toString('base64url'),newSubscription=null}){
   const view=(id,item,admin=false)=>pageView({id,...item},origin,admin,now());
   async function owned(id,actor){validId(id);const key=userKey(actor);const item=await store.getVersion(id);if(!item||item.record.lifecycle?.state==='deleted'||!owns(item.record,key))throw notFound();return item;}
   return {
@@ -42,13 +43,14 @@ export function createCustomerService({store,origin='https://tap.imai.my',now=Da
     async update(id,data,actor){
       const previous=await owned(id,actor);
       requirePublicPage(previous.record,now());
-      if(!data||Object.keys(data).some(key=>!['profile','revision'].includes(key)))throw fail(400,'Anda hanya boleh menyunting maklumat halaman sendiri.');
+      if(!data||Object.keys(data).some(key=>!['profile','revision','catalog'].includes(key)))throw fail(400,'Anda hanya boleh menyunting maklumat halaman sendiri.');
       const original=JSON.parse(Buffer.from(new URL(previous.record.url).searchParams.get('p'),'base64url'));
       if(data.profile?.googleStatus&&data.profile.googleStatus!==original.googleStatus)throw fail(403,'Hanya super admin boleh menukar status Google Review.');
       const profile={...data.profile};
       if(original.googleStatus==='pending'){profile.google='';profile.googleStatus='pending';}
-      const url=profileURL(profile,origin);
-      const saved=await savePage({store,id,previous,revision:data.revision,changes:{v:1,url},actor,now});
+      const applied=applyServiceCatalog(profile,data.catalog,{id,origin,mediaOrigin});
+      const url=profileURL(applied.profile,origin);
+      const saved=await savePage({store,id,previous,revision:data.revision,changes:{v:1,url,...(applied.catalog?{catalog:applied.catalog}:{})},actor,now});
       // A subsequent admin reassignment must never expose another owner's record in this reply.
       if(!owns(saved.record,userKey(actor)))throw notFound();
       return view(id,saved);

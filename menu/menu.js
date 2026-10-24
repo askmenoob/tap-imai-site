@@ -1,0 +1,132 @@
+// import-service/service-catalog-schema.mjs
+function catalogPrice(item, language2 = "ms") {
+  const en = language2 === "en";
+  if (item.priceMode === "quote") return en ? "Request a quote" : "Minta sebut harga";
+  if (item.priceMode === "free") return en ? "Free" : "Percuma";
+  const money = "RM" + (item.priceCents / 100).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const suffix = { unit: en ? "unit" : "unit", hour: en ? "hour" : "jam", session: en ? "session" : "sesi", day: en ? "day" : "hari", night: en ? "night" : "malam", month: en ? "month" : "bulan", project: en ? "project" : "projek" }[item.unit];
+  return (item.priceMode === "from" ? en ? "From " : "Bermula " : "") + money + (suffix ? " / " + suffix : "");
+}
+
+// src/public-catalog.mjs
+var $ = (id2) => document.getElementById(id2);
+var params = new URLSearchParams(location.search);
+var id = params.get("s");
+var endpoint = location.hostname === "127.0.0.1" ? location.origin : window.SMARTTAP_IMPORT_CONFIG?.endpoint;
+var data = null;
+var language = "ms";
+try {
+  if (localStorage.getItem("smarttap.language") === "en") language = "en";
+} catch {
+}
+var L = (ms, en) => language === "en" ? en : ms;
+var el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text) n.textContent = text;
+  return n;
+};
+function https(value) {
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" && !u.username && !u.password ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+function enquiry(item) {
+  try {
+    const u = new URL(data.whatsapp);
+    if (!https(u.href) || !["wa.me", "api.whatsapp.com"].includes(u.hostname)) return null;
+    u.searchParams.set("text", L("Salam ", "Hello ") + data.name + L(", saya ingin bertanya tentang ", ", I would like to ask about ") + item.name + " (" + item.category + ").");
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+function render() {
+  if (!data) return;
+  $("catalog-business-name").textContent = data.name;
+  $("catalog-title").textContent = data.label;
+  $("catalog-back").textContent = L("\u2190 Kembali ke halaman perniagaan", "\u2190 Back to business page");
+  $("catalog-back").href = data.pageURL;
+  document.title = data.label + " \u2014 " + data.name;
+  $("catalog-search-label").textContent = L("Cari produk / perkhidmatan", "Search products / services");
+  $("catalog-search").placeholder = L("Nama, kategori atau penerangan", "Name, category or description");
+  $("catalog-category-label").textContent = L("Kategori", "Category");
+  const selected = $("catalog-category").value;
+  $("catalog-category").replaceChildren();
+  const all = el("option", null, L("Semua kategori", "All categories"));
+  all.value = "";
+  $("catalog-category").append(all);
+  for (const name of [...new Set(data.catalog.items.map((x) => x.category))]) {
+    const o = el("option", null, name);
+    o.value = name;
+    $("catalog-category").append(o);
+  }
+  $("catalog-category").value = [...$("catalog-category").options].some((o) => o.value === selected) ? selected : "";
+  const query = $("catalog-search").value.trim().toLowerCase(), category = $("catalog-category").value, items = data.catalog.items.filter((item) => (!category || item.category === category) && (!query || (item.name + " " + item.description + " " + item.category).toLowerCase().includes(query)));
+  $("catalog-public-items").replaceChildren();
+  for (const item of items) {
+    const card = el("article", "catalog-public-card");
+    if (item.photo && https(item.photo) || location.hostname === "127.0.0.1" && item.photo?.startsWith(location.origin + "/api/catalog-media/")) {
+      const image = el("img", "catalog-public-photo");
+      image.src = item.photo;
+      image.alt = item.name;
+      image.loading = "lazy";
+      image.referrerPolicy = "no-referrer";
+      image.onerror = () => image.remove();
+      card.append(image);
+    }
+    const body = el("div", "catalog-public-card-body");
+    body.append(el("span", "catalog-item-category", item.category), el("h2", null, item.name), el("strong", "catalog-public-price", catalogPrice(item, language)));
+    if (item.description) body.append(el("p", "catalog-public-description", item.description));
+    if (item.status === "unavailable") body.append(el("span", "catalog-unavailable", L("Tidak tersedia sementara", "Temporarily unavailable")));
+    else {
+      const url = enquiry(item);
+      if (url) {
+        const a = el("a", "catalog-enquiry", L("Tanya melalui WhatsApp \u2197", "Enquire on WhatsApp \u2197"));
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        body.append(a);
+      }
+    }
+    card.append(body);
+    $("catalog-public-items").append(card);
+  }
+  $("catalog-public-count").textContent = items.length + L(" item", " items");
+  $("catalog-public-empty").hidden = !!items.length;
+  $("catalog-public-empty").textContent = data.catalog.items.length ? L("Tiada padanan. Cuba carian atau kategori lain.", "No matches. Try another search or category.") : L("Senarai sedang dikemas kini. Hubungi perniagaan untuk maklumat lanjut.", "The list is being updated. Contact the business for more details.");
+}
+$("catalog-search").oninput = render;
+$("catalog-category").onchange = render;
+window.addEventListener("smarttap:language", (event) => {
+  language = event.detail.language === "en" ? "en" : "ms";
+  render();
+});
+async function open() {
+  try {
+    if (!/^[A-Za-z0-9_-]{16}$/.test(id || "")) throw new Error(L("Pautan katalog tidak sah.", "Invalid catalogue link."));
+    if (!endpoint) throw new Error(L("Sambungan katalog belum tersedia.", "Catalogue connection unavailable."));
+    const response = await fetch(new URL("/api/catalog/" + id, endpoint), { cache: "no-store", credentials: "omit", signal: AbortSignal.timeout(15e3) }), result = await response.json();
+    if (!response.ok) throw new Error(result.error || L("Katalog tidak tersedia.", "Catalogue unavailable."));
+    data = result;
+    $("catalog-public").dataset.theme = data.theme;
+    if (/^#[a-f0-9]{6}$/i.test(data.accent)) $("catalog-public").style.setProperty("--accent", data.accent);
+    if (https(data.logo)) {
+      $("catalog-business-logo").src = data.logo;
+      $("catalog-business-logo").referrerPolicy = "no-referrer";
+      $("catalog-business-logo").onerror = () => {
+        $("catalog-business-logo").hidden = true;
+      };
+    } else $("catalog-business-logo").hidden = true;
+    $("catalog-public-status").hidden = true;
+    $("catalog-content").hidden = false;
+    render();
+  } catch (error) {
+    $("catalog-public-status").textContent = error.name === "TimeoutError" ? L("Sambungan mengambil masa terlalu lama. Muat semula untuk mencuba lagi.", "Connection timed out. Reload to try again.") : error.message;
+    $("catalog-public-status").setAttribute("role", "alert");
+  }
+}
+open();

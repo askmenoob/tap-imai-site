@@ -72,7 +72,7 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
           if(customer){reply(res,403,{error:'Hanya super admin boleh mendaftarkan Gmail pemilik.'},origin);return true;}
           reply(res,200,await customers.assign(match[1],await body(req,2048),actor),origin);return true;
         }
-        const data=await body(req,24576);
+        const data=await body(req,98304);
         reply(res,200,customer?await customers.update(match[1],data,actor):await admin.update(match[1],data,actor),origin);return true;
       }
     }

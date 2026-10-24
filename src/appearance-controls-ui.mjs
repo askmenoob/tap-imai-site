@@ -29,22 +29,22 @@ export function createAppearanceControls({onChange}) {
   const resetters=[];
   function linkEditor(key,label,{address=false,whatsapp=false}={}){
     const box=wrap(key),input=$(key);let draft='';
-    const options=[['none','Tidak dipaparkan'],['link','Pautan HTTPS']];if(address)options.push(['address','Guna alamat perniagaan']);if(whatsapp)options.push(['whatsapp','Nombor WhatsApp Malaysia']);
+    const options=[['none','Tidak dipaparkan'],['link','Pautan HTTPS']];if(key==='menu')options.push(['catalog','Bina menu / katalog']);if(address)options.push(['address','Guna alamat perniagaan']);if(whatsapp)options.push(['whatsapp','Nombor WhatsApp Malaysia']);
     const mode=select(box,'appearance-'+key+'-mode',label,options),phone=el('input');phone.type='tel';phone.placeholder='Contoh: 012-2258950';phone.setAttribute('aria-label','Nombor WhatsApp promosi');phone.hidden=true;box.append(phone);controls.push(phone);
     const open=el('a','appearance-test-link','Uji pautan ↗');open.target='_blank';open.rel='noopener noreferrer';box.append(open);
     const hint=help(box,address?'Pilih pautan Maps sendiri atau jana arah daripada alamat yang anda simpan.':'Kosongkan pautan untuk menyembunyikan butang ini.');
     function sync(){
-      input.hidden=mode.value==='none'||mode.value==='whatsapp';input.readOnly=mode.value==='address';phone.hidden=mode.value!=='whatsapp';phone.disabled=locked||phone.hidden;
-      const url=safeAppearanceURL(input.value);open.hidden=!url;if(url)open.href=url;else open.removeAttribute('href');
+      input.hidden=['none','whatsapp','catalog'].includes(mode.value);input.readOnly=['address','catalog'].includes(mode.value);phone.hidden=mode.value!=='whatsapp';phone.disabled=locked||phone.hidden;
+      const url=safeAppearanceURL(input.value);open.hidden=!url||mode.value==='catalog';if(url)open.href=url;else open.removeAttribute('href');
       input.setCustomValidity(input.value&&!url?message('Gunakan pautan HTTPS yang sah.','Enter a valid HTTPS link.'):'');
       mode.setCustomValidity(mode.value==='address'&&!input.value?message('Isi alamat perniagaan dahulu.','Enter your business address first.'):'');
       phone.setCustomValidity(mode.value==='whatsapp'&&!whatsappFromPhone(phone.value)?message('Masukkan nombor telefon Malaysia yang sah.','Enter a valid Malaysian phone number.'):'');
-      hint.hidden=mode.value==='none';
+      hint.hidden=['none','catalog'].includes(mode.value);
     }
     mode.onchange=()=>{if(mode.value==='none'){draft=input.value||draft;input.value='';}else if(mode.value==='address'){input.value=mapsAddressURL($('address').value);}else if(mode.value==='whatsapp'){input.value=whatsappFromPhone(phone.value)||'';}else input.value=draft;sync();changed();};
     phone.oninput=()=>{input.value=whatsappFromPhone(phone.value)||'';sync();changed();};
     input.addEventListener('input',()=>{draft=input.value;sync();});
-    resetters.push(()=>{draft=input.value;mode.value=input.value?'link':'none';phone.value='';sync();});
+    resetters.push(()=>{draft=input.value;let builtIn=false;try{const u=new URL(input.value);builtIn=key==='menu'&&u.origin===location.origin&&u.pathname==='/menu/'&&/^[A-Za-z0-9_-]{16}$/.test(u.searchParams.get('s')||'');}catch{}mode.value=builtIn?'catalog':input.value?'link':'none';phone.value='';sync();});
     return {sync};
   }
   const links=[linkEditor('menu','Jenis pautan menu / katalog'),linkEditor('directions','Pilihan lokasi',{address:true}),linkEditor('promoURL','Jenis pautan promosi',{whatsapp:true})];
