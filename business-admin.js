@@ -2747,26 +2747,26 @@ function createCustomerArea({ coverNodes, onSelect }) {
     (confirm ? checkout : cart).append(node);
   }
   paymentForm.prepend(cart, checkout);
-  const paymentPager = document.createElement("div");
-  paymentPager.className = "customer-step-controls";
-  paymentPager.innerHTML = '<button type="button" class="secondary" id="customer-cart-back">Sebelum</button><span id="customer-cart-step"></span><button type="button" class="secondary" id="customer-cart-next">Seterusnya</button>';
-  paymentForm.append(paymentPager);
-  let paymentStep = 0;
+  const paymentTabs = document.createElement("nav");
+  paymentTabs.className = "customer-subnav customer-payment-tabs";
+  paymentTabs.setAttribute("aria-label", "Bahagian pembelian");
+  let paymentTab = 0;
   const showCart = () => {
-    cart.hidden = paymentStep !== 0;
-    checkout.hidden = paymentStep !== 1;
-    $2("customer-cart-back").disabled = paymentStep === 0;
-    $2("customer-cart-next").disabled = paymentStep === 1;
-    $2("customer-cart-step").textContent = paymentStep === 0 ? "1 / 2" : "2 / 2";
+    cart.hidden = paymentTab !== 0;
+    checkout.hidden = paymentTab !== 1;
+    for (const [i, button] of [...paymentTabs.children].entries()) button.setAttribute("aria-current", i === paymentTab ? "page" : "false");
   };
-  $2("customer-cart-back").onclick = () => {
-    paymentStep = 0;
-    showCart();
-  };
-  $2("customer-cart-next").onclick = () => {
-    paymentStep = 1;
-    showCart();
-  };
+  for (const [i, label] of ["Pesanan", "Jumlah & bayaran"].entries()) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.onclick = () => {
+      paymentTab = i;
+      showCart();
+    };
+    paymentTabs.append(button);
+  }
+  paymentForm.prepend(paymentTabs);
   showCart();
   const fieldGroups = { business: [["name", "tagline"], ["logo"], ["phone", "whatsapp"], ["website"], ["instagram", "facebook"], ["tiktok", "threads"], ["google"]], page: [["theme", "accent"], ["cover"], ["menu", "directions"], ["address", "hours"], ["promoTitle", "promoText"], ["promoURL"], ["promoStart", "promoEnd"]] };
   const pages = { business: [], page: [] };
@@ -2785,19 +2785,24 @@ function createCustomerArea({ coverNodes, onSelect }) {
     $2("fields").append(group);
     pages[view2].push(group);
   }
-  const pager = document.createElement("div");
-  pager.className = "customer-step-controls";
-  pager.innerHTML = '<button type="button" class="secondary" id="customer-prev">Sebelum</button><span id="customer-step" role="status"></span><button type="button" class="secondary" id="customer-next">Seterusnya</button>';
-  form.prepend(pager);
-  let view = "package", sectionName = "overview", step = { business: 0, page: 0 }, selected2 = null;
-  $2("customer-prev").onclick = () => {
-    if (step[view] > 0) step[view]--;
-    render2();
-  };
-  $2("customer-next").onclick = () => {
-    if (step[view] < pages[view].length - 1) step[view]++;
-    render2();
-  };
+  const fieldTabs = document.createElement("nav");
+  fieldTabs.className = "customer-subnav customer-field-tabs";
+  fieldTabs.setAttribute("aria-label", "Bahagian suntingan");
+  form.prepend(fieldTabs);
+  const tabLabels = { business: ["Maklumat", "Logo", "Hubungi", "Laman web", "Instagram / Facebook", "TikTok / Threads", "Google Review"], page: ["Tema & warna", "Cover", "Menu & lokasi", "Alamat & waktu", "Promosi", "Pautan promosi", "Tarikh promosi"] };
+  let view = "package", sectionName = "overview", activeTab = { business: 0, page: 0 }, selected2 = null;
+  for (const [name, labels] of Object.entries(tabLabels)) for (const [i, label] of labels.entries()) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.dataset.fieldView = name;
+    button.dataset.index = String(i);
+    button.onclick = () => {
+      activeTab[name] = i;
+      render2();
+    };
+    fieldTabs.append(button);
+  }
   const toggle = $2("customer-menu-toggle");
   toggle.onclick = () => {
     const expanded = toggle.getAttribute("aria-expanded") !== "true";
@@ -2830,12 +2835,11 @@ function createCustomerArea({ coverNodes, onSelect }) {
     const title = menus.find((m) => m[0] === view)[1];
     if ($2("customer-title").textContent !== title) $2("customer-title").textContent = title;
     for (const [name, sections] of Object.entries(pages)) sections.forEach((node, i) => {
-      node.hidden = view !== name || i !== step[name];
+      node.hidden = view !== name || i !== activeTab[name];
     });
-    if (["business", "page"].includes(view)) {
-      $2("customer-prev").disabled = step[view] === 0;
-      $2("customer-next").disabled = step[view] === pages[view].length - 1;
-      $2("customer-step").textContent = step[view] + 1 + " / " + pages[view].length;
+    for (const button of fieldTabs.children) {
+      button.hidden = button.dataset.fieldView !== view;
+      button.setAttribute("aria-current", Number(button.dataset.index) === activeTab[button.dataset.fieldView] ? "page" : "false");
     }
     for (const [name, node] of Object.entries(groups)) {
       const hide = name !== sectionName;
@@ -2857,7 +2861,7 @@ function createCustomerArea({ coverNodes, onSelect }) {
         const at = sections.findIndex((group) => group.contains(invalid));
         if (at >= 0) {
           view = name;
-          step[name] = at;
+          activeTab[name] = at;
           break;
         }
       }
@@ -2893,8 +2897,8 @@ function createCustomerArea({ coverNodes, onSelect }) {
     nav.classList.remove("is-open");
     view = "package";
     sectionName = "overview";
-    step = { business: 0, page: 0 };
-    paymentStep = 0;
+    activeTab = { business: 0, page: 0 };
+    paymentTab = 0;
     showCart();
     render2();
   }, open };
