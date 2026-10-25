@@ -57,16 +57,25 @@ export function createToyyibCheckout({store,provider,secretKey='',categoryCode='
     }
     return page;
   }
-  const checkoutView=order=>({id:order.id,pageId:order.pageId,status:order.status,amountCents:order.quote.amountCents,currency:'MYR',mode:order.mode,billCode:order.billCode||null,paymentUrl:order.billCode&&!['paid','cancelled','review'].includes(order.status)?provider.host+'/'+order.billCode:null,invoice:order.invoice||null,createdAt:order.createdAt,verifiedAt:order.verifiedAt||null});
-  async function saveOrder(id,changes){for(let retry=0;retry<6;retry++){const item=await store.getGatewayOrder(id);if(!item)throw fail(404,'Pesanan tidak ditemui.');if(item.record.status==='paid'&&changes.status&&changes.status!=='paid')return item.record;const next={...item.record,...changes};if(await store.updateGatewayOrder(id,next,item.revision))return next;}throw fail(409,'Pesanan sedang dikemas kini. Cuba semula.');}
+  const checkoutView=order=>({id:order.id,pageId:order.pageId,status:order.status,amountCents:order.quote.amountCents,currency:'MYR',mode:order.mode,billCode:order.billCode||null,paymentUrl:order.billCode&&!['paid','cancelled','review','resolved'].includes(order.status)?provider.host+'/'+order.billCode:null,invoice:order.invoice||null,createdAt:order.createdAt,verifiedAt:order.verifiedAt||null});
+  async function saveOrder(id,changes){for(let retry=0;retry<6;retry++){const item=await store.getGatewayOrder(id);if(!item)throw fail(404,'Pesanan tidak ditemui.');if(['paid','resolved'].includes(item.record.status)&&changes.status&&changes.status!==item.record.status)return item.record;const next={...item.record,...changes};if(await store.updateGatewayOrder(id,next,item.revision))return next;}throw fail(409,'Pesanan sedang dikemas kini. Cuba semula.');}
   async function updatePage(order,changes){
     for(let retry=0;retry<6;retry++){
       const item=await store.getVersion(order.pageId);if(!item)throw fail(404,'Halaman tidak ditemui.');
-      if(item.record.checkout?.id!==order.id||item.record.checkout.status==='paid'&&changes.status!=='paid')return item;
+      if(item.record.checkout?.id!==order.id||['paid','resolved'].includes(item.record.checkout.status)&&changes.status!==item.record.checkout.status)return item;
+      if(item.record.checkout.status==='review'&&['pending','failed','creating','cancelled'].includes(changes.status))return item;
+      if(Object.entries(changes).every(([key,value])=>(item.record.checkout[key]??null)===(value??null)))return item;
       try{return await savePage({store,id:order.pageId,previous:item,revision:item.revision,changes:{checkout:{...item.record.checkout,...changes}},actor:{email:'toyyibpay'},now});}catch(error){if(error.status!==409)throw error;}
     }throw fail(409,'Halaman sedang dikemas kini. Cuba semula.');
   }
-  async function fulfill(order,tx){
+  async function clearResolution(order){
+    for(let retry=0;retry<6;retry++){
+      const item=await store.getVersion(order.pageId),lock=item?.record.paymentResolution;
+      if(!lock||lock.orderId!==order.id||lock.token!==order.resolution?.token)return;
+      try{await savePage({store,id:order.pageId,previous:item,revision:item.revision,changes:{paymentResolution:null},actor:{email:order.resolution.changedBy},now});return;}catch(error){if(error.status!==409)throw error;}
+    }throw fail(409,'Keputusan disimpan. Muat semula untuk melengkapkan penyelesaian.');
+  }
+  async function fulfill(order,tx,resolution=null){
     const invoice=tx.billpaymentInvoiceNo;
     if(typeof invoice!=='string'||!/^[-A-Za-z0-9_]{1,100}$/.test(invoice))throw fail(502,'Rujukan ToyyibPay tidak sah.');
     const claim={provider:'toyyibpay',mode:order.mode,orderId:order.id,pageId:order.pageId,invoice};
@@ -74,14 +83,24 @@ export function createToyyibCheckout({store,provider,secretKey='',categoryCode='
     if(!await store.claimPayment(key,claim)){const existing=await store.getPayment(key);if(existing?.orderId!==order.id||existing?.pageId!==order.pageId)throw fail(409,'Transaksi ini telah digunakan untuk pesanan lain.');}
     for(let retry=0;retry<6;retry++){
       const previous=await store.getVersion(order.pageId);if(!previous)throw fail(404,'Halaman tidak ditemui.');
-      if(previous.record.gatewayApplied?.[order.id])return saveOrder(order.id,{status:'paid',invoice,verifiedAt:new Date(now()).toISOString()});
-      let recipient=false;try{recipient=ownerKey(previous.record.ownerEmail)===order.ownerKey;}catch{}
-      if(!recipient||previous.record.lifecycle?.state==='deleted'||order.status==='cancelled')return saveOrder(order.id,{status:'review',invoice,verifiedAt:new Date(now()).toISOString()});
+      // Read durable order state AFTER the page snapshot. A resolution lock written
+      // after this snapshot makes the subsequent page CAS fail, even across instances.
+      const latest=await store.getGatewayOrder(order.id);if(!latest)throw fail(404,'Pesanan tidak ditemui.');order=latest.record;
+      if(['paid','resolved'].includes(order.status))return order;
+      const lock=previous.record.paymentResolution;
+      if(lock&&(!resolution||lock.orderId!==order.id||lock.token!==resolution.token))return order;
+      if(order.resolution&&(!resolution||order.resolution.token!==resolution.token))return order;
+      if(previous.record.gatewayApplied?.[order.id])return saveOrder(order.id,{status:'paid',invoice,verifiedAt:new Date(now()).toISOString(),...(resolution?{ownerKey:resolution.targetOwnerKey,originalOwnerKey:order.originalOwnerKey||order.ownerKey,resolution:{...resolution,completedAt:new Date(now()).toISOString()}}:{})});
+      let recipient=false;try{recipient=ownerKey(previous.record.ownerEmail)===(resolution?.targetOwnerKey||order.ownerKey);}catch{}
+      if(!recipient||previous.record.lifecycle?.state==='deleted'||order.status==='cancelled'&&!resolution){
+        const held=await saveOrder(order.id,{status:'review',invoice,verifiedAt:new Date(now()).toISOString()});
+        await updatePage(held,{status:'review',invoice});return held;
+      }
       const old=previous.record.subscription,changes={gatewayApplied:{...previous.record.gatewayApplied,[order.id]:invoice},renewal:{id:order.id,status:'approved',provider:'toyyibpay',reference:invoice,paidDate:new Date(now()).toISOString().slice(0,10),...order.quote,submittedAt:order.createdAt,decidedAt:new Date(now()).toISOString(),decidedBy:'toyyibpay'}};
       if(order.quote.months===12){const expiry=Date.parse(old?.expiresAt||'');const start=Math.max(Number.isFinite(expiry)?expiry:0,now());changes.subscription={plan:'annual',currency:'MYR',lastOrderCents:order.quote.amountCents,renewalCents:3000,startsAt:old?.startsAt||new Date(now()).toISOString(),expiresAt:annualEnd(start),lastPaymentId:order.id};}
       else if(!hasAnnualEntitlement(previous.record))changes.subscription={plan:'nfc_only',currency:'MYR',lastPaymentId:order.id};
       if(previous.record.checkout?.id===order.id)changes.checkout={...previous.record.checkout,status:'paid',invoice};
-      try{await savePage({store,id:order.pageId,previous,revision:previous.revision,changes,actor:{email:'toyyibpay'},now});return saveOrder(order.id,{status:'paid',invoice,verifiedAt:new Date(now()).toISOString()});}catch(error){if(error.status!==409)throw error;}
+      try{await savePage({store,id:order.pageId,previous,revision:previous.revision,changes,actor:{email:resolution?.changedBy||'toyyibpay'},now});return saveOrder(order.id,{status:'paid',invoice,verifiedAt:new Date(now()).toISOString(),...(resolution?{ownerKey:resolution.targetOwnerKey,originalOwnerKey:order.originalOwnerKey||order.ownerKey,resolution:{...resolution,completedAt:new Date(now()).toISOString()}}:{})});}catch(error){if(error.status!==409)throw error;}
     }throw fail(409,'Bayaran diterima tetapi pengaktifan sedang dikemas kini. Semak semula status.');
   }
   async function reconcile(id,force=false){
@@ -89,10 +108,13 @@ export function createToyyibCheckout({store,provider,secretKey='',categoryCode='
     const work=(async()=>{
       const saved=await store.getGatewayOrder(id);if(!saved)throw fail(404,'Pesanan tidak ditemui.');const order=saved.record;
       if(order.mode!==provider.mode)throw fail(409,'Persekitaran pembayaran tidak sepadan.');
-      if(['paid','review'].includes(order.status)||!order.billCode)return order;
+      if(['paid','review','resolved'].includes(order.status)){await updatePage(order,{status:order.status,invoice:order.invoice||null});if(order.resolution?.completedAt)await clearResolution(order);return order;}
+      if(!order.billCode)return order;
       if(!force&&now()-(lastChecks.get(id)||0)<10000)return order;
       lastChecks.set(id,now());if(lastChecks.size>1000)lastChecks.delete(lastChecks.keys().next().value);
       const transactions=await provider.transactions(order.billCode);
+      const latest=await store.getGatewayOrder(id);
+      if(['paid','resolved'].includes(latest?.record.status)||latest?.record.resolution){const result=latest.record;await updatePage(result,{status:result.status,invoice:result.invoice||null});return result;}
       const paid=transactions.filter(tx=>String(tx.billpaymentStatus)==='1');
       const match=paid.find(tx=>tx.billExternalReferenceNo===order.id&&amountCents(tx.billpaymentAmount)===order.quote.amountCents);
       if(match)return fulfill(order,match);
@@ -108,8 +130,9 @@ export function createToyyibCheckout({store,provider,secretKey='',categoryCode='
     async create(id,data={},actor){
       ready();if(Object.keys(data).some(key=>!['package','extraNfcQty','stickerQty','revision','expectedAmountCents'].includes(key)))throw fail(400,'Maklumat pesanan tidak sah.');
       const previous=await owned(id,actor);if(!previous.record.ownerEmail)throw fail(409,'Daftarkan Gmail pemilik dahulu.');
+      if(previous.record.paymentResolution)throw fail(409,'Selesaikan semakan bayaran admin yang sedang diproses dahulu.');
       const old=previous.record.checkout;
-      if(old&&!['paid','cancelled','creation_failed'].includes(old.status)){
+      if(old&&!['paid','cancelled','creation_failed','resolved'].includes(old.status)){
         const pending=await store.getGatewayOrder(old.id);
         if(pending&&actor.role!=='admin'&&pending.record.ownerKey!==ownerKey(actor.email))throw fail(409,'Bil terdahulu memerlukan semakan super admin.');
         if(!pending||!pending.record.billCode)throw fail(409,'Bil sedang disediakan. Hubungi super admin jika status tidak berubah.');
@@ -134,9 +157,57 @@ export function createToyyibCheckout({store,provider,secretKey='',categoryCode='
     async cancel(id,actor){
       ready();if(!orderId(id))throw fail(404,'Pesanan tidak ditemui.');const saved=await store.getGatewayOrder(id);if(!saved)throw fail(404,'Pesanan tidak ditemui.');await owned(saved.record.pageId,actor);
       if(actor.role!=='admin'&&saved.record.ownerKey!==ownerKey(actor.email))throw fail(404,'Pesanan tidak ditemui.');
-      const checked=await reconcile(id,true);if(['paid','review'].includes(checked.status))throw fail(409,'Bayaran telah diterima; pesanan tidak boleh dibatalkan.');
+      const checked=await reconcile(id,true);if(['paid','review','resolved'].includes(checked.status))throw fail(409,'Bayaran telah diterima; pesanan tidak boleh dibatalkan.');
       if(!checked.billCode)throw fail(409,'Bil belum dapat dibatalkan. Hubungi super admin.');
       await owned(checked.pageId,actor);await provider.cancel(checked.billCode);const after=await reconcile(id,true);if(['paid','review'].includes(after.status))throw fail(409,'Bayaran telah diterima; pesanan tidak boleh dibatalkan.');const result=await saveOrder(id,{status:'cancelled'});await updatePage(result,{status:result.status});return {checkout:checkoutView(result),page:view(result.pageId,await owned(result.pageId,actor),actor)};
+    },
+    async resolve(id,data={},actor){
+      ready();if(actor?.role!=='admin'||!actor.email)throw fail(403,'Hanya super admin boleh menyelesaikan semakan bayaran.');
+      if(!orderId(id))throw fail(404,'Pesanan tidak ditemui.');
+      if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(key=>!['action','revision','pageRevision','note','confirmEmail','reference','confirmRefund'].includes(key)))throw fail(400,'Maklumat penyelesaian tidak sah.');
+      const note=typeof data.note==='string'?data.note.normalize('NFC').trim():'';
+      if(!note||note.length>200||/[\u0000-\u001f]/.test(note)||!['apply','record-refund'].includes(data.action))throw fail(400,'Pilih tindakan dan masukkan nota semakan, maksimum 200 aksara.');
+      let saved=await store.getGatewayOrder(id);if(!saved||saved.record.mode!==provider.mode)throw fail(404,'Pesanan tidak ditemui.');
+      let order=saved.record;const page=await store.getVersion(order.pageId);if(!page)throw fail(404,'Halaman tidak ditemui.');
+      if(order.resolution?.completedAt&&['paid','resolved'].includes(order.status)){
+        if(order.resolution.action!==data.action)throw fail(409,'Pesanan sudah diselesaikan dengan tindakan lain.');
+        await updatePage(order,{status:order.status,invoice:order.invoice});await clearResolution(order);return {checkout:checkoutView(order),page:view(order.pageId,await store.getVersion(order.pageId),actor)};
+      }
+      if(order.status!=='review'||data.revision!==saved.revision||data.pageRevision!==page.revision)throw fail(409,'Semakan atau halaman telah berubah. Muat semula sebelum meneruskan.');
+      let targetOwnerKey=null,reference=null;
+      if(data.action==='apply'){
+        if(page.record.lifecycle?.state==='deleted'||!page.record.ownerEmail)throw fail(409,'Pulihkan halaman dan daftarkan Gmail pemilik dahulu.');
+        try{targetOwnerKey=ownerKey(data.confirmEmail);if(targetOwnerKey!==ownerKey(page.record.ownerEmail))throw 0;}catch{throw fail(409,'Sahkan Gmail pemilik semasa sebelum mengaktifkan bayaran.');}
+      }else{
+        reference=typeof data.reference==='string'?data.reference.normalize('NFC').trim():'';
+        if(data.confirmRefund!==true||!reference||reference.length>100||/[\u0000-\u001f]/.test(reference))throw fail(400,'Sahkan pemulangan wang di luar SmartTap dan masukkan rujukannya.');
+        if(page.record.gatewayApplied?.[id])throw fail(409,'Langganan telah diaktifkan. Semak pembetulan langganan secara berasingan.');
+      }
+      // Provider proof is fresh, independently queried, and tied to this exact invoice.
+      const transactions=await provider.transactions(order.billCode);
+      const match=transactions.find(tx=>String(tx.billpaymentStatus)==='1'&&tx.billExternalReferenceNo===id&&amountCents(tx.billpaymentAmount)===order.quote.amountCents&&tx.billpaymentInvoiceNo===order.invoice);
+      if(!match)throw fail(409,'Transaksi berjaya yang sepadan belum dapat disahkan dengan ToyyibPay.');
+      const intended=page.record.paymentResolution||{orderId:id,token:randomBytes(12).toString('hex'),action:data.action,note,targetOwnerKey,reference,changedBy:actor.email,startedAt:new Date(now()).toISOString()};
+      if(intended.orderId!==id||intended.action!==data.action||intended.targetOwnerKey!==targetOwnerKey||intended.reference!==reference)throw fail(409,'Penyelesaian terdahulu sedang diproses. Sambung tindakan yang sama.');
+      if(!page.record.paymentResolution)await savePage({store,id:order.pageId,previous:page,revision:data.pageRevision,changes:{paymentResolution:intended},actor,now});
+      if(order.resolution){
+        if(order.resolution.token!==intended.token)throw fail(409,'Penyelesaian telah berubah. Muat semula dahulu.');
+      }else{
+        const next={...order,resolution:intended};
+        if(!await store.updateGatewayOrder(id,next,saved.revision))throw fail(409,'Pesanan sedang dikemas kini. Muat semula sebelum meneruskan.');
+        order=next;
+      }
+      const resolution=order.resolution;
+      let result;
+      if(data.action==='apply'){
+        result=await fulfill(order,match,resolution);
+        if(result.status!=='paid')throw fail(409,'Pemilik atau status halaman berubah. Semak dan sambung tindakan yang sama.');
+      }else{
+        // Records an operator-confirmed external refund only. No money is sent by this API.
+        await updatePage(order,{status:'resolved',invoice:order.invoice});
+        result=await saveOrder(id,{status:'resolved',resolution:{...resolution,completedAt:new Date(now()).toISOString()}});
+      }
+      await clearResolution(result);return {checkout:checkoutView(result),page:view(order.pageId,await store.getVersion(order.pageId),actor)};
     },
     async callback(data){
       ready();verifyToyyibCallback(data,secretKey);const item=await store.getGatewayOrder(data.order_id);

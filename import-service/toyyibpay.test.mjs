@@ -132,3 +132,92 @@ test('explicit settlement-hold acceptance permits live checkout without falsely 
   const checkout=await service.create(ctx.page.id,{package:'bundle',revision:ctx.page.revision,expectedAmountCents:10000},alice);
   assert.equal(checkout.paymentUrl,'https://toyyibpay.com/'+checkout.billCode);assert.equal(checkout.amountCents,10000);
 });
+
+test('review synchronizes page status and admin resolves a verified payment explicitly exactly once',async()=>{
+ const ctx=await setup(),checkout=await begin(ctx);
+ let current=await ctx.store.getVersion(ctx.page.id);
+ await ctx.customers.assign(ctx.page.id,{email:bob.email,revision:current.revision},admin);
+ paid(ctx,checkout);await ctx.gateway.callback(callback(checkout));
+ assert.equal((await ctx.store.get(ctx.page.id)).checkout.status,'review');
+ const order=await ctx.store.getGatewayOrder(checkout.id);current=await ctx.store.getVersion(ctx.page.id);
+ const data={action:'apply',revision:order.revision,pageRevision:current.revision,note:'Customer transfer confirmed with both owners',confirmEmail:bob.email};
+ await assert.rejects(ctx.gateway.resolve(checkout.id,data,bob),e=>e.status===403);
+ await assert.rejects(ctx.gateway.resolve(checkout.id,{...data,confirmEmail:alice.email},admin),e=>e.status===409);
+ const result=await ctx.gateway.resolve(checkout.id,data,admin);
+ assert.equal(result.checkout.status,'paid');assert.equal(result.page.subscription.expiresAt,'2027-10-24T08:00:00.000Z');
+ assert.equal((await ctx.gateway.resolve(checkout.id,data,admin)).page.subscription.expiresAt,result.page.subscription.expiresAt);
+ assert.equal((await ctx.store.getGatewayOrder(checkout.id)).record.resolution.changedBy,admin.email);
+ await assert.rejects(ctx.gateway.status(checkout.id,alice),e=>e.status===404);
+ assert.equal((await ctx.gateway.status(checkout.id,bob)).checkout.status,'paid');
+});
+
+test('review resolution requires current revisions, fresh matching provider proof, and cannot grant deleted pages',async()=>{
+ const ctx=await setup(),checkout=await begin(ctx),management=createManagementService({store:ctx.store,now});
+ let page=await ctx.store.getVersion(ctx.page.id);await management.state(ctx.page.id,{state:'deleted',confirmName:profile.name,revision:page.revision},admin);
+ paid(ctx,checkout);await ctx.gateway.callback(callback(checkout));
+ let saved=await ctx.store.getGatewayOrder(checkout.id);page=await ctx.store.getVersion(ctx.page.id);
+ const data={action:'apply',revision:saved.revision,pageRevision:page.revision,note:'Checked order',confirmEmail:alice.email};
+ await assert.rejects(ctx.gateway.resolve(checkout.id,data,admin),e=>e.status===409);
+ const restored=await management.state(ctx.page.id,{state:'disabled',revision:page.revision},admin);
+ await assert.rejects(ctx.gateway.resolve(checkout.id,data,admin),e=>e.status===409);
+ ctx.bills.get(checkout.billCode).transactions=[];
+ await assert.rejects(ctx.gateway.resolve(checkout.id,{...data,pageRevision:restored.revision},admin),e=>e.status===409);
+ assert.equal((await ctx.store.get(ctx.page.id)).subscription.expiresAt,null);
+});
+
+test('external refund record unlocks page without granting or claiming to transfer money; replay stays terminal',async()=>{
+ const ctx=await setup(),checkout=await begin(ctx);await ctx.gateway.cancel(checkout.id,alice);
+ paid(ctx,checkout);await ctx.gateway.callback(callback(checkout));
+ const saved=await ctx.store.getGatewayOrder(checkout.id),page=await ctx.store.getVersion(ctx.page.id);
+ const data={action:'record-refund',revision:saved.revision,pageRevision:page.revision,note:'Refund checked outside SmartTap',reference:'REFUND-123',confirmRefund:true};
+ await assert.rejects(ctx.gateway.resolve(checkout.id,{...data,confirmRefund:false},admin),e=>e.status===400);
+ const result=await ctx.gateway.resolve(checkout.id,data,admin);assert.equal(result.checkout.status,'resolved');assert.equal(result.page.subscription.expiresAt,null);
+ await ctx.gateway.callback(callback(checkout));assert.equal((await ctx.store.getGatewayOrder(checkout.id)).record.status,'resolved');
+ const granted=await createManagementService({store:ctx.store,now}).subscription(ctx.page.id,{action:'extend',note:'Separate complimentary entitlement',revision:result.page.revision},admin);
+ assert.equal(granted.subscription.source,'admin');assert.equal(ctx.bills.size,1);
+});
+
+test('a stale independent instance cannot activate after refund resolution or downgrade terminal state',async()=>{
+ const ctx=await setup(),checkout=await begin(ctx);let release,started;
+ const waiting=new Promise(r=>started=r),paused=new Promise(r=>release=r);
+ const other=createToyyibCheckout({store:ctx.store,provider:{...ctx.provider,transactions:async()=>{started();return paused;}},secretKey:secret,categoryCode:category,enabled:true,accountVerified:true,now});
+ const oldRequest=other.status(checkout.id,alice);await waiting;
+ await ctx.gateway.cancel(checkout.id,alice);paid(ctx,checkout);await ctx.gateway.callback(callback(checkout));
+ const page=await ctx.store.getVersion(ctx.page.id),order=await ctx.store.getGatewayOrder(checkout.id);
+ await ctx.gateway.resolve(checkout.id,{action:'record-refund',revision:order.revision,pageRevision:page.revision,note:'Bank refund independently checked',reference:'REF-STALE',confirmRefund:true},admin);
+ release(ctx.bills.get(checkout.billCode).transactions);await oldRequest;
+ assert.equal((await ctx.store.getGatewayOrder(checkout.id)).record.status,'resolved');
+ assert.equal((await ctx.store.get(ctx.page.id)).subscription.expiresAt,null);
+ assert.equal((await ctx.store.get(ctx.page.id)).checkout.status,'resolved');
+ assert.equal((await ctx.store.get(ctx.page.id)).paymentResolution,null);
+});
+
+test('interrupted resolution locks ownership and can resume without duplicating entitlement',async()=>{
+ const ctx=await setup(),checkout=await begin(ctx);let page=await ctx.store.getVersion(ctx.page.id);
+ await ctx.customers.assign(ctx.page.id,{email:bob.email,revision:page.revision},admin);paid(ctx,checkout);await ctx.gateway.callback(callback(checkout));
+ page=await ctx.store.getVersion(ctx.page.id);let order=await ctx.store.getGatewayOrder(checkout.id);
+ const original=ctx.store.updateGatewayOrder;let crash=true;
+ ctx.store.updateGatewayOrder=async(id,record,revision)=>{if(record.status==='paid'&&crash){crash=false;throw Error('interrupted after page entitlement');}return original(id,record,revision);};
+ const data={action:'apply',revision:order.revision,pageRevision:page.revision,note:'Approved transfer after verification',confirmEmail:bob.email};
+ await assert.rejects(ctx.gateway.resolve(checkout.id,data,admin),/interrupted/);
+ page=await ctx.store.getVersion(ctx.page.id);order=await ctx.store.getGatewayOrder(checkout.id);assert.equal(page.record.paymentResolution.orderId,checkout.id);
+ await assert.rejects(ctx.customers.assign(ctx.page.id,{email:'carl@gmail.com',revision:page.revision},admin),e=>e.status===409);
+ const result=await ctx.gateway.resolve(checkout.id,{...data,revision:order.revision,pageRevision:page.revision},admin);
+ assert.equal(result.page.subscription.expiresAt,'2027-10-24T08:00:00.000Z');assert.equal((await ctx.store.get(ctx.page.id)).paymentResolution,null);
+ assert.equal((await ctx.store.getGatewayOrder(checkout.id)).record.ownerKey,(await ctx.store.getGatewayOrder(checkout.id)).record.resolution.targetOwnerKey);
+});
+
+test('resolution resumes after intent-write failure and terminal replay clears an interrupted unlock',async()=>{
+ const ctx=await setup(),checkout=await begin(ctx);await ctx.gateway.cancel(checkout.id,alice);paid(ctx,checkout);await ctx.gateway.callback(callback(checkout));
+ let page=await ctx.store.getVersion(ctx.page.id),order=await ctx.store.getGatewayOrder(checkout.id);
+ const data={action:'apply',revision:order.revision,pageRevision:page.revision,note:'Late paid bill verified with owner',confirmEmail:alice.email};
+ const originalOrder=ctx.store.updateGatewayOrder;let intentCrash=true;
+ ctx.store.updateGatewayOrder=async(id,record,revision)=>{if(record.resolution&&intentCrash){intentCrash=false;throw Error('intent storage outage');}return originalOrder(id,record,revision);};
+ await assert.rejects(ctx.gateway.resolve(checkout.id,data,admin),/intent storage outage/);
+ page=await ctx.store.getVersion(ctx.page.id);order=await ctx.store.getGatewayOrder(checkout.id);assert.ok(page.record.paymentResolution);assert.equal(order.record.resolution,undefined);
+ const update=ctx.store.update;let unlockCrash=true;
+ ctx.store.update=async(id,record,revision)=>{if(record.paymentResolution===null&&unlockCrash){unlockCrash=false;throw Error('unlock storage outage');}return update(id,record,revision);};
+ await assert.rejects(ctx.gateway.resolve(checkout.id,{...data,revision:order.revision,pageRevision:page.revision},admin),/unlock storage outage/);
+ assert.equal((await ctx.store.getGatewayOrder(checkout.id)).record.status,'paid');assert.ok((await ctx.store.get(ctx.page.id)).paymentResolution);
+ const result=await ctx.gateway.resolve(checkout.id,data,admin);assert.equal(result.page.subscription.expiresAt,'2027-10-24T08:00:00.000Z');assert.equal((await ctx.store.get(ctx.page.id)).paymentResolution,null);
+});

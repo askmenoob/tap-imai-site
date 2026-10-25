@@ -25,7 +25,7 @@ export function pageView({id,record,revision},origin='https://tap.imai.my',inclu
   let checkout=null;try{if(record.checkout&&(includeOwner||record.checkout.recipientKey===ownerKey(record.ownerEmail))){const c=record.checkout;checkout={id:c.id,status:c.status,amountCents:c.amountCents,mode:c.mode,createdAt:c.createdAt,invoice:c.invoice||null};}}catch{}
   return {id,url:origin+'/?s='+id,adminMessage,checkout,profile:JSON.parse(Buffer.from(new URL(url).searchParams.get('p'),'base64url').toString('utf8')),
     revision,catalog:structuredClone(record.catalog||{v:1,enabled:false,kind:'custom',items:[]}),createdAt:record.createdAt||null,updatedAt:record.updatedAt||record.createdAt||null,state:pageState(record,now),manualState:record.lifecycle?.state||'active',subscription:record.subscription||null,
-    renewal:record.renewal?Object.fromEntries(Object.entries(record.renewal).filter(([key])=>includeOwner||!['submittedBy','decidedBy'].includes(key))):null,...(includeOwner?{ownerEmail:record.ownerEmail||'',subscriptionAdjustment:record.subscriptionAdjustment||null}:{})};
+    renewal:record.renewal?Object.fromEntries(Object.entries(record.renewal).filter(([key])=>includeOwner||!['submittedBy','decidedBy'].includes(key))):null,...(includeOwner?{ownerEmail:record.ownerEmail||'',subscriptionAdjustment:record.subscriptionAdjustment||null,paymentResolution:record.paymentResolution||null}:{})};
 }
 export function profileURL(value,origin='https://tap.imai.my'){
   if(!value||typeof value!=='object'||Array.isArray(value))throw fail(400,'Maklumat suntingan tidak sah.');
@@ -60,14 +60,41 @@ export function createAdminService({store,origin='https://tap.imai.my',mediaOrig
           const r=entry.record;
           if(r.renewal?.status!=='pending'||r.lifecycle?.state==='deleted')continue;
           const item=view(entry);
-          items.push({id:item.id,name:item.profile.name,amountCents:item.renewal.amountCents,submittedAt:item.renewal.submittedAt});
+          items.push({id:item.id,key:'manual:'+item.id,category:'manual_review',name:item.profile.name,amountCents:item.renewal.amountCents,submittedAt:item.renewal.submittedAt});
         }
         cursor=page.cursor;
         if(cursor&&seen.has(cursor))throw fail(503,'Senarai bayaran belum dapat dimuatkan.');
         if(cursor)seen.add(cursor);
       }while(cursor);
+      // Gateway orders are authoritative, including reviews on transferred/deleted pages
+      // and older paid orders after a customer starts a new checkout.
+      if(store.listGatewayOrders){
+        cursor=null;seen.clear();
+        do{
+          const page=await store.listGatewayOrders(cursor);
+          for(const {record:order} of page.items){
+            let category;
+            const physical=order.quote?.includesPhysical||order.quote?.items?.some(item=>['bundle','nfc','extra_nfc','table_sticker'].includes(item.id)&&item.quantity>0);
+            if(order.status==='review')category='payment_review';
+            else if(order.status==='paid'&&!order.alertAcknowledgedAt)category='new_order';
+            else if(order.status==='paid'&&physical){
+              const state=order.fulfillment?.state||'awaiting_address';
+              if(state==='awaiting_address')category='awaiting_address';
+              else if(['received','preparing'].includes(state))category='fulfillment';
+            }
+            if(!category&&!order.resolution)continue;
+            let record;try{validId(order.pageId);record=await store.get(order.pageId);}catch{throw fail(503,'Senarai pesanan belum dapat disahkan.');}
+            if(record?.paymentResolution?.orderId===order.id)category='payment_review';
+            if(!category)continue;
+            const name=record?JSON.parse(Buffer.from(new URL(record.url).searchParams.get('p'),'base64url')).name:'Halaman tidak tersedia';
+            items.push({id:order.pageId,key:'gateway:'+order.id,orderId:order.id,mode:order.mode,category,name,amountCents:order.quote.amountCents,submittedAt:order.verifiedAt||order.createdAt});
+          }
+          cursor=page.cursor;if(cursor&&seen.has(cursor))throw fail(503,'Senarai pesanan belum dapat dimuatkan.');if(cursor)seen.add(cursor);
+        }while(cursor);
+      }
       items.sort((a,b)=>(a.submittedAt||'').localeCompare(b.submittedAt||'')||a.id.localeCompare(b.id));
-      const result={items,count:items.length,checkedAt:new Date(now()).toISOString()};
+      const categories=Object.fromEntries(['manual_review','payment_review','new_order','awaiting_address','fulfillment'].map(key=>[key,items.filter(item=>item.category===key).length]));
+      const result={items,count:items.length,categories,checkedAt:new Date(now()).toISOString()};
       if(version===epoch)pendingCache={at:now(),result};
       return result;
     })();

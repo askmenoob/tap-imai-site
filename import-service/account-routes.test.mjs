@@ -9,6 +9,7 @@ import {createMemoryLinkStore,createCloudLinkStore,createShortLinks} from './sho
 import {createAccountRoutes} from './account-routes.mjs';
 import {createManagementService} from './management.mjs';
 import {createToyyibCheckout} from './toyyibpay.mjs';
+import {createPageHistory} from './page-history.mjs';
 const clientId='test.apps.googleusercontent.com',origin='https://tap.imai.my';
 const pair=await generateKeyPair('RS256');
 const token=async(email,overrides={})=>new SignJWT({email,email_verified:true,role:'admin',...overrides}).setProtectedHeader({alg:'RS256'}).setSubject(email).setAudience(clientId).setIssuer('https://accounts.google.com').setIssuedAt().setExpirationTime('5m').sign(pair.privateKey);
@@ -20,7 +21,7 @@ test('HTTP signed Google identities enforce customer boundaries, role and privat
   const body=async req=>{const chunks=[];for await(const chunk of req)chunks.push(chunk);return JSON.parse(Buffer.concat(chunks));};
   const management=createManagementService({store,enabled:true,qrPayload:'test-only'});
   const gateway=createToyyibCheckout({store,provider:{mode:'live',host:'https://toyyibpay.com',async create(){return 'TESTBILL123';},async transactions(){return [];}},secretKey:'test-secret',categoryCode:'testcategory',enabled:true,accountVerified:true});
-  const routes=createAccountRoutes({gateway,adminAuth:createGoogleAdminAuth({clientId,emails:['owner@gmail.com'],keySet:pair.publicKey}),userAuth:createGoogleUserAuth({clientId,keySet:pair.publicKey}),admin,customers,management,clientId,adminConfigured:true,reply,body});
+  const routes=createAccountRoutes({history:createPageHistory({store}),gateway,adminAuth:createGoogleAdminAuth({clientId,emails:['owner@gmail.com'],keySet:pair.publicKey}),userAuth:createGoogleUserAuth({clientId,keySet:pair.publicKey}),admin,customers,management,clientId,adminConfigured:true,reply,body});
   const server=http.createServer(async(req,res)=>{try{await routes(req,res,{path:new URL(req.url,origin).pathname,origin:req.headers.origin===origin?origin:null});}catch(e){reply(res,e.status||500,{error:e.message});}});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>server.close());
   const base='http://127.0.0.1:'+server.address().port;
@@ -53,6 +54,13 @@ test('HTTP signed Google identities enforce customer boundaries, role and privat
   assert.equal((await call('/api/user/links/'+bob.id+'/checkout',null,'POST',{package:'nfc',revision:latestBob.revision})).status,401);
   assert.equal((await call('/api/user/links/'+bob.id+'/checkout','alice@gmail.com','POST',{package:'nfc',revision:latestBob.revision})).status,404);
   const checkout=await call('/api/user/links/'+bob.id+'/checkout','bob@gmail.com','POST',{package:'nfc',revision:latestBob.revision});assert.equal(checkout.status,200);assert.equal(checkout.data.amountCents,7000);
+  const resolve='/api/admin/checkout/'+checkout.data.id+'/resolve';
+  assert.equal((await call(resolve,null,'POST',{})).status,401);
+  assert.equal((await call(resolve,'alice@gmail.com','POST',{})).status,403);
+  assert.equal((await call(resolve.replace('/admin/','/user/'),'bob@gmail.com','POST',{})).status,403);
+  assert.equal((await call('/api/admin/links/'+bob.id+'/history','alice@gmail.com')).status,403);
+  assert.equal((await call('/api/user/links/'+bob.id+'/history','bob@gmail.com')).status,403);
+  assert.equal((await call('/api/admin/links/'+bob.id+'/history','owner@gmail.com')).status,200);
   assert.equal((await call('/api/user/checkout/'+checkout.data.id+'/status','alice@gmail.com','POST',{})).status,404);
   const checked=await call('/api/user/checkout/'+checkout.data.id+'/status','bob@gmail.com','POST',{});assert.equal(checked.status,200);assert.equal(checked.data.checkout.status,'pending');assert.equal('ownerKey' in checked.data.checkout,false);
   const list=await call('/api/user/links?email=bob@gmail.com&role=admin','alice@gmail.com');assert.equal(list.status,200);assert.deepEqual(list.data.items.map(x=>x.id),[alice.id]);assert.equal('ownerEmail' in list.data.items[0],false);

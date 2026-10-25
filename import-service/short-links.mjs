@@ -123,6 +123,35 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
       return {record:data,revision:metadata.generation};
     },
     updateGatewayOrder:(id,record,revision)=>write(gatewayObject(id),record,revision),
+    async listGatewayOrders(cursor){
+      const url=new URL(base);url.searchParams.set('prefix','checkout/');url.searchParams.set('maxResults','25');url.searchParams.set('fields','items(name,generation),nextPageToken');
+      if(cursor)url.searchParams.set('pageToken',cursor);
+      const page=await request(url),items=[];
+      for(const meta of page.items||[]){
+        if(!/^checkout\/ST[a-f0-9]{24}\.json$/.test(meta.name))continue;
+        const record=await request(base+encodeURIComponent(meta.name)+'?alt=media&generation='+encodeURIComponent(meta.generation));
+        if(!record)throw Object.assign(new Error('Senarai pesanan berubah. Muat semula.'),{status:409});
+        items.push({record,revision:meta.generation});
+      }
+      return {items,cursor:page.nextPageToken||null};
+    },
+    async listHistory(id,cursor){
+      if(!/^[A-Za-z0-9_-]{16}$/.test(id||''))throw new Error('Invalid link ID.');
+      const prefix='history/'+id+'/',url=new URL(base);url.searchParams.set('prefix',prefix);url.searchParams.set('maxResults','25');url.searchParams.set('fields','items(name,generation),nextPageToken');
+      if(cursor)url.searchParams.set('pageToken',cursor);
+      const page=await request(url),items=[];
+      for(const meta of page.items||[]){
+        const revision=meta.name.startsWith(prefix)?meta.name.slice(prefix.length).replace(/\.json$/,''):'';
+        if(!/^\d{1,30}$/.test(revision)||meta.name!==prefix+revision+'.json')continue;
+        const record=await request(base+encodeURIComponent(meta.name)+'?alt=media&generation='+encodeURIComponent(meta.generation));
+        if(!record)throw Object.assign(new Error('Sejarah berubah. Muat semula.'),{status:409});items.push({revision,record});
+      }
+      return {items,cursor:page.nextPageToken||null};
+    },
+    getHistory(id,revision){
+      if(!/^[A-Za-z0-9_-]{16}$/.test(id||'')||!/^\d{1,30}$/.test(revision||''))throw new Error('Invalid history reference.');
+      return request(base+encodeURIComponent('history/'+id+'/'+revision+'.json')+'?alt=media');
+    },
     archive:(id,revision,record)=>write('history/'+id+'/'+revision+'.json',record),
     update:(id,record,revision)=>write(object(id),record,revision),
     claimPayment:(key,record)=>write('payments/'+ownerPrefix(key).slice(7,-1)+'.json',record),
@@ -148,6 +177,9 @@ export function createMemoryLinkStore(){
     createGatewayOrder:async(id,record)=>{if(gatewayOrders.has(id))return false;gatewayOrders.set(id,{record:clone(record),revision:String(++generation)});return true;},
     getGatewayOrder:async id=>clone(gatewayOrders.get(id)||null),
     updateGatewayOrder:async(id,record,revision)=>{if(gatewayOrders.get(id)?.revision!==revision)return false;gatewayOrders.set(id,{record:clone(record),revision:String(++generation)});return true;},
+    listGatewayOrders:async cursor=>{const offset=Number(cursor||0),all=[...gatewayOrders.values()].map(clone);return {items:all.slice(offset,offset+25),cursor:all.length>offset+25?String(offset+25):null};},
+    listHistory:async(id,cursor)=>{const offset=Number(cursor||0),all=[...history].filter(([key])=>key.startsWith(id+'/')).map(([key,record])=>({revision:key.slice(id.length+1),record:clone(record)}));return {items:all.slice(offset,offset+25),cursor:all.length>offset+25?String(offset+25):null};},
+    getHistory:async(id,revision)=>clone(history.get(id+'/'+revision)||null),
     claimPayment:async(key,record)=>{if(payments.has(key))return false;payments.set(key,clone(record));return true;},
     getPayment:async key=>clone(payments.get(key)||null),
     create:async(id,record)=>{if(records.has(id))return false;records.set(id,{record:clone(record),revision:String(++generation)});return true;},

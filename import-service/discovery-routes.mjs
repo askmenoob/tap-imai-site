@@ -23,7 +23,7 @@ export function createDiscoveryRoutes({service,adminAuth,shortLinks,originURL,de
       else await adminAuth(req.headers.authorization);
     }
     if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){reply(res,415,{error:'Gunakan JSON.'},origin);return true;}
-    if(!allow(req.socket.remoteAddress,action==='suggest')){reply(res,429,{error:'Had carian dicapai. Cuba sebentar lagi.'},origin);return true;}
+    if(!await allow(req,action)){reply(res,429,{error:'Had carian dicapai. Cuba sebentar lagi.'},origin);return true;}
     const data=await body(req,action==='create'?24576:4096);
     if(action==='create'){
       if(!shortLinks){reply(res,503,{error:'Pautan pendek belum tersedia.'},origin);return true;}

@@ -20,6 +20,9 @@ import {createManagementService} from './management.mjs';
 import {createToyyibCheckout,createToyyibProvider} from './toyyibpay.mjs';
 import {createToyyibDemo} from './toyyib-demo.mjs';
 import {paymentQR} from './payment-qr.mjs';
+import {createDiscoveryQuota,createCloudQuotaStore,createMemoryQuotaStore,quotaLimits} from './quota.mjs';
+import {createPageHistory} from './page-history.mjs';
+import {parseStaticHeaders,staticHeadersFor} from './static-headers.mjs';
 
 const preview = process.argv.includes('--preview');
 const demo = preview && process.env.PREVIEW_DEMO === '1';
@@ -28,6 +31,7 @@ const newSubscription=paymentsEnabled?{plan:'annual',startsAt:null,expiresAt:nul
 const port = Number(process.env.PORT || 8787);
 const mediaOrigin=preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app';
 const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
+const staticHeaders=preview?parseStaticHeaders(await readFile(resolve(root,'_headers'),'utf8')):[];
 const key = (process.env.GOOGLE_PLACES_API_KEY || '').trim();
 const secret = (process.env.IMPORT_SIGNING_SECRET || (preview ? randomBytes(32).toString('hex') : '')).trim();
 if (!preview && (!key || secret.length < 32)) throw new Error('Configure GOOGLE_PLACES_API_KEY and IMPORT_SIGNING_SECRET before starting.');
@@ -51,7 +55,8 @@ const toyDemo=demo?createToyyibDemo('http://127.0.0.1:'+port):null;
 const toyProvider=toyDemo?.provider||(toySecret&&toyCategory?createToyyibProvider({secretKey:toySecret,categoryCode:toyCategory,mode:toyMode}):null);
 const gateway=linkStore?createToyyibCheckout({store:linkStore,provider:toyProvider,secretKey:toySecret,categoryCode:toyCategory,enabled:demo||process.env.TOYYIBPAY_ENABLED==='true',accountVerified:process.env.TOYYIBPAY_ACCOUNT_VERIFIED==='true',settlementHoldAccepted:process.env.TOYYIBPAY_SETTLEMENT_HOLD_ACCEPTED==='true',duitNowQR:demo||process.env.TOYYIBPAY_DUITNOW_QR==='true',origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',apiOrigin:preview?'http://127.0.0.1:'+port:'https://tap-business-import-262870839474.asia-southeast1.run.app'}):null;
 const orders=linkStore?createOrdersService({store:linkStore}):null;
-const accountRoutes=createAccountRoutes({orders,adminAuth,userAuth,admin,customers,management,gateway,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
+const history=linkStore?createPageHistory({store:linkStore,mediaOrigin,origin:preview?mediaOrigin:'https://tap.imai.my'}):null;
+const accountRoutes=createAccountRoutes({orders,history,adminAuth,userAuth,admin,customers,management,gateway,clientId:adminClientId,adminConfigured:!!adminClientId&&adminEmails.some(email=>email.trim()),demo,reply,body});
 
 const demoMedia=new Map();
 const mediaStore=demo?{put:async(name,bytes)=>demoMedia.set(name,bytes),get:async name=>demoMedia.get(name)}:process.env.SHORT_LINK_BUCKET?createCloudMediaStore({bucket:process.env.SHORT_LINK_BUCKET,getToken:runtimeToken}):null;
@@ -70,21 +75,11 @@ const fixture = {
 const service = createImportService({ google: demo ? fixture : createGoogleProvider(key), secret,
   ...(!demo && process.env.GOOGLE_SEARCH_ENABLED==='true' ? {webSearch:createGoogleWebSearch({project:process.env.GOOGLE_SEARCH_PROJECT,model:process.env.GOOGLE_SEARCH_MODEL || 'gemini-3.8-flash'})} : {}),
   ...(demo ? { readWebsite: async () => ({ url:'https://example.com/', html:`<script type="application/ld+json">${JSON.stringify({ '@type':'CafeOrCoffeeShop', name:'Kopi Contoh (DEMO)', description:'Kopi dan makanan untuk komuniti setempat. Data contoh untuk menguji aliran sahaja.', logo:demoLogo, sameAs:['https://www.instagram.com/example/','https://www.facebook.com/example/','https://www.tiktok.com/@example','https://wa.me/60123456789'] })}</script>` }) } : {}) });
-const windows = new Map();
-let day = ''; let dayCount = 0;
-function allow(remote, suggestions = false) {
-  const today = new Date().toISOString().slice(0,10);
-  if (today !== day) { day = today; dayCount = 0; }
-  const bucket=remote+(suggestions?':suggest':':lookup');
-  const now = Date.now(); const previous = windows.get(bucket);
-  const state = !previous || now - previous.since >= 60000 ? { since:now, count:0 } : previous;
-  windows.set(bucket, state);
-  if (windows.size > 10000) for (const [id, item] of windows) if (now - item.since > 60000) windows.delete(id);
-  return ++state.count <= (suggestions?30:12) && ++dayCount <= Number(process.env.MAX_DAILY_REQUESTS || 300);
-}
+const quotaStore=preview?createMemoryQuotaStore():createCloudQuotaStore({bucket:process.env.QUOTA_BUCKET||process.env.SHORT_LINK_BUCKET,getToken:runtimeToken});
+const allow=createDiscoveryQuota({store:quotaStore,secret,limits:quotaLimits(process.env),cloudRun:!preview&&!!process.env.K_SERVICE});
 function reply(res, status, data, origin) {
   res.writeHead(status, { 'content-type':'application/json; charset=utf-8', 'cache-control':'no-store',
-    'x-content-type-options':'nosniff', ...(origin ? { 'access-control-allow-origin':origin, vary:'Origin' } : {}) });
+    'x-content-type-options':'nosniff','x-frame-options':'DENY',...(!preview?{'strict-transport-security':'max-age=31536000','content-security-policy':"default-src 'none'; frame-ancestors 'none'"}:{}), ...(origin ? { 'access-control-allow-origin':origin, vary:'Origin' } : {}) });
   res.end(JSON.stringify({ ...data, ...(demo ? { demo:true } : {}) }));
 }
 async function body(req,limit=4096) {
@@ -96,6 +91,7 @@ async function body(req,limit=4096) {
 const discoveryRoutes=createDiscoveryRoutes({service,adminAuth,shortLinks,originURL:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',demo,reply,body,allow});
 const server = http.createServer(async (req,res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
+  if(preview)for(const [name,value] of Object.entries(staticHeadersFor(staticHeaders,path)))res.setHeader(name,value);
   const origin = origins.has(req.headers.origin) ? req.headers.origin : null;
   try {
     if(toyDemo&&await toyDemo.route(req,res,path))return;
@@ -136,7 +132,8 @@ const server = http.createServer(async (req,res) => {
       if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin':origin, 'access-control-allow-methods':'POST', 'access-control-allow-headers':'Content-Type', vary:'Origin' }); res.end(); return; }
       if (req.method !== 'POST') return reply(res, 405, { error:'Kaedah tidak dibenarkan.' }, origin);
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return reply(res, 415, { error:'Gunakan JSON.' }, origin);
-      if (!allow(req.socket.remoteAddress, path === '/api/suggest')) return reply(res, 429, { error:'Had carian dicapai. Cuba sebentar lagi.' }, origin);
+      if(path!=='/api/shorten')return reply(res,404,{error:'Tidak ditemui.'},origin);
+      if (!await allow(req,'shorten')) return reply(res, 429, { error:'Had carian dicapai. Cuba sebentar lagi.' }, origin);
       const data = await body(req,path==='/api/shorten'?24576:4096);
       if(path==='/api/shorten') {
         if(!shortLinks) return reply(res,503,{error:'Pautan pendek belum tersedia. Cuba lagi sebentar.'},origin);
@@ -147,11 +144,11 @@ const server = http.createServer(async (req,res) => {
     if (preview && ['GET','HEAD'].includes(req.method)) {
       if(path==='/edit'||path==='/subscribe'){res.writeHead(301,{location:path+'/'});res.end();return;}
       if(path==='/edit/')req.url='/edit/index.html';
-      const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path==='/subscribe/'?'/subscribe/index.html':path==='/menu/'?'/menu/index.html':path).slice(1);
+      const relative = decodeURIComponent(path==='/'?'/index.html':path==='/edit/'?'/edit/index.html':path==='/subscribe/'?'/subscribe/index.html':path==='/menu/'?'/menu/index.html':/^\/demo\/(salon|restaurant)\/$/.test(path)?path+'index.html':path).slice(1);
       const file = resolve(root, relative);
-      if (!file.startsWith(root + sep) || !/^(?:index\.html|menu\/(?:index\.html|menu\.css|menu\.js)|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|admin-entry\.js|manifest\.webmanifest|favicon\.ico|pwa\.(?:js|css)|language\.(?:js|css)|language-catalog\.mjs|sw\.js|offline\.html|business-(?:import|logo|entry|admin|subscribe|page)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
+      if (!file.startsWith(root + sep) || !/^(?:index\.html|demo\/(?:salon|restaurant)\/(?:index\.html|demo\.(?:css|js)|logo\.svg|cover\.webp)|frontpage-demo\.css|menu\/(?:index\.html|menu\.css|menu\.js)|edit\/index\.html|subscribe\/index\.html|subscribe\.css|setup\.html|admin\.html|privacy\.html|terms\.html|import-config\.js|admin-entry\.js|manifest\.webmanifest|favicon\.ico|pwa\.(?:js|css)|language\.(?:js|css)|language-catalog\.mjs|sw\.js|offline\.html|business-(?:import|logo|entry|admin|subscribe|page)\.(?:js|css)|assets\/[\w.-]+)$/.test(relative)) return reply(res,404,{error:'Tidak ditemui.'});
       const bytes = await readFile(file);
-      res.writeHead(200, { 'content-type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.mjs':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.png':'image/png','.ico':'image/x-icon','.jpeg':'image/jpeg'})[extname(file)] || 'application/octet-stream', 'cache-control':'no-store' });
+      res.writeHead(200, { 'content-type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.mjs':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.png':'image/png','.ico':'image/x-icon','.jpeg':'image/jpeg','.webp':'image/webp'})[extname(file)] || 'application/octet-stream', 'cache-control':'no-store' });
       res.end(req.method === 'HEAD' ? undefined : bytes); return;
     }
     reply(res,404,{error:'Tidak ditemui.'});

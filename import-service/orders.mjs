@@ -32,7 +32,7 @@ export function createOrdersService({store,now=Date.now}){
   if(!item||item.record.pageId!==pageId||actor.role!=='admin'&&item.record.ownerKey!==ownerKey(actor.email))throw fail(404,'Pesanan tidak ditemui.');return item;
  }
  function summary(order){return {id:order.id,pageId:order.pageId,paymentStatus:order.status,mode:order.mode,amountCents:order.quote.amountCents,currency:'MYR',createdAt:order.createdAt,paidAt:order.status==='paid'?order.verifiedAt||null:null,invoice:order.invoice||null,includesPhysical:physical(order),fulfillmentState:state(order)};}
- function view(item){const order=item.record;return {...summary(order),revision:item.revision,items:order.quote.items||[],shippingCents:order.quote.shippingCents||0,shipping:order.shipping||null,fulfillment:order.fulfillment?{state:order.fulfillment.state,courier:order.fulfillment.courier||'',trackingNumber:order.fulfillment.trackingNumber||'',trackingURL:order.fulfillment.trackingURL||'',updatedAt:order.fulfillment.updatedAt,timeline:(order.fulfillment.timeline||[]).map(({state,at})=>({state,at}))}:null};}
+ function view(item,actor){const order=item.record;return {...summary(order),revision:item.revision,alertAcknowledgedAt:order.alertAcknowledgedAt||null,...(actor?.role==='admin'?{resolution:order.resolution||null}:{}),items:order.quote.items||[],shippingCents:order.quote.shippingCents||0,shipping:order.shipping||null,fulfillment:order.fulfillment?{state:order.fulfillment.state,courier:order.fulfillment.courier||'',trackingNumber:order.fulfillment.trackingNumber||'',trackingURL:order.fulfillment.trackingURL||'',updatedAt:order.fulfillment.updatedAt,timeline:(order.fulfillment.timeline||[]).map(({state,at})=>({state,at}))}:null};}
  async function write(pageId,id,data,actor,kind){
   if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(key=>!['revision',...(kind==='address'?['address']:['state','courier','trackingNumber','trackingURL'])].includes(key)))throw fail(400,'Maklumat pesanan tidak sah.');
   if(kind==='fulfillment'&&actor?.role!=='admin')throw fail(403,'Hanya super admin boleh mengemas kini penghantaran.');
@@ -53,7 +53,7 @@ export function createOrdersService({store,now=Date.now}){
   await page(pageId,actor);
   if(!await store.updateGatewayOrder(id,next,previous.revision))throw fail(409,'Pesanan sedang dikemas kini. Muat semula sebelum menyimpan.');
   // Recheck both current page ownership and the original paying owner before returning an address.
-  return view(await load(pageId,id,actor));
+  return view(await load(pageId,id,actor),actor);
  }
  return {
   async list(pageId,actor,cursor){
@@ -62,7 +62,17 @@ export function createOrdersService({store,now=Date.now}){
    const offset=Number(cursor||0);const orders=await Promise.all(ids.slice(offset,offset+25).map(async id=>{const saved=await store.getGatewayOrder(id);return saved&&saved.record.pageId===pageId&&(actor.role==='admin'||saved.record.ownerKey===ownerKey(actor.email))?summary(saved.record):null;}));
    await page(pageId,actor);return {items:orders.filter(Boolean),cursor:offset+25<ids.length?String(offset+25):null};
   },
-  async get(pageId,id,actor){const result=await load(pageId,id,actor);await page(pageId,actor);return view(result);},
+  async get(pageId,id,actor){const result=await load(pageId,id,actor);await page(pageId,actor);return view(result,actor);},
+  async acknowledge(pageId,id,data={},actor){
+   if(actor?.role!=='admin')throw fail(403,'Hanya super admin boleh menandakan pesanan dilihat.');
+   if(!data||Object.keys(data).some(key=>key!=='revision'))throw fail(400,'Maklumat pesanan tidak sah.');
+   const item=await load(pageId,id,actor);
+   if(item.record.status!=='paid')throw fail(409,'Hanya pesanan yang dibayar boleh ditandakan dilihat.');
+   if(item.record.alertAcknowledgedAt)return view(item,actor);
+   if(data.revision!==item.revision)throw fail(409,'Pesanan telah berubah. Muat semula dahulu.');
+   if(!await store.updateGatewayOrder(id,{...item.record,alertAcknowledgedAt:new Date(now()).toISOString(),alertAcknowledgedBy:actor.email},item.revision))throw fail(409,'Pesanan telah berubah. Muat semula dahulu.');
+   return view(await load(pageId,id,actor),actor);
+  },
   address:(pageId,id,data,actor)=>write(pageId,id,data,actor,'address'),
   fulfill:(pageId,id,data,actor)=>write(pageId,id,data,actor,'fulfillment'),
  };

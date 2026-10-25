@@ -1,13 +1,16 @@
 const states=['Johor','Kedah','Kelantan','Melaka','Negeri Sembilan','Pahang','Perak','Perlis','Pulau Pinang','Sabah','Sarawak','Selangor','Terengganu','Kuala Lumpur','Labuan','Putrajaya'];
 const fulfillmentLabels={unpaid:'Menunggu bayaran',awaiting_address:'Bayaran diterima · perlukan alamat',received:'Alamat diterima',preparing:'Sedang disediakan',shipped:'Dihantar',completed:'Selesai'};
-const paymentLabels={creating:'Bil sedang disediakan',pending:'Menunggu bayaran',failed:'Bayaran belum berjaya',creation_failed:'Bil belum dapat disediakan',cancelled:'Dibatalkan',paid:'Bayaran disahkan',review:'Bayaran memerlukan semakan admin'};
+const paymentLabels={creating:'Bil sedang disediakan',pending:'Menunggu bayaran',failed:'Bayaran belum berjaya',creation_failed:'Bil belum dapat disediakan',cancelled:'Dibatalkan',paid:'Bayaran disahkan',review:'Bayaran memerlukan semakan admin',resolved:'Semakan selesai · pemulangan wang direkodkan'};
 const money=value=>new Intl.NumberFormat('ms-MY',{style:'currency',currency:'MYR'}).format(value/100);
 const date=value=>value?new Date(value).toLocaleString('ms-MY',{timeZone:'Asia/Kuala_Lumpur',dateStyle:'medium',timeStyle:'short'}):'—';
 const addressFields={name:['Nama penerima',100],phone:['Telefon penerima',30],notes:['Nota penghantaran (pilihan)',300],line1:['Alamat baris 1',160],line2:['Alamat baris 2 (pilihan)',160],postcode:['Poskod',5],city:['Bandar',80],state:['Negeri',40]};
-export function createOrdersUI({customer,api}){
+export function createOrdersUI({customer,api,onPageUpdated=()=>{},onOrderChanged=()=>{},onBusy=()=>{},canMutate=()=>true}){
  const panel=document.createElement('section');panel.id='orders-panel';panel.className='orders-panel';
  panel.innerHTML='<h2>Pesanan saya</h2><p class="help">Semak pembelian, alamat dan penghantaran untuk perniagaan ini. Status penghantaran dikemas kini oleh super admin.</p><label for="orders-picker">Pilih pesanan</label><div class="orders-selector"><select id="orders-picker"></select><button type="button" id="orders-refresh" class="secondary" aria-label="Muat semula pesanan"><span aria-hidden="true">↻</span><span class="orders-refresh-label">Muat semula pesanan</span></button><button type="button" id="orders-more" class="secondary" hidden>Pesanan terdahulu</button></div><p id="orders-status" role="status" aria-live="polite"></p><div id="order-body" hidden><nav class="customer-subnav orders-tabs" aria-label="Bahagian pesanan"></nav><section id="order-details"></section><form id="order-address-form" novalidate><div id="order-recipient"></div><div id="order-address"></div><p class="help">Penghantaran Malaysia sahaja. Alamat disimpan untuk pesanan ini dan hanya boleh dilihat oleh pemilik yang berhak serta super admin.</p><button type="submit" id="order-address-save">Simpan maklumat penghantaran</button><p id="order-address-lock" class="help" hidden>Pesanan sudah dihantar. Hubungi super admin untuk pembetulan alamat.</p></form><section id="order-tracking"><p id="order-tracking-state" class="notice"></p><div id="order-tracking-info"></div><ol id="order-timeline"></ol><form id="order-fulfillment-form"><label for="order-fulfillment-state">Status penyediaan / penghantaran</label><select id="order-fulfillment-state"></select><label for="order-courier">Nama kurier</label><input id="order-courier" maxlength="80" placeholder="Contoh: Pos Laju / J&T Express"><label for="order-tracking-number">Nombor tracking</label><input id="order-tracking-number" maxlength="100"><label for="order-tracking-url">Pautan tracking kurier (pilihan)</label><input id="order-tracking-url" type="url" maxlength="500" placeholder="https://"><button type="submit" id="order-fulfillment-save">Simpan status penghantaran</button></form></section><a id="order-contact" class="button secondary" target="_blank" rel="noopener noreferrer" hidden>WhatsApp tentang pesanan ↗</a><p class="help" id="order-contact-help" hidden>Draf mesej mengandungi nama perniagaan dan ID pesanan. Semak dan hantar sendiri melalui WhatsApp.</p></div>';
  if(!customer)panel.querySelector('h2').textContent='Pesanan pelanggan';
+ const resolutionForm=document.createElement('form');resolutionForm.id='order-resolution';resolutionForm.hidden=true;
+ resolutionForm.innerHTML='<h3>Bayaran perlu tindakan</h3><p class="notice">ToyyibPay akan disemak semula. Pengaktifan kepada pemilik semasa memerlukan pengesahan Gmail dan nota admin.</p><label for="resolution-action">Tindakan penyelesaian</label><select id="resolution-action"><option value="apply">Aktifkan untuk pemilik semasa yang disahkan</option><option value="record-refund">Rekod pemulangan wang yang telah dibuat di luar SmartTap</option></select><div id="resolution-apply"><label for="resolution-email">Taip Gmail pemilik semasa untuk sahkan</label><input id="resolution-email" type="email" maxlength="100" autocomplete="off"></div><div id="resolution-refund" hidden><p class="help">Tindakan ini hanya menyimpan rekod. Ia tidak menghantar wang atau membuat refund di ToyyibPay.</p><label for="resolution-reference">Rujukan pemulangan wang</label><input id="resolution-reference" maxlength="100" autocomplete="off"><label class="check-label"><input id="resolution-confirm" type="checkbox"> Saya telah menyemak dan mengesahkan wang telah dipulangkan di luar SmartTap.</label></div><label for="resolution-note">Nota keputusan admin</label><textarea id="resolution-note" required maxlength="200" rows="3"></textarea><button type="submit">Sahkan penyelesaian bayaran</button><p id="resolution-status" role="status" aria-live="polite"></p>';
+ panel.querySelector('#order-details').after(resolutionForm);
  const $=id=>panel.querySelector('#'+id),el=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
  const inputs={};for(const [key,[caption,max]] of Object.entries(addressFields)){
   const unit=el('div');unit.className='order-field';unit.dataset.field=key;const label=el('label',caption);label.htmlFor='order-address-'+key;
@@ -16,7 +19,7 @@ export function createOrdersUI({customer,api}){
   else {input.maxLength=max;input.type=key==='phone'?'tel':'text';if(key==='postcode'){input.inputMode='numeric';input.pattern='[0-9]{5}';}}
   input.required=!['line2','notes'].includes(key);input.autocomplete='off';unit.append(label,input);$(['name','phone','notes'].includes(key)?'order-recipient':'order-address').append(unit);
  }
- let page=null,order=null,items=[],cursor=null,tab='details',sequence=0,signature='',working=false;
+ let page=null,order=null,items=[],cursor=null,tab='details',sequence=0,signature='',working=false,focusOrder=null;
  const tabs={details:'Butiran pesanan',recipient:'Penerima',address:'Alamat',tracking:'Tracking'};
  for(const [key,label] of Object.entries(tabs)){const button=el('button',label);button.type='button';button.dataset.tab=key;button.onclick=()=>{tab=key;renderTabs();};panel.querySelector('.orders-tabs').append(button);}
  function renderTabs(){
@@ -25,6 +28,7 @@ export function createOrdersUI({customer,api}){
   if(!physical)tab='details';for(const b of panel.querySelector('.orders-tabs').children){b.hidden=b.dataset.tab!=='details'&&!physical;b.setAttribute('aria-current',b.dataset.tab===tab?'page':'false');}
   const contactVisible=order?.paymentStatus==='paid'&&['details','tracking'].includes(tab);$('order-contact').hidden=!contactVisible;$('order-contact-help').hidden=!contactVisible;
   $('order-details').hidden=tab!=='details';$('order-address-form').hidden=!['recipient','address'].includes(tab);$('order-recipient').hidden=tab!=='recipient';$('order-address').hidden=tab!=='address';$('order-tracking').hidden=tab!=='tracking';
+  resolutionForm.hidden=customer||!(order?.paymentStatus==='review'||page?.paymentResolution?.orderId===order?.id)||tab!=='details';
  }
  function controls(){
   $('orders-picker').disabled=working||!items.length;$('orders-refresh').disabled=working;$('orders-more').disabled=working;
@@ -32,12 +36,18 @@ export function createOrdersUI({customer,api}){
   for(const input of Object.values(inputs))input.disabled=working||locked;
   $('order-address-save').disabled=working;$('order-address-save').hidden=locked;$('order-address-lock').hidden=!locked;
   for(const node of $('order-fulfillment-form').querySelectorAll('input,select,button'))node.disabled=working||!order?.shipping;
+  for(const node of resolutionForm.querySelectorAll('input,select,textarea,button'))node.disabled=working;
+  if(order?.resolution?.action)$('resolution-action').disabled=true;
+  const acknowledge=panel.querySelector('[data-order-ack]');if(acknowledge)acknowledge.disabled=working;
  }
  function render(){
-  if(!order){$('order-body').hidden=true;for(const input of Object.values(inputs))input.value='';for(const id of ['order-details','order-tracking-info','order-timeline'])$(id).replaceChildren();for(const id of ['order-courier','order-tracking-number','order-tracking-url'])$(id).value='';$('order-contact').removeAttribute('href');return;}$('order-body').hidden=false;
+  if(!order){$('order-body').hidden=true;resolutionForm.hidden=true;for(const input of Object.values(inputs))input.value='';for(const id of ['order-details','order-tracking-info','order-timeline'])$(id).replaceChildren();for(const id of ['order-courier','order-tracking-number','order-tracking-url'])$(id).value='';$('order-contact').removeAttribute('href');return;}$('order-body').hidden=false;
   const details=$('order-details');details.replaceChildren();const badge=el('p',paymentLabels[order.paymentStatus]||order.paymentStatus);badge.className='notice';badge.dataset.payment=order.paymentStatus;details.append(badge);
   for(const [label,value] of [['ID pesanan',order.id],['Tarikh pesanan',date(order.createdAt)],['Rujukan bayaran',order.invoice||'—']]){const line=el('p');line.append(el('strong',label+': '),el('span',value));details.append(line);}
   const list=el('ul');list.className='order-items';for(const item of order.items)list.append(el('li',item.name+' × '+item.quantity+' · '+money(item.totalCents)));details.append(list,el('p',(order.paymentStatus==='paid'?'Jumlah dibayar: ':'Jumlah bil: ')+money(order.amountCents)));
+  if(!customer&&order.paymentStatus==='paid'&&!order.alertAcknowledgedAt){const button=el('button','Tandakan pesanan telah dilihat');button.type='button';button.dataset.orderAck='';button.disabled=working;button.onclick=()=>save('acknowledge',{});details.append(button);}
+  if(!customer&&order.resolution){const audit=el('p','Keputusan: '+(order.resolution.action==='apply'?'Pengaktifan disahkan':'Pemulangan wang direkodkan')+' · '+order.resolution.note);audit.dataset.noI18n='';details.append(audit);}
+  if(order.paymentStatus==='review'||page?.paymentResolution?.orderId===order.id){const intent=order.resolution||page.paymentResolution;$('resolution-action').value=intent?.action||'apply';$('resolution-note').value=intent?.note||'';$('resolution-email').value='';$('resolution-reference').value=intent?.reference||'';$('resolution-confirm').checked=false;resolutionVisibility();}
   if(order.mode!=='live')details.append(el('p','DEMO / SANDBOX — bukan bayaran sebenar.'));
   if(order.includesPhysical)details.append(el('p',order.shippingCents?'Caj penghantaran dalam pesanan: '+money(order.shippingCents):'Caj penghantaran diurus secara berasingan dengan super admin.'));
   else if(order.paymentStatus==='paid')details.append(el('p','Pesanan digital sahaja. Alamat penghantaran tidak diperlukan.'));
@@ -63,15 +73,28 @@ export function createOrdersUI({customer,api}){
    items=more?[...items,...result.items.filter(item=>!items.some(old=>old.id===item.id))]:result.items;cursor=result.cursor;$('orders-more').hidden=!cursor;
    const previous=order?.id;$('orders-picker').replaceChildren();for(const item of items){const option=el('option',date(item.createdAt)+' · '+money(item.amountCents)+' · '+(item.paymentStatus==='paid'?fulfillmentLabels[item.fulfillmentState]:paymentLabels[item.paymentStatus])+' · '+item.id.slice(-8));option.value=item.id;$('orders-picker').append(option);}
    if(!items.length){order=null;render();$('orders-status').textContent='Belum ada pesanan ToyyibPay untuk perniagaan ini.';return;}
-   const id=items.some(item=>item.id===previous)?previous:items[0].id;$('orders-picker').value=id;working=false;await select(id);
+   const id=focusOrder||(items.some(item=>item.id===previous)?previous:items[0].id);focusOrder=null;
+   if(!items.some(item=>item.id===id)){const option=el('option',id);option.value=id;$('orders-picker').append(option);}
+   $('orders-picker').value=id;working=false;await select(id);
   }catch(e){if(current===sequence)$('orders-status').textContent=e.message;}finally{if(current===sequence){working=false;controls();}}
  }
  $('orders-picker').onchange=()=>select($('orders-picker').value);$('orders-refresh').onclick=()=>load();$('orders-more').onclick=()=>load(true);
- async function save(action,data){if(!order||working)return;const current=sequence;working=true;controls();$('orders-status').textContent='Menyimpan pesanan…';
-  try{const result=await api(path()+'/'+order.id+'/'+action,{method:'PUT',body:{revision:order.revision,...data}});if(current!==sequence)return;order=result;render();$('orders-status').textContent='Maklumat pesanan berjaya disimpan.';}
-  catch(e){if(current===sequence)$('orders-status').textContent=e.message;}finally{if(current===sequence){working=false;controls();}}
+ async function save(action,data){if(!order||working||!canMutate())return;const current=sequence;working=true;onBusy(true);controls();$('orders-status').textContent='Menyimpan pesanan…';
+  try{const result=await api(path()+'/'+order.id+'/'+action,{method:'PUT',body:{revision:order.revision,...data}});if(current!==sequence)return;order=result;render();onOrderChanged();$('orders-status').textContent='Maklumat pesanan berjaya disimpan.';}
+  catch(e){if(current===sequence)$('orders-status').textContent=e.message;}finally{onBusy(false);if(current===sequence){working=false;controls();}}
  }
+ function resolutionVisibility(){const apply=$('resolution-action').value==='apply';$('resolution-apply').hidden=!apply;$('resolution-refund').hidden=apply;$('resolution-email').required=apply;$('resolution-reference').required=!apply;$('resolution-confirm').required=!apply;}
+ $('resolution-action').onchange=resolutionVisibility;
+ resolutionForm.onsubmit=async event=>{
+  event.preventDefault();if(customer||!order||working||!canMutate()||!resolutionForm.reportValidity())return;
+  const current=sequence,id=order.id;working=true;onBusy(true);controls();$('resolution-status').textContent='Mengesahkan transaksi dan menyimpan keputusan…';
+  try{
+   const action=$('resolution-action').value,body={action,revision:order.revision,pageRevision:page.revision,note:$('resolution-note').value.trim(),...(action==='apply'?{confirmEmail:$('resolution-email').value.trim()}:{reference:$('resolution-reference').value.trim(),confirmRefund:$('resolution-confirm').checked})};
+   const result=await api('/checkout/'+id+'/resolve',{method:'POST',body});if(current!==sequence)return;
+   page=result.page;order=await api(path()+'/'+id);if(current!==sequence)return;render();await onPageUpdated(result.page);onOrderChanged();$('orders-status').textContent='Semakan bayaran diselesaikan dan direkodkan.';
+  }catch(e){if(current===sequence)$('resolution-status').textContent=e.message;}finally{onBusy(false);if(current===sequence){working=false;controls();}}
+ };
  $('order-address-form').onsubmit=event=>{event.preventDefault();if(working)return;const invalid=Object.values(inputs).find(input=>!input.disabled&&!input.checkValidity());if(invalid){tab=['name','phone','notes'].includes(invalid.name)?'recipient':'address';renderTabs();invalid.focus();invalid.reportValidity();return;}save('address',{address:Object.fromEntries(Object.entries(inputs).map(([key,input])=>[key,input.value.trim()]))});};
  $('order-fulfillment-form').onsubmit=event=>{event.preventDefault();save('fulfillment',{state:$('order-fulfillment-state').value,courier:$('order-courier').value.trim(),trackingNumber:$('order-tracking-number').value.trim(),trackingURL:$('order-tracking-url').value.trim()});};
- return {panel,show(item){const next=item.id+'|'+(item.checkout?.id||'')+'|'+(item.checkout?.status||'');const changed=page?.id!==item.id;page=item;if(next===signature)return;signature=next;if(changed){order=null;items=[];render();$('orders-picker').replaceChildren();}load();},clear(){sequence++;page=null;order=null;items=[];cursor=null;signature='';working=false;render();$('orders-picker').replaceChildren();$('orders-status').textContent='';}};
+ return {panel,show(item,orderId){const next=item.id+'|'+(item.checkout?.id||'')+'|'+(item.checkout?.status||'');const changed=page?.id!==item.id;page=item;focusOrder=orderId||null;if(next===signature&&!orderId)return;signature=next;if(changed){order=null;items=[];render();$('orders-picker').replaceChildren();}load();},clear(){sequence++;page=null;order=null;items=[];cursor=null;signature='';working=false;focusOrder=null;resolutionForm.hidden=true;render();$('orders-picker').replaceChildren();$('orders-status').textContent='';}};
 }

@@ -1,0 +1,17 @@
+{
+  "displayName": "SmartTap backup execution failed — TEMPLATE, DO NOT APPLY",
+  "enabled": false,
+  "combiner": "OR",
+  "notificationChannels": ["REPLACE_WITH_APPROVED_VERIFIED_NOTIFICATION_CHANNEL_RESOURCE"],
+  "conditions": [{
+    "displayName": "Backup Cloud Run Job reports a failed execution",
+    "conditionThreshold": {
+      "filter": "metric.type=\"run.googleapis.com/job/completed_execution_count\" AND resource.type=\"cloud_run_job\" AND resource.label.job_name=\"smarttap-daily-backup\" AND metric.label.result=\"failed\"",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 0,
+      "duration": "0s",
+      "aggregations": [{"alignmentPeriod": "300s", "perSeriesAligner": "ALIGN_DELTA", "crossSeriesReducer": "REDUCE_SUM"}],
+      "trigger": {"count": 1}
+    }
+  }]
+}

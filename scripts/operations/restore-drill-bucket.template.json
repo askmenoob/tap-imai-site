@@ -1,0 +1,6 @@
+{
+  "name": "smarttap-restore-drill-cedar-kiln-502614-h5",
+  "location": "asia-southeast1",
+  "storageClass": "STANDARD",
+  "iamConfiguration": {"uniformBucketLevelAccess": {"enabled": true}, "publicAccessPrevention": "enforced"}
+}

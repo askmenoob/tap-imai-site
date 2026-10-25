@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "status": "PROPOSED_LOCAL_ONLY_NOT_APPLIED",
+  "approvalRequired": true,
+  "project": "cedar-kiln-502614-h5",
+  "region": "asia-southeast1",
+  "verifiedInputs": {
+    "sourceBucket": "cedar-kiln-502614-h5-tap-links",
+    "applicationServiceAccount": "tap-business-import@cedar-kiln-502614-h5.iam.gserviceaccount.com",
+    "quotaIamExpansionRequired": false,
+    "notificationChannelsFound": 0,
+    "note": "Read-only provider metadata supplied by parent audit. Recheck immediately before any apply."
+  },
+  "costNotice": "Storage copies, retention, storage operations, Cloud Run Jobs, Artifact Registry, build jobs, Scheduler and Monitoring may incur Google charges. No free-cost guarantee or spending ceiling is implied.",
+  "buckets": {
+    "backup": {
+      "name": "smarttap-backup-cedar-kiln-502614-h5",
+      "location": "asia-southeast1",
+      "storageClass": "STANDARD",
+      "iamConfiguration": {"uniformBucketLevelAccess": {"enabled": true}, "publicAccessPrevention": "enforced"},
+      "retentionPolicy": {"retentionPeriod": "2592000"},
+      "retentionLocked": false,
+      "lifecycle": {"rule": [{"action": {"type": "Delete"}, "condition": {"age": 35, "matchesPrefix": ["snapshots/"]}}]},
+      "notes": ["Never call lockRetentionPolicy.", "Lifecycle applies to backup snapshots only; do not apply this rule to the source bucket.", "Retention and asynchronous lifecycle deletion can keep objects longer than 35 days.", "Private bucket is separate from live storage but in the same project; this does not protect against a compromised project administrator."]
+    },
+    "restoreDrill": {
+      "name": "smarttap-restore-drill-cedar-kiln-502614-h5",
+      "location": "asia-southeast1",
+      "storageClass": "STANDARD",
+      "iamConfiguration": {"uniformBucketLevelAccess": {"enabled": true}, "publicAccessPrevention": "enforced"},
+      "notes": ["Initially empty. No automatic lifecycle or live configuration switch.", "Delete drill contents only through a separately approved cleanup after verification."]
+    }
+  },
+  "identities": {
+    "backupRunner": "smarttap-backup@cedar-kiln-502614-h5.iam.gserviceaccount.com",
+    "schedulerInvoker": "smarttap-backup-scheduler@cedar-kiln-502614-h5.iam.gserviceaccount.com",
+    "applicationBackupAccess": "NONE: never bind the application service account to either new bucket or operations job",
+    "sourceReaderRole": {"roleId": "smarttapBackupSourceReader", "stage": "GA", "includedPermissions": ["storage.buckets.get", "storage.objects.get", "storage.objects.list"]},
+    "backupWriterRole": {"roleId": "smarttapBackupSnapshotWriter", "stage": "GA", "includedPermissions": ["storage.buckets.get", "storage.objects.create", "storage.objects.get", "storage.objects.list"]},
+    "bindings": [
+      {"resource": "buckets/cedar-kiln-502614-h5-tap-links", "member": "serviceAccount:smarttap-backup@cedar-kiln-502614-h5.iam.gserviceaccount.com", "role": "projects/cedar-kiln-502614-h5/roles/smarttapBackupSourceReader"},
+      {"resource": "buckets/smarttap-backup-cedar-kiln-502614-h5", "member": "serviceAccount:smarttap-backup@cedar-kiln-502614-h5.iam.gserviceaccount.com", "role": "projects/cedar-kiln-502614-h5/roles/smarttapBackupSnapshotWriter"},
+      {"resource": "projects/cedar-kiln-502614-h5/locations/asia-southeast1/jobs/smarttap-daily-backup", "member": "serviceAccount:smarttap-backup-scheduler@cedar-kiln-502614-h5.iam.gserviceaccount.com", "role": "roles/run.invoker"}
+    ],
+    "restoreDrillAccess": "No scheduled runner binding. An explicitly approved operator temporarily uses source read on the backup bucket and create/get/list on the empty drill bucket, then access is removed.",
+    "deploymentAccess": "Use the existing approved deployer to build/push the isolated image and create the job. Creating service accounts, roles, bindings, or impersonation permissions requires approval; never grant project Owner/Editor to make the plan work."
+  },
+  "runner": {
+    "name": "smarttap-daily-backup",
+    "artifactRepository": "smarttap-operations",
+    "imageTemplate": "asia-southeast1-docker.pkg.dev/cedar-kiln-502614-h5/smarttap-operations/backup@sha256:APPROVED_IMAGE_DIGEST",
+    "dockerfile": "scripts/operations/backup.Dockerfile",
+    "buildContext": "scripts",
+    "entrypoint": ["python3", "/app/smarttap-backup.py"],
+    "args": ["backup", "--source=cedar-kiln-502614-h5-tap-links", "--backup=smarttap-backup-cedar-kiln-502614-h5", "--execute"],
+    "snapshot": "Each invocation derives a fresh UTC YYYYMMDDTHHMMSSZ prefix; existing snapshot prefixes are rejected.",
+    "memory": "512Mi",
+    "cpu": "1",
+    "timeout": "1800s",
+    "taskCount": 1,
+    "parallelism": 1,
+    "maxRetries": 0,
+    "secrets": [],
+    "initialActivation": "Create the backup job after approval, run one manual execution and verify backupVerified. Keep Scheduler uncreated/paused until backup plus isolated restore drill passes."
+  },
+  "schedule": {
+    "name": "smarttap-backup-daily",
+    "cron": "0 18 * * *",
+    "timeZone": "Etc/UTC",
+    "malaysiaTime": "02:00 every day, UTC+08:00",
+    "initiallyEnabled": false,
+    "oauthServiceAccount": "smarttap-backup-scheduler@cedar-kiln-502614-h5.iam.gserviceaccount.com",
+    "oauthScope": "https://www.googleapis.com/auth/cloud-platform",
+    "runEndpoint": "https://run.googleapis.com/v2/projects/cedar-kiln-502614-h5/locations/asia-southeast1/jobs/smarttap-daily-backup:run",
+    "retryCount": 0,
+    "notes": ["Scheduler HTTP success means execution accepted, not backup verified.", "Inspect Cloud Run Job completion plus structured backupVerified log; configure failed-execution and missing-success alerts.", "Job/Scheduler retries are disabled to avoid unnoticed duplicate snapshot writes; investigate a failure and run a new timestamp explicitly."]
+  },
+  "monitoring": {
+    "uptimeCheckPreparation": "node scripts/prepare-smarttap-monitoring.mjs --output=outputs/smarttap-operations/monitoring",
+    "checks": ["https://tap.imai.my/subscribe/", "https://tap-business-import-262870839474.asia-southeast1.run.app/health"],
+    "periodSeconds": 300,
+    "proposedNotificationChannel": {"type": "email", "email": "pillo0404@gmail.com", "status": "PROPOSAL_ONLY_APPROVAL_AND_PROVIDER_VERIFICATION_REQUIRED", "sendNothingBeforeApproval": true},
+    "alertTemplate": "scripts/operations/uptime-alert.template.json",
+    "actualCheckIds": null,
+    "actualVerifiedChannelResource": null,
+    "activationGate": "No enabled alert may be applied with placeholders or an unverified/unapproved notification destination."
+  },
+  "activationOrder": [
+    "Get explicit approval for paid resources, new identities, least-privilege bindings, retention/lifecycle and proposed notification contact.",
+    "Recheck bucket-name availability and existing project IAM inheritance; stop if the application identity has broad project storage permissions that grant access to backups.",
+    "Provision private buckets with the reviewed policies, dedicated identities and narrow bindings; source bucket and application IAM remain unchanged except adding the separate source-reader identity.",
+    "Build the isolated backup image from scripts/ context, inspect image and pin its digest in the job template.",
+    "Create the backup job; execute one backup and require backupVerified with nonzero object count.",
+    "Perform a restore drill into the separate empty drill bucket; require restoreVerified and isolated application read verification without live payments or callback replay.",
+    "Create/verify the approved notification channel and uptime checks; record actual IDs and instantiate the alert template.",
+    "Test notification delivery and backup failure/missing-success alerts without taking production down.",
+    "Only after all gates pass, create or resume the daily Scheduler job and record provider resource IDs, first successful scheduled execution and rollback evidence."
+  ],
+  "rollback": [
+    "Pause only smarttap-backup-daily Scheduler job.",
+    "Disable only newly recorded SmartTap alert policies/checks; retain unrelated monitoring.",
+    "Remove only new scheduler-invoker and backup-runner bindings if required; never change application account permissions.",
+    "Do not delete retained backups, source data, or restore live data in place. Unlocked 30-day retention still prevents deletion of young backup objects.",
+    "Do not remove the Artifact Registry image while a retained job execution needs it. No change to DNS, live payment configuration, or live bucket is part of rollback."
+  ]
+}

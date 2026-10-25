@@ -3160,16 +3160,24 @@ function createBusinessDetails({ addressInput, hoursInput, onChange }) {
 // src/orders-ui.mjs
 var states = ["Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan", "Pahang", "Perak", "Perlis", "Pulau Pinang", "Sabah", "Sarawak", "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya"];
 var fulfillmentLabels = { unpaid: "Menunggu bayaran", awaiting_address: "Bayaran diterima \xB7 perlukan alamat", received: "Alamat diterima", preparing: "Sedang disediakan", shipped: "Dihantar", completed: "Selesai" };
-var paymentLabels = { creating: "Bil sedang disediakan", pending: "Menunggu bayaran", failed: "Bayaran belum berjaya", creation_failed: "Bil belum dapat disediakan", cancelled: "Dibatalkan", paid: "Bayaran disahkan", review: "Bayaran memerlukan semakan admin" };
+var paymentLabels = { creating: "Bil sedang disediakan", pending: "Menunggu bayaran", failed: "Bayaran belum berjaya", creation_failed: "Bil belum dapat disediakan", cancelled: "Dibatalkan", paid: "Bayaran disahkan", review: "Bayaran memerlukan semakan admin", resolved: "Semakan selesai \xB7 pemulangan wang direkodkan" };
 var money = (value) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(value / 100);
 var date = (value) => value ? new Date(value).toLocaleString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "short" }) : "\u2014";
 var addressFields = { name: ["Nama penerima", 100], phone: ["Telefon penerima", 30], notes: ["Nota penghantaran (pilihan)", 300], line1: ["Alamat baris 1", 160], line2: ["Alamat baris 2 (pilihan)", 160], postcode: ["Poskod", 5], city: ["Bandar", 80], state: ["Negeri", 40] };
-function createOrdersUI({ customer: customer2, api: api2 }) {
+function createOrdersUI({ customer: customer2, api: api2, onPageUpdated = () => {
+}, onOrderChanged = () => {
+}, onBusy = () => {
+}, canMutate = () => true }) {
   const panel = document.createElement("section");
   panel.id = "orders-panel";
   panel.className = "orders-panel";
   panel.innerHTML = '<h2>Pesanan saya</h2><p class="help">Semak pembelian, alamat dan penghantaran untuk perniagaan ini. Status penghantaran dikemas kini oleh super admin.</p><label for="orders-picker">Pilih pesanan</label><div class="orders-selector"><select id="orders-picker"></select><button type="button" id="orders-refresh" class="secondary" aria-label="Muat semula pesanan"><span aria-hidden="true">\u21BB</span><span class="orders-refresh-label">Muat semula pesanan</span></button><button type="button" id="orders-more" class="secondary" hidden>Pesanan terdahulu</button></div><p id="orders-status" role="status" aria-live="polite"></p><div id="order-body" hidden><nav class="customer-subnav orders-tabs" aria-label="Bahagian pesanan"></nav><section id="order-details"></section><form id="order-address-form" novalidate><div id="order-recipient"></div><div id="order-address"></div><p class="help">Penghantaran Malaysia sahaja. Alamat disimpan untuk pesanan ini dan hanya boleh dilihat oleh pemilik yang berhak serta super admin.</p><button type="submit" id="order-address-save">Simpan maklumat penghantaran</button><p id="order-address-lock" class="help" hidden>Pesanan sudah dihantar. Hubungi super admin untuk pembetulan alamat.</p></form><section id="order-tracking"><p id="order-tracking-state" class="notice"></p><div id="order-tracking-info"></div><ol id="order-timeline"></ol><form id="order-fulfillment-form"><label for="order-fulfillment-state">Status penyediaan / penghantaran</label><select id="order-fulfillment-state"></select><label for="order-courier">Nama kurier</label><input id="order-courier" maxlength="80" placeholder="Contoh: Pos Laju / J&T Express"><label for="order-tracking-number">Nombor tracking</label><input id="order-tracking-number" maxlength="100"><label for="order-tracking-url">Pautan tracking kurier (pilihan)</label><input id="order-tracking-url" type="url" maxlength="500" placeholder="https://"><button type="submit" id="order-fulfillment-save">Simpan status penghantaran</button></form></section><a id="order-contact" class="button secondary" target="_blank" rel="noopener noreferrer" hidden>WhatsApp tentang pesanan \u2197</a><p class="help" id="order-contact-help" hidden>Draf mesej mengandungi nama perniagaan dan ID pesanan. Semak dan hantar sendiri melalui WhatsApp.</p></div>';
   if (!customer2) panel.querySelector("h2").textContent = "Pesanan pelanggan";
+  const resolutionForm = document.createElement("form");
+  resolutionForm.id = "order-resolution";
+  resolutionForm.hidden = true;
+  resolutionForm.innerHTML = '<h3>Bayaran perlu tindakan</h3><p class="notice">ToyyibPay akan disemak semula. Pengaktifan kepada pemilik semasa memerlukan pengesahan Gmail dan nota admin.</p><label for="resolution-action">Tindakan penyelesaian</label><select id="resolution-action"><option value="apply">Aktifkan untuk pemilik semasa yang disahkan</option><option value="record-refund">Rekod pemulangan wang yang telah dibuat di luar SmartTap</option></select><div id="resolution-apply"><label for="resolution-email">Taip Gmail pemilik semasa untuk sahkan</label><input id="resolution-email" type="email" maxlength="100" autocomplete="off"></div><div id="resolution-refund" hidden><p class="help">Tindakan ini hanya menyimpan rekod. Ia tidak menghantar wang atau membuat refund di ToyyibPay.</p><label for="resolution-reference">Rujukan pemulangan wang</label><input id="resolution-reference" maxlength="100" autocomplete="off"><label class="check-label"><input id="resolution-confirm" type="checkbox"> Saya telah menyemak dan mengesahkan wang telah dipulangkan di luar SmartTap.</label></div><label for="resolution-note">Nota keputusan admin</label><textarea id="resolution-note" required maxlength="200" rows="3"></textarea><button type="submit">Sahkan penyelesaian bayaran</button><p id="resolution-status" role="status" aria-live="polite"></p>';
+  panel.querySelector("#order-details").after(resolutionForm);
   const $2 = (id) => panel.querySelector("#" + id), el = (tag, text2) => {
     const n = document.createElement(tag);
     if (text2) n.textContent = text2;
@@ -3208,7 +3216,7 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
     unit.append(label, input);
     $2(["name", "phone", "notes"].includes(key) ? "order-recipient" : "order-address").append(unit);
   }
-  let page = null, order = null, items = [], cursor2 = null, tab = "details", sequence = 0, signature = "", working = false;
+  let page = null, order = null, items = [], cursor2 = null, tab = "details", sequence = 0, signature = "", working = false, focusOrder = null;
   const tabs = { details: "Butiran pesanan", recipient: "Penerima", address: "Alamat", tracking: "Tracking" };
   for (const [key, label] of Object.entries(tabs)) {
     const button = el("button", label);
@@ -3236,6 +3244,7 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
     $2("order-recipient").hidden = tab !== "recipient";
     $2("order-address").hidden = tab !== "address";
     $2("order-tracking").hidden = tab !== "tracking";
+    resolutionForm.hidden = customer2 || !(order?.paymentStatus === "review" || page?.paymentResolution?.orderId === order?.id) || tab !== "details";
   }
   function controls() {
     $2("orders-picker").disabled = working || !items.length;
@@ -3247,10 +3256,15 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
     $2("order-address-save").hidden = locked;
     $2("order-address-lock").hidden = !locked;
     for (const node of $2("order-fulfillment-form").querySelectorAll("input,select,button")) node.disabled = working || !order?.shipping;
+    for (const node of resolutionForm.querySelectorAll("input,select,textarea,button")) node.disabled = working;
+    if (order?.resolution?.action) $2("resolution-action").disabled = true;
+    const acknowledge = panel.querySelector("[data-order-ack]");
+    if (acknowledge) acknowledge.disabled = working;
   }
   function render2() {
     if (!order) {
       $2("order-body").hidden = true;
+      resolutionForm.hidden = true;
       for (const input of Object.values(inputs)) input.value = "";
       for (const id of ["order-details", "order-tracking-info", "order-timeline"]) $2(id).replaceChildren();
       for (const id of ["order-courier", "order-tracking-number", "order-tracking-url"]) $2(id).value = "";
@@ -3273,6 +3287,28 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
     list.className = "order-items";
     for (const item of order.items) list.append(el("li", item.name + " \xD7 " + item.quantity + " \xB7 " + money(item.totalCents)));
     details.append(list, el("p", (order.paymentStatus === "paid" ? "Jumlah dibayar: " : "Jumlah bil: ") + money(order.amountCents)));
+    if (!customer2 && order.paymentStatus === "paid" && !order.alertAcknowledgedAt) {
+      const button = el("button", "Tandakan pesanan telah dilihat");
+      button.type = "button";
+      button.dataset.orderAck = "";
+      button.disabled = working;
+      button.onclick = () => save("acknowledge", {});
+      details.append(button);
+    }
+    if (!customer2 && order.resolution) {
+      const audit = el("p", "Keputusan: " + (order.resolution.action === "apply" ? "Pengaktifan disahkan" : "Pemulangan wang direkodkan") + " \xB7 " + order.resolution.note);
+      audit.dataset.noI18n = "";
+      details.append(audit);
+    }
+    if (order.paymentStatus === "review" || page?.paymentResolution?.orderId === order.id) {
+      const intent = order.resolution || page.paymentResolution;
+      $2("resolution-action").value = intent?.action || "apply";
+      $2("resolution-note").value = intent?.note || "";
+      $2("resolution-email").value = "";
+      $2("resolution-reference").value = intent?.reference || "";
+      $2("resolution-confirm").checked = false;
+      resolutionVisibility();
+    }
     if (order.mode !== "live") details.append(el("p", "DEMO / SANDBOX \u2014 bukan bayaran sebenar."));
     if (order.includesPhysical) details.append(el("p", order.shippingCents ? "Caj penghantaran dalam pesanan: " + money(order.shippingCents) : "Caj penghantaran diurus secara berasingan dengan super admin."));
     else if (order.paymentStatus === "paid") details.append(el("p", "Pesanan digital sahaja. Alamat penghantaran tidak diperlukan."));
@@ -3365,7 +3401,13 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
         $2("orders-status").textContent = "Belum ada pesanan ToyyibPay untuk perniagaan ini.";
         return;
       }
-      const id = items.some((item) => item.id === previous) ? previous : items[0].id;
+      const id = focusOrder || (items.some((item) => item.id === previous) ? previous : items[0].id);
+      focusOrder = null;
+      if (!items.some((item) => item.id === id)) {
+        const option = el("option", id);
+        option.value = id;
+        $2("orders-picker").append(option);
+      }
       $2("orders-picker").value = id;
       working = false;
       await select(id);
@@ -3382,9 +3424,10 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
   $2("orders-refresh").onclick = () => load2();
   $2("orders-more").onclick = () => load2(true);
   async function save(action, data) {
-    if (!order || working) return;
+    if (!order || working || !canMutate()) return;
     const current = sequence;
     working = true;
+    onBusy(true);
     controls();
     $2("orders-status").textContent = "Menyimpan pesanan\u2026";
     try {
@@ -3392,16 +3435,56 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
       if (current !== sequence) return;
       order = result;
       render2();
+      onOrderChanged();
       $2("orders-status").textContent = "Maklumat pesanan berjaya disimpan.";
     } catch (e) {
       if (current === sequence) $2("orders-status").textContent = e.message;
     } finally {
+      onBusy(false);
       if (current === sequence) {
         working = false;
         controls();
       }
     }
   }
+  function resolutionVisibility() {
+    const apply = $2("resolution-action").value === "apply";
+    $2("resolution-apply").hidden = !apply;
+    $2("resolution-refund").hidden = apply;
+    $2("resolution-email").required = apply;
+    $2("resolution-reference").required = !apply;
+    $2("resolution-confirm").required = !apply;
+  }
+  $2("resolution-action").onchange = resolutionVisibility;
+  resolutionForm.onsubmit = async (event) => {
+    event.preventDefault();
+    if (customer2 || !order || working || !canMutate() || !resolutionForm.reportValidity()) return;
+    const current = sequence, id = order.id;
+    working = true;
+    onBusy(true);
+    controls();
+    $2("resolution-status").textContent = "Mengesahkan transaksi dan menyimpan keputusan\u2026";
+    try {
+      const action = $2("resolution-action").value, body = { action, revision: order.revision, pageRevision: page.revision, note: $2("resolution-note").value.trim(), ...action === "apply" ? { confirmEmail: $2("resolution-email").value.trim() } : { reference: $2("resolution-reference").value.trim(), confirmRefund: $2("resolution-confirm").checked } };
+      const result = await api2("/checkout/" + id + "/resolve", { method: "POST", body });
+      if (current !== sequence) return;
+      page = result.page;
+      order = await api2(path() + "/" + id);
+      if (current !== sequence) return;
+      render2();
+      await onPageUpdated(result.page);
+      onOrderChanged();
+      $2("orders-status").textContent = "Semakan bayaran diselesaikan dan direkodkan.";
+    } catch (e) {
+      if (current === sequence) $2("resolution-status").textContent = e.message;
+    } finally {
+      onBusy(false);
+      if (current === sequence) {
+        working = false;
+        controls();
+      }
+    }
+  };
   $2("order-address-form").onsubmit = (event) => {
     event.preventDefault();
     if (working) return;
@@ -3419,11 +3502,12 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
     event.preventDefault();
     save("fulfillment", { state: $2("order-fulfillment-state").value, courier: $2("order-courier").value.trim(), trackingNumber: $2("order-tracking-number").value.trim(), trackingURL: $2("order-tracking-url").value.trim() });
   };
-  return { panel, show(item) {
+  return { panel, show(item, orderId) {
     const next = item.id + "|" + (item.checkout?.id || "") + "|" + (item.checkout?.status || "");
     const changed = page?.id !== item.id;
     page = item;
-    if (next === signature) return;
+    focusOrder = orderId || null;
+    if (next === signature && !orderId) return;
     signature = next;
     if (changed) {
       order = null;
@@ -3440,6 +3524,8 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
     cursor2 = null;
     signature = "";
     working = false;
+    focusOrder = null;
+    resolutionForm.hidden = true;
     render2();
     $2("orders-picker").replaceChildren();
     $2("orders-status").textContent = "";
@@ -3448,6 +3534,7 @@ function createOrdersUI({ customer: customer2, api: api2 }) {
 
 // src/payment-alerts.mjs
 function createPaymentAlerts({ api: api2, open, canOpen }) {
+  const labels = { manual_review: "Bayaran manual menunggu semakan", payment_review: "Bayaran perlu tindakan", new_order: "Pesanan baharu dibayar", awaiting_address: "Menunggu alamat penghantaran", fulfillment: "Pesanan untuk disediakan" };
   const $2 = (id) => document.getElementById(id), bell = $2("payment-bell"), panel = $2("payment-alerts"), count = $2("payment-count"), status = $2("payment-alert-status"), list = $2("payment-alert-list"), refreshButton = $2("payment-alert-refresh");
   let active = false, generation = 0, timer, flight = null, lastCount = null;
   const schedule = () => {
@@ -3469,7 +3556,7 @@ function createPaymentAlerts({ api: api2, open, canOpen }) {
         count.textContent = String(data.count);
         lastCount = data.count;
         bell.classList.toggle("has-pending", data.count > 0);
-        status.textContent = data.count ? "Pilih perniagaan untuk semak bayaran." : "Tiada bayaran menunggu semakan.";
+        status.textContent = data.count ? "Pilih pesanan untuk tindakan seterusnya." : "Tiada pesanan atau bayaran memerlukan tindakan.";
         list.replaceChildren();
         for (const item of data.items) {
           const button = document.createElement("button");
@@ -3478,15 +3565,17 @@ function createPaymentAlerts({ api: api2, open, canOpen }) {
           const name = document.createElement("strong");
           name.textContent = item.name;
           name.dataset.noI18n = "";
+          const category = document.createElement("span");
+          category.textContent = labels[item.category] || labels.manual_review;
           const detail = document.createElement("span");
           detail.dataset.noI18n = "";
-          detail.textContent = new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(item.amountCents / 100) + " \xB7 " + new Date(item.submittedAt).toLocaleString("ms-MY", { timeZone: "Asia/Kuala_Lumpur" });
-          button.append(name, detail);
+          detail.textContent = (item.mode && item.mode !== "live" ? "DEMO / SANDBOX \xB7 " : "") + new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(item.amountCents / 100) + " \xB7 " + new Date(item.submittedAt).toLocaleString("ms-MY", { timeZone: "Asia/Kuala_Lumpur" });
+          button.append(name, category, detail);
           button.addEventListener("click", async () => {
             if (!canOpen()) return;
             button.disabled = true;
             try {
-              await open(item.id);
+              await open(item.id, item.orderId);
             } catch {
               if (active && current === generation) status.textContent = "Bayaran belum dapat dibuka. Cuba lagi.";
             } finally {
@@ -3884,10 +3973,10 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
       changedGatewayId = item.id;
     }
     $2("gateway-order").textContent = checkout ? checkout.id + " \xB7 " + money2(checkout.amountCents) + (checkout.invoice ? " \xB7 " + checkout.invoice : "") : "";
-    $2("gateway-status").textContent = checkout ? { creating: "Sedang menyediakan bil. Muat semula sebentar lagi.", pending: "Bayaran belum disahkan. Teruskan pembayaran atau semak status.", failed: "Cubaan bayaran tidak berjaya. Anda boleh mencuba semula pada bil yang sama.", paid: "Bayaran ToyyibPay disahkan.", cancelled: "Bil belum dibayar telah dibatalkan.", creation_failed: "Bil belum dapat disediakan. Anda boleh cuba semula.", review: "Bayaran diterima dan memerlukan tindakan super admin." }[checkout.status] || "" : "";
-    const reviewable = settings.enabled && checkout && !["paid", "cancelled", "creation_failed"].includes(checkout.status);
+    $2("gateway-status").textContent = checkout ? { creating: "Sedang menyediakan bil. Muat semula sebentar lagi.", pending: "Bayaran belum disahkan. Teruskan pembayaran atau semak status.", failed: "Cubaan bayaran tidak berjaya. Anda boleh mencuba semula pada bil yang sama.", paid: "Bayaran ToyyibPay disahkan.", cancelled: "Bil belum dibayar telah dibatalkan.", creation_failed: "Bil belum dapat disediakan. Anda boleh cuba semula.", review: "Bayaran diterima dan memerlukan tindakan super admin.", resolved: "Semakan selesai. Pemulangan wang di luar SmartTap telah direkodkan." }[checkout.status] || "" : "";
+    const reviewable = settings.enabled && checkout && !["paid", "cancelled", "creation_failed", "resolved"].includes(checkout.status);
     $2("gateway-check").hidden = !reviewable;
-    $2("gateway-cancel").hidden = !reviewable;
+    $2("gateway-cancel").hidden = !reviewable || checkout.status === "review";
     $2("gateway-continue").hidden = true;
     $2("gateway-continue").removeAttribute("href");
   }
@@ -4657,6 +4746,235 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   }, open };
 }
 
+// src/page-history.mjs
+function createPageHistoryUI({ api: api2, onUpdated = () => {
+}, canMutate = () => true }) {
+  const el = (tag, text2) => {
+    const node = document.createElement(tag);
+    if (text2) node.textContent = text2;
+    return node;
+  };
+  const panel = el("section");
+  panel.className = "card page-history";
+  panel.hidden = true;
+  const title = el("h3", "Sejarah & pemulihan kandungan");
+  const help = el("p", "Pulihkan maklumat perniagaan, paparan dan katalog daripada versi terdahulu. URL dan QR kekal sama. Gmail pemilik, langganan, bayaran, pesanan dan status halaman tidak dipulihkan.");
+  help.className = "help";
+  const toggle = el("button", "Lihat sejarah");
+  toggle.type = "button";
+  toggle.className = "secondary";
+  toggle.setAttribute("aria-expanded", "false");
+  const body = el("div");
+  body.hidden = true;
+  const actions = el("div");
+  actions.className = "actions";
+  const refresh = el("button", "Muat semula sejarah"), more = el("button", "Versi lain");
+  for (const button of [refresh, more]) {
+    button.type = "button";
+    button.className = "secondary";
+  }
+  more.hidden = true;
+  actions.append(refresh, more);
+  const status = el("p");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const form = el("form");
+  form.noValidate = true;
+  const picker = el("select");
+  picker.id = "page-history-source";
+  const pickerLabel = el("label", "Versi untuk dipulihkan");
+  pickerLabel.htmlFor = picker.id;
+  const details = el("p");
+  details.className = "help";
+  details.dataset.noI18n = "";
+  const warning = el("p", "Pemulihan menggantikan kandungan semasa, termasuk suntingan yang belum disimpan. Semak versi dan nama perniagaan sebelum meneruskan.");
+  warning.className = "notice";
+  const name = el("input");
+  name.id = "page-history-confirm-name";
+  name.maxLength = 80;
+  name.autocomplete = "off";
+  name.required = true;
+  const nameLabel = el("label", "Taip nama perniagaan semasa untuk mengesahkan");
+  nameLabel.htmlFor = name.id;
+  const note = el("textarea");
+  note.id = "page-history-note";
+  note.maxLength = 200;
+  note.rows = 2;
+  note.required = true;
+  const noteLabel = el("label", "Sebab pemulihan (maksimum 200 aksara)");
+  noteLabel.htmlFor = note.id;
+  const confirmation = el("input");
+  confirmation.id = "page-history-confirm";
+  confirmation.type = "checkbox";
+  const confirmationLabel = el("label");
+  confirmationLabel.htmlFor = confirmation.id;
+  confirmationLabel.append(confirmation, document.createTextNode(" Saya telah menyemak versi dan mahu menggantikan kandungan semasa."));
+  const restore = el("button", "Pulihkan versi dipilih");
+  restore.type = "submit";
+  form.append(pickerLabel, picker, details, warning, nameLabel, name, noteLabel, note, confirmationLabel, restore);
+  body.append(actions, status, form);
+  panel.append(title, help, toggle, body);
+  let page = null, items = [], cursor2 = null, working = false, locked = false, sequence = 0;
+  const allowed = () => !!page && !working && !locked && canMutate() && page.manualState !== "deleted" && page.state !== "deleted";
+  const path = () => "/api/admin/links/" + encodeURIComponent(page.id) + "/history";
+  const date4 = (value) => value ? new Date(value).toLocaleString("ms-MY", { timeZone: "Asia/Kuala_Lumpur" }) : "Tarikh tidak tersedia";
+  function controls() {
+    toggle.disabled = !page || working || locked;
+    refresh.disabled = working || locked;
+    more.disabled = working || locked;
+    picker.disabled = working || locked || !items.length;
+    for (const input of [name, note, confirmation]) input.disabled = !allowed();
+    restore.disabled = !allowed() || !items.find((item) => item.revision === picker.value)?.restorable;
+    form.hidden = !items.length;
+  }
+  function selected2() {
+    const item = items.find((item2) => item2.revision === picker.value);
+    details.textContent = item ? "Versi " + item.revision + " \xB7 " + date4(item.archivedAt || item.updatedAt) + (item.changedBy ? " \xB7 " + item.changedBy : "") + (item.restorable ? "" : " \xB7 Versi ini tidak sah dan tidak boleh dipulihkan.") : "Pilih versi dahulu.";
+    confirmation.checked = false;
+    controls();
+  }
+  async function load2(append = false) {
+    if (!page || working || locked) return;
+    const current = sequence;
+    working = true;
+    controls();
+    status.textContent = "Memuatkan sejarah\u2026";
+    try {
+      const result = await api2(path() + (append && cursor2 ? "?cursor=" + encodeURIComponent(cursor2) : ""));
+      if (current !== sequence) return;
+      if (result.revision !== page.revision) {
+        status.textContent = "Halaman telah berubah. Muat semula halaman sebelum memulihkan kandungan.";
+        items = [];
+        picker.replaceChildren();
+        more.hidden = true;
+        return;
+      }
+      items = append ? [...items, ...result.items.filter((item) => !items.some((old) => old.revision === item.revision))] : result.items;
+      cursor2 = result.cursor;
+      more.hidden = !cursor2;
+      const previous = picker.value;
+      picker.replaceChildren();
+      for (const item of items) {
+        const option = el("option", date4(item.archivedAt || item.updatedAt) + " \xB7 " + item.name + " \xB7 #" + item.revision + (item.restorable ? "" : " \xB7 Tidak sah"));
+        option.value = item.revision;
+        option.disabled = !item.restorable;
+        picker.append(option);
+      }
+      picker.value = items.some((item) => item.revision === previous && item.restorable) ? previous : items.find((item) => item.restorable)?.revision || "";
+      selected2();
+      status.textContent = items.length ? "Sejarah dimuatkan. Pilih versi dan lengkapkan pengesahan untuk memulihkan kandungan." : "Belum ada versi terdahulu untuk halaman ini.";
+    } catch (error) {
+      if (current === sequence) status.textContent = error.message || "Sejarah belum dapat dimuatkan.";
+    } finally {
+      if (current === sequence) {
+        working = false;
+        controls();
+      }
+    }
+  }
+  toggle.onclick = () => {
+    body.hidden = !body.hidden;
+    toggle.setAttribute("aria-expanded", String(!body.hidden));
+    toggle.textContent = body.hidden ? "Lihat sejarah" : "Tutup sejarah";
+    if (!body.hidden && !items.length) load2();
+  };
+  refresh.onclick = () => load2();
+  more.onclick = () => load2(true);
+  picker.onchange = selected2;
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (!allowed()) return;
+    const chosen = items.find((item) => item.revision === picker.value);
+    if (!chosen?.restorable) {
+      status.textContent = "Pilih versi yang sah dahulu.";
+      return;
+    }
+    if (name.value !== page.profile.name) {
+      status.textContent = "Nama perniagaan mesti sama tepat dengan nama semasa.";
+      name.focus();
+      return;
+    }
+    const reason = note.value.trim();
+    if (!reason || reason.length > 200 || /[\u0000-\u001f]/.test(reason)) {
+      status.textContent = "Masukkan sebab pemulihan yang sah, maksimum 200 aksara.";
+      note.focus();
+      return;
+    }
+    if (!confirmation.checked) {
+      status.textContent = "Tandakan pengesahan sebelum memulihkan kandungan.";
+      confirmation.focus();
+      return;
+    }
+    const current = sequence;
+    working = true;
+    controls();
+    status.textContent = "Memulihkan kandungan\u2026";
+    try {
+      const result = await api2(path() + "/restore", { method: "POST", body: { sourceRevision: chosen.revision, revision: page.revision, note: reason } });
+      if (current !== sequence) return;
+      page = result;
+      items = [];
+      cursor2 = null;
+      picker.replaceChildren();
+      name.value = "";
+      note.value = "";
+      confirmation.checked = false;
+      more.hidden = true;
+      status.textContent = "Kandungan berjaya dipulihkan. URL, QR dan maklumat langganan kekal.";
+      await onUpdated(result);
+    } catch (error) {
+      if (current === sequence) status.textContent = error.status === 409 ? "Halaman telah berubah atau belum boleh dipulihkan. Muat semula halaman dan semak sebelum mencuba lagi." : error.message || "Kandungan belum dapat dipulihkan.";
+    } finally {
+      if (current === sequence) {
+        working = false;
+        controls();
+      }
+    }
+  };
+  return { panel, show(item) {
+    if (page?.id === item.id && page.revision === item.revision) {
+      page = item;
+      controls();
+      return;
+    }
+    sequence++;
+    page = item;
+    items = [];
+    cursor2 = null;
+    working = false;
+    panel.hidden = false;
+    body.hidden = true;
+    toggle.textContent = "Lihat sejarah";
+    toggle.setAttribute("aria-expanded", "false");
+    picker.replaceChildren();
+    details.textContent = "";
+    name.value = "";
+    note.value = "";
+    confirmation.checked = false;
+    status.textContent = "";
+    more.hidden = true;
+    controls();
+  }, clear() {
+    sequence++;
+    page = null;
+    items = [];
+    cursor2 = null;
+    working = false;
+    panel.hidden = true;
+    body.hidden = true;
+    picker.replaceChildren();
+    details.textContent = "";
+    name.value = "";
+    note.value = "";
+    confirmation.checked = false;
+    status.textContent = "";
+    controls();
+  }, lock(value) {
+    locked = !!value;
+    controls();
+  } };
+}
+
 // src/admin.js
 var $ = (id) => document.getElementById(id);
 var customer = document.body.dataset.role === "user";
@@ -4685,25 +5003,41 @@ function lockControls(value) {
   businessDetails?.lock(value || customer && selected?.state !== "active");
   appearanceControls?.lock(value || customer && selected?.state !== "active");
   catalogEditor?.lock(value || customer && selected?.state !== "active");
+  historyUI?.lock(value);
 }
+var historyUI = null;
 var management = createManagementUI({ customer, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
   selected = item;
   records = records.map((record) => record.id === item.id ? item : record);
   render();
+  historyUI?.show(item);
   alerts?.refresh();
   customerArea?.update(item);
   ordersUI.show(item);
   $("edit-title").textContent = item.profile.name;
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
 } });
-var ordersUI = createOrdersUI({ customer, api: (path, options) => api(base + path, options) });
+var ordersUI = createOrdersUI({ customer, api: (path, options) => api(base + path, options), canMutate: () => !saving, onBusy: lockControls, onOrderChanged: () => alerts?.refresh(), onPageUpdated: async (item) => {
+  selected = item;
+  records = records.map((record) => record.id === item.id ? item : record);
+  render();
+  await management.show(item);
+  historyUI?.show(item);
+} });
 $("edit-form").before(ordersUI.panel);
-var alerts = customer ? null : createPaymentAlerts({ api, open: async (id) => {
+historyUI = customer ? null : createPageHistoryUI({ api, canMutate: () => !saving, onUpdated: async (item) => {
+  records = records.map((record) => record.id === item.id ? item : record);
+  render();
+  await edit(item);
+} });
+if (historyUI) $("edit-form").after(historyUI.panel);
+var alerts = customer ? null : createPaymentAlerts({ api, open: async (id, orderId) => {
   if (saving) return;
   const current = session;
   const item = await api(base + "/links/" + id);
   if (current !== session || saving) return;
-  await edit(item);
+  await edit(item, orderId);
+  if (orderId) ordersUI.panel.scrollIntoView({ behavior: "smooth", block: "start" });
 }, canOpen: () => !saving });
 function logout(message = "Anda telah log keluar.") {
   coverPreview.hidden = true;
@@ -4721,6 +5055,7 @@ function logout(message = "Anda telah log keluar.") {
   listingTools?.invalidate();
   management.clear();
   ordersUI.clear();
+  historyUI?.clear();
   alerts?.stop();
   customerArea?.clear();
   $("dashboard").hidden = true;
@@ -4836,7 +5171,7 @@ async function login(token) {
     $("login-status").textContent = error.message;
   }
 }
-async function edit(item) {
+async function edit(item, orderId) {
   if (saving) return;
   coverPreview.hidden = !item.profile.cover;
   if (item.profile.cover) coverPreview.src = item.profile.cover;
@@ -4877,7 +5212,8 @@ async function edit(item) {
   if (!customer) $("editor").scrollIntoView({ behavior: "smooth", block: "start" });
   lockControls(false);
   await management.show(item);
-  ordersUI.show(item);
+  ordersUI.show(item, orderId);
+  historyUI?.show(item);
   customerArea?.update(item);
 }
 for (const [key, text2] of Object.entries(fields)) {
@@ -4989,6 +5325,7 @@ catalogEditor = createCatalogEditor({ onChange: () => {
     selected = result.page;
     records = records.map((record) => record.id === selected.id ? selected : record);
     render();
+    historyUI?.show(result.page);
     return result;
   } finally {
     lockControls(false);
@@ -5026,6 +5363,7 @@ coverFile.addEventListener("change", async () => {
     selected = updated;
     records = records.map((record) => record.id === updated.id ? updated : record);
     render();
+    historyUI?.show(updated);
     $("field-cover").value = updated.profile.cover;
     if (previewURL) URL.revokeObjectURL(previewURL);
     previewURL = URL.createObjectURL(file);
@@ -5078,6 +5416,7 @@ $("edit-form").addEventListener("submit", async (event) => {
     records = records.map((record) => record.id === updated.id ? updated : record);
     selected = updated;
     render();
+    historyUI?.show(updated);
     customerArea?.update(updated);
     $("edit-title").textContent = updated.profile.name;
     for (const key of Object.keys(fields)) $("field-" + key).value = updated.profile[key] || (key === "theme" ? "classic" : key === "accent" ? "#20543e" : "");
@@ -5116,6 +5455,7 @@ $("owner-form")?.addEventListener("submit", async (event) => {
     selected = updated;
     records = records.map((record) => record.id === updated.id ? updated : record);
     render();
+    historyUI?.show(updated);
     $("owner-email").value = updated.ownerEmail;
     $("owner-status").textContent = "Gmail didaftarkan. Pemilik boleh login di tap.imai.my/edit. URL dan QR kekal sama.";
   } catch (error) {

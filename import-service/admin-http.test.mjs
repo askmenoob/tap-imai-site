@@ -4,7 +4,7 @@ import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 
 test('HTTP admin routes reject anonymous/forged access and cross-origin writes; production ignores demo flag',async t=>{
-  const child=spawn(process.execPath,['import-service/server.mjs'],{cwd:new URL('../',import.meta.url),env:{...process.env,PORT:'18972',PREVIEW_DEMO:'1',GOOGLE_PLACES_API_KEY:'test',IMPORT_SIGNING_SECRET:'s'.repeat(32),ADMIN_GOOGLE_CLIENT_ID:'123456789-test.apps.googleusercontent.com',ADMIN_EMAILS:'admin@example.com',SHORT_LINK_BUCKET:''},stdio:['ignore','pipe','pipe']});
+  const child=spawn(process.execPath,['import-service/server.mjs'],{cwd:new URL('../',import.meta.url),env:{...process.env,PORT:'18972',PREVIEW_DEMO:'1',GOOGLE_PLACES_API_KEY:'test',IMPORT_SIGNING_SECRET:'s'.repeat(32),ADMIN_GOOGLE_CLIENT_ID:'123456789-test.apps.googleusercontent.com',ADMIN_EMAILS:'admin@example.com',SHORT_LINK_BUCKET:'',QUOTA_BUCKET:'isolated-test-quota'},stdio:['ignore','pipe','pipe']});
   t.after(()=>child.kill());let started='';
   for await(const chunk of child.stdout){started+=chunk;if(started.includes('\n'))break;}
   assert.equal(JSON.parse(started).demo,false);

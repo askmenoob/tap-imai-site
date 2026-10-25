@@ -1,0 +1,8 @@
+{
+  "name": "smarttap-backup-cedar-kiln-502614-h5",
+  "location": "asia-southeast1",
+  "storageClass": "STANDARD",
+  "iamConfiguration": {"uniformBucketLevelAccess": {"enabled": true}, "publicAccessPrevention": "enforced"},
+  "retentionPolicy": {"retentionPeriod": "2592000"},
+  "lifecycle": {"rule": [{"action": {"type": "Delete"}, "condition": {"age": 35, "matchesPrefix": ["snapshots/"]}}]}
+}
