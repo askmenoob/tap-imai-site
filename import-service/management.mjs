@@ -21,8 +21,9 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
       admin(actor);
       if(!actor.email||!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(key=>!['action','expiresDate','note','revision'].includes(key)))throw fail(400,'Maklumat langganan tidak sah.');
       const previous=await load(id,actor),record=previous.record;
+      if(record.paymentResolution)throw fail(409,'Penyelesaian bayaran sedang diproses. Selesaikan semakan sebelum mengubah langganan.');
       if(record.lifecycle?.state==='deleted'||!record.ownerEmail)throw fail(409,'Pulihkan halaman dan daftarkan Gmail pemilik dahulu.');
-      if(record.renewal?.status==='pending'||record.checkout&&!['paid','cancelled','creation_failed'].includes(record.checkout.status))throw fail(409,'Selesaikan atau batalkan bil/semakan bayaran yang masih terbuka dahulu.');
+      if(record.renewal?.status==='pending'||record.checkout&&!['paid','cancelled','creation_failed','resolved'].includes(record.checkout.status))throw fail(409,'Selesaikan atau batalkan bil/semakan bayaran yang masih terbuka dahulu.');
       const note=typeof data.note==='string'?data.note.normalize('NFC').trim():'';
       if(!note||note.length>200||/[\u0000-\u001f]/.test(note))throw fail(400,'Masukkan sebab pelarasan, maksimum 200 aksara.');
       const time=now(),old=record.subscription;let expiresAt;
@@ -71,6 +72,7 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
     async state(id,{state,revision,confirmName}={},actor){
       admin(actor);if(!['active','disabled','deleted'].includes(state))throw fail(400,'Status halaman tidak sah.');
       const previous=await load(id,actor);const name=JSON.parse(Buffer.from(new URL(previous.record.url).searchParams.get('p'),'base64url')).name;
+      if(previous.record.paymentResolution)throw fail(409,'Penyelesaian bayaran sedang diproses. Selesaikan semakan sebelum mengubah status halaman.');
       if(state==='deleted'&&confirmName!==name)throw fail(400,'Taip nama perniagaan yang tepat untuk memadam halaman.');
       if(previous.record.lifecycle?.state==='deleted'&&state==='active')throw fail(400,'Pulihkan sebagai nyahaktif dahulu, kemudian aktifkan halaman.');
       const saved=await savePage({store,id,previous,revision,changes:{lifecycle:{state,changedAt:new Date(now()).toISOString(),changedBy:actor.email}},actor,now});return view(id,saved,actor);
@@ -78,6 +80,7 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
     async request(id,data={},actor){
       if(!manualEnabled)throw fail(410,'Bayaran manual telah ditutup. Gunakan ToyyibPay.');if(!qrPayload)throw fail(503,'Bayaran manual belum dikonfigurasi.');
       ready();const previous=await load(id,actor);if(previous.record.lifecycle?.state==='deleted')throw fail(409,'Halaman telah dipadam.');
+      if(previous.record.paymentResolution)throw fail(409,'Penyelesaian bayaran sedang diproses. Selesaikan semakan sebelum menghantar bayaran manual.');
       if(!previous.record.ownerEmail)throw fail(400,'Daftarkan Gmail pelanggan sebelum merekod bayaran.');
       if(Object.keys(data).some(key=>!['reference','paidDate','amountCents','revision','package','extraNfcQty','stickerQty'].includes(key)))throw fail(400,'Maklumat bayaran tidak sah.');
       const quote=catalog.quote(previous.record,{package:data.package,extraNfcQty:data.extraNfcQty,stickerQty:data.stickerQty});
@@ -97,6 +100,7 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
     async decide(id,{requestId,decision,revision,confirmBank=false,note=''}={},actor){
       admin(actor);ready();if(!['approve','reject'].includes(decision)||typeof note!=='string'||note.length>200)throw fail(400,'Keputusan semakan tidak sah.');
       const previous=await load(id,actor);if(previous.record.lifecycle?.state==='deleted')throw fail(409,'Halaman telah dipadam.');
+      if(previous.record.paymentResolution)throw fail(409,'Penyelesaian bayaran sedang diproses. Selesaikan semakan sebelum membuat keputusan bayaran manual.');
       const renewal=previous.record.renewal;if(!renewal||renewal.id!==requestId)throw fail(409,'Permohonan telah berubah. Muat semula.');
       const target=decision==='approve'?'approved':'rejected';
       if(renewal.status===target)return view(id,previous,actor);

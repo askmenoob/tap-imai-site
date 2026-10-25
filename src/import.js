@@ -4,6 +4,7 @@ import { createSuggestions } from './business-suggestions.mjs';
 import { malaysiaPhone, whatsappFromPhone, threadsProfile } from '../import-service/contacts.mjs';
 import { generateShortPage } from './short-page.mjs';
 import {googleLogin} from './google-login.mjs';
+import {onboardingResult} from './onboarding-result.mjs';
 
 const $ = id => document.getElementById(id);
 const registering=new URLSearchParams(location.search).get('register')==='1';
@@ -13,6 +14,7 @@ let listingTools=null,pendingStart=null;
 let publicDraftToken='';
 let activeSearch; let sequence = 0; let resultSequence = 0; let sources = {};
 let activeGeneration;
+let savedResult=null;
 let sessionToken = crypto.randomUUID();
 let places = []; let activePlace = -1; let placesFromDemo = false;
 const config = window.SMARTTAP_IMPORT_CONFIG || {};
@@ -46,7 +48,24 @@ if(registering){
 }
 // Remove the earlier optional controls if an older HTML response was cached.
 $('shorten')?.remove();$('short-status')?.remove();$('share').rows=1;
-$('result').querySelector('.notice').textContent='Simpan URL pendek ini. Daftarkan Gmail pemilik dengan super admin dan semak status pakej sebelum berkongsi. Halaman yang menunggu pengaktifan boleh diurus melalui ruang pelanggan. URL dan QR kekal sama selepas renew.';
+const resultEyebrow=$('result').querySelector('.eyebrow'),resultTitle=$('result').querySelector('h2'),resultNotice=$('result').querySelector('.notice');
+const registrationContact=$('registration-contact')||document.createElement('a');
+registrationContact.id='registration-contact';registrationContact.className='button';registrationContact.target='_blank';registrationContact.rel='noopener noreferrer';registrationContact.hidden=true;
+if(!registrationContact.parentNode)$('result').querySelector('.actions').append(registrationContact);
+const registrationHelp=$('registration-contact-help')||document.createElement('p');registrationHelp.id='registration-contact-help';registrationHelp.className='help';registrationHelp.hidden=true;
+if(!registrationHelp.parentNode)registrationContact.closest('.actions').after(registrationHelp);
+for(const node of [resultEyebrow,resultTitle,resultNotice,registrationContact,registrationHelp,$('open'),$('generate')])node.dataset.noI18n='';
+function resultLanguage(){try{if(localStorage.getItem('smarttap.language')==='en')return 'en';}catch{}return document.documentElement.lang==='en'?'en':'ms';}
+function renderResult(){
+  $('generate').textContent=registering?(resultLanguage()==='en'?'Register page & QR ↗':'Daftar halaman & QR ↗'):(resultLanguage()==='en'?'Save draft & QR ↗':'Simpan draf & QR ↗');
+  if(!savedResult)return;
+  const view=onboardingResult({...savedResult,registering,language:resultLanguage()});
+  resultEyebrow.textContent=view.eyebrow;resultTitle.textContent=view.title;resultNotice.textContent=view.notice;$('open').textContent=view.openLabel;
+  registrationContact.hidden=!view.showContact;registrationHelp.hidden=!view.showContact;registrationContact.textContent=view.contactLabel;registrationHelp.textContent=view.contactHelp;
+  if(view.contactURL)registrationContact.href=view.contactURL;else registrationContact.removeAttribute('href');
+  $('form-status').dataset.noI18n='';$('form-status').textContent=view.status;
+}
+window.addEventListener('smarttap:language',renderResult);renderResult();
 function httpsURL(value) {
   try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && (!u.port || u.port === '443') ? u.href : null; }
   catch { return null; }
@@ -59,7 +78,7 @@ function sourceLine(key, value) {
     link.textContent = new URL(value).hostname; link.target='_blank'; link.rel='noopener noreferrer'; line.append(link);
   } else line.textContent = 'Sumber: ' + value;
 }
-function invalidate() { resultSequence++;activeGeneration?.abort(); $('result').hidden=true; $('form-status').textContent='';$('copy-status').textContent=''; }
+function invalidate() { resultSequence++;activeGeneration?.abort();savedResult=null; $('result').hidden=true;delete $('form-status').dataset.noI18n; $('form-status').textContent='';$('copy-status').textContent='';const contact=$('registration-contact'),help=$('registration-contact-help');if(contact){contact.hidden=true;contact.removeAttribute('href');}if(help)help.hidden=true; }
 function previewLogo() {
   const value = httpsURL($('field-logo').value.trim());
   $('logo-preview').hidden = true; $('logo-fallback').hidden = false;
@@ -269,8 +288,8 @@ $('profile-form').addEventListener('submit',async event=>{
     if(current!==resultSequence) return;
     showShareURL(page.url,page.png);
     $('manage-registration').href='/admin.html?page='+new URL(page.url).searchParams.get('s');$('manage-registration').hidden=!registering;
-    if(registering)$('result').querySelector('.notice').textContent='Pendaftaran Gmail selesai. Pelanggan boleh login di tap.imai.my/edit untuk menyemak pakej, menghantar rujukan bayaran dan menyunting halaman selepas diaktifkan. URL pendek dan QR kekal sama.';
-    $('result').hidden=false; $('form-status').textContent='URL pendek dan QR anda sedia.';
+    savedResult={url:page.url,name:profile.name};renderResult();
+    $('result').hidden=false;
     $('result').scrollIntoView({behavior:'smooth',block:'start'});
   } catch(error){if(error.name!=='AbortError'&&current===resultSequence)$('form-status').textContent='URL pendek dan QR belum dapat dijana. Cuba lagi sebentar. '+error.message;}
   finally {$('generate').disabled=registering&&(!adminCredential||adminExpiry<=Date.now());}

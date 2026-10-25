@@ -1,0 +1,17 @@
+{
+  "displayName": "SmartTap HTTPS unavailable — TEMPLATE, DO NOT APPLY",
+  "enabled": false,
+  "combiner": "OR",
+  "notificationChannels": ["REPLACE_WITH_APPROVED_VERIFIED_NOTIFICATION_CHANNEL_RESOURCE"],
+  "conditions": [{
+    "displayName": "Two or more locations fail for five minutes",
+    "conditionThreshold": {
+      "filter": "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND (metric.label.check_id=\"REPLACE_WITH_CREATED_FRONTEND_CHECK_ID\" OR metric.label.check_id=\"REPLACE_WITH_CREATED_BACKEND_CHECK_ID\")",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 1,
+      "duration": "300s",
+      "aggregations": [{"alignmentPeriod": "300s", "perSeriesAligner": "ALIGN_NEXT_OLDER", "crossSeriesReducer": "REDUCE_COUNT_FALSE", "groupByFields": ["metric.label.check_id"]}],
+      "trigger": {"count": 1}
+    }
+  }]
+}

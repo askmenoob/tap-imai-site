@@ -70,9 +70,9 @@ export function createManagementUI({customer,api,onUpdate,onBusy}){
     $('gateway-pay').hidden=!settings.enabled;$('gateway-pay-help').hidden=!settings.enabled;
     if(changedGatewayId!==item.id){$('manual-method').open=!settings.enabled;changedGatewayId=item.id;}
     $('gateway-order').textContent=checkout?checkout.id+' · '+money(checkout.amountCents)+(checkout.invoice?' · '+checkout.invoice:''):'';
-    $('gateway-status').textContent=checkout?({creating:'Sedang menyediakan bil. Muat semula sebentar lagi.',pending:'Bayaran belum disahkan. Teruskan pembayaran atau semak status.',failed:'Cubaan bayaran tidak berjaya. Anda boleh mencuba semula pada bil yang sama.',paid:'Bayaran ToyyibPay disahkan.',cancelled:'Bil belum dibayar telah dibatalkan.',creation_failed:'Bil belum dapat disediakan. Anda boleh cuba semula.',review:'Bayaran diterima dan memerlukan tindakan super admin.'}[checkout.status]||''):'';
-    const reviewable=settings.enabled&&checkout&&!['paid','cancelled','creation_failed'].includes(checkout.status);
-    $('gateway-check').hidden=!reviewable;$('gateway-cancel').hidden=!reviewable;
+    $('gateway-status').textContent=checkout?({creating:'Sedang menyediakan bil. Muat semula sebentar lagi.',pending:'Bayaran belum disahkan. Teruskan pembayaran atau semak status.',failed:'Cubaan bayaran tidak berjaya. Anda boleh mencuba semula pada bil yang sama.',paid:'Bayaran ToyyibPay disahkan.',cancelled:'Bil belum dibayar telah dibatalkan.',creation_failed:'Bil belum dapat disediakan. Anda boleh cuba semula.',review:'Bayaran diterima dan memerlukan tindakan super admin.',resolved:'Semakan selesai. Pemulangan wang di luar SmartTap telah direkodkan.'}[checkout.status]||''):'';
+    const reviewable=settings.enabled&&checkout&&!['paid','cancelled','creation_failed','resolved'].includes(checkout.status);
+    $('gateway-check').hidden=!reviewable;$('gateway-cancel').hidden=!reviewable||checkout.status==='review';
     $('gateway-continue').hidden=true;$('gateway-continue').removeAttribute('href');
   }
   let changedGatewayId;

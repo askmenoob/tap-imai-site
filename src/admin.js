@@ -10,6 +10,7 @@ import {googleLogin} from './google-login.mjs';
 import {createManagementUI,stateLabels} from './management-ui.mjs';
 import {createGoogleListingTools} from './google-listing-tools.mjs';
 import {createCustomerArea} from './customer-area.mjs';
+import {createPageHistoryUI} from './page-history.mjs';
 
 const $=id=>document.getElementById(id);
 const customer=document.body.dataset.role==='user',base=customer?'/api/user':'/api/admin';
@@ -20,14 +21,16 @@ let credential='',records=[],cursor=null,selected=null,expiryTimer,session=0,bus
 function lockControls(value){
   saving=value;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])if($(id))$(id).disabled=value||(id==='save'&&customer&&selected?.state!=='active');
   for(const field of Object.keys(fields))if($('field-'+field))$('field-'+field).disabled=value||(customer&&selected?.state!=='active');
-  for(const id of ['cover-file','remove-cover'])if($(id))$(id).disabled=value||(customer&&selected?.state!=='active');listingTools?.lock(value);businessDetails?.lock(value||(customer&&selected?.state!=='active'));appearanceControls?.lock(value||(customer&&selected?.state!=='active'));catalogEditor?.lock(value||(customer&&selected?.state!=='active'));
+  for(const id of ['cover-file','remove-cover'])if($(id))$(id).disabled=value||(customer&&selected?.state!=='active');listingTools?.lock(value);businessDetails?.lock(value||(customer&&selected?.state!=='active'));appearanceControls?.lock(value||(customer&&selected?.state!=='active'));catalogEditor?.lock(value||(customer&&selected?.state!=='active'));historyUI?.lock(value);
 }
-const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();alerts?.refresh();customerArea?.update(item);ordersUI.show(item);$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
-const ordersUI=createOrdersUI({customer,api:(path,options)=>api(base+path,options)});$('edit-form').before(ordersUI.panel);
-const alerts=customer?null:createPaymentAlerts({api,open:async id=>{if(saving)return;const current=session;const item=await api(base+'/links/'+id);if(current!==session||saving)return;await edit(item);},canOpen:()=>!saving});
+let historyUI=null;
+const management=createManagementUI({customer,api:(path,options)=>api(base+path,options),onBusy:lockControls,onUpdate:item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();historyUI?.show(item);alerts?.refresh();customerArea?.update(item);ordersUI.show(item);$('edit-title').textContent=item.profile.name;if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';}});
+const ordersUI=createOrdersUI({customer,api:(path,options)=>api(base+path,options),canMutate:()=>!saving,onBusy:lockControls,onOrderChanged:()=>alerts?.refresh(),onPageUpdated:async item=>{selected=item;records=records.map(record=>record.id===item.id?item:record);render();await management.show(item);historyUI?.show(item);}});$('edit-form').before(ordersUI.panel);
+historyUI=customer?null:createPageHistoryUI({api,canMutate:()=>!saving,onUpdated:async item=>{records=records.map(record=>record.id===item.id?item:record);render();await edit(item);}});if(historyUI)$('edit-form').after(historyUI.panel);
+const alerts=customer?null:createPaymentAlerts({api,open:async(id,orderId)=>{if(saving)return;const current=session;const item=await api(base+'/links/'+id);if(current!==session||saving)return;await edit(item,orderId);if(orderId)ordersUI.panel.scrollIntoView({behavior:'smooth',block:'start'});},canOpen:()=>!saving});
 function logout(message='Anda telah log keluar.'){
   coverPreview.hidden=true;coverStatus.textContent='';if(previewURL){URL.revokeObjectURL(previewURL);previewURL=null;}credential='';records=[];cursor=null;selected=null;session++;clearTimeout(expiryTimer);
-  listingTools?.invalidate();management.clear();ordersUI.clear();alerts?.stop();customerArea?.clear();
+  listingTools?.invalidate();management.clear();ordersUI.clear();historyUI?.clear();alerts?.stop();customerArea?.clear();
   $('dashboard').hidden=true;$('editor').hidden=true;$('login-panel').hidden=false;$('records').replaceChildren();
   for(const field of Object.keys(fields))$('field-'+field).value='';
   businessDetails?.set({});appearanceControls?.set();catalogEditor?.clear();
@@ -80,7 +83,7 @@ async function login(token){
     $('identity').textContent=actor.email;$('login-panel').hidden=true;$('dashboard').hidden=false;alerts?.start();await load(true);
   }catch(error){credential='';$('login-status').textContent=error.message;}
 }
-async function edit(item){
+async function edit(item,orderId){
   if(saving)return;
   coverPreview.hidden=!item.profile.cover;if(item.profile.cover)coverPreview.src=item.profile.cover;coverStatus.textContent='';selected=item;$('edit-title').textContent=item.profile.name;$('share').value=item.url;$('open').href=item.url;$('copy-status').textContent='';$('save-status').textContent='';
   if($('public-sharing'))$('public-sharing').hidden=item.state==='nfc_only'||item.state==='deleted';
@@ -91,7 +94,7 @@ async function edit(item){
   try{const png=await QRCode.toDataURL(item.url,{width:1024,margin:4,errorCorrectionLevel:'M',color:{dark:'#173b33',light:'#ffffff'}});if(selected?.id===item.id){$('qr').src=png;$('download').href=png;}}
   catch{$('copy-status').textContent='QR belum dapat disediakan. URL pelanggan masih sama.';}
   if(!customer)$('editor').scrollIntoView({behavior:'smooth',block:'start'});
-  lockControls(false);await management.show(item);ordersUI.show(item);customerArea?.update(item);
+  lockControls(false);await management.show(item);ordersUI.show(item,orderId);historyUI?.show(item);customerArea?.update(item);
 }
 for(const [key,text] of Object.entries(fields)){
   const label=document.createElement('label');label.htmlFor='field-'+key;label.textContent=text+(['name','google'].includes(key)?' *':'');
@@ -120,7 +123,7 @@ appearanceControls=createAppearanceControls({onChange:()=>{$('save-status').text
 coverStatus.after(...appearanceControls.coverNodes);
 catalogEditor=createCatalogEditor({onChange:()=>{$('save-status').textContent='Ada perubahan yang belum disimpan.';},upload:async file=>{
  const item=selected,current=session;if(!item||saving)throw new Error('Sila buka halaman semula.');lockControls(true);
- try{const response=await fetch(new URL(base+'/links/'+item.id+'/catalog-image',endpoint),{method:'POST',headers:{Authorization:'Bearer '+credential,'Content-Type':file.type,'If-Match':item.revision},body:file,cache:'no-store',credentials:'omit'});const result=await response.json();if(!response.ok)throw new Error(result.error||'Gambar belum dapat disimpan.');if(current!==session||selected?.id!==item.id)throw new Error('Sesi telah berubah.');selected=result.page;records=records.map(record=>record.id===selected.id?selected:record);render();return result;
+ try{const response=await fetch(new URL(base+'/links/'+item.id+'/catalog-image',endpoint),{method:'POST',headers:{Authorization:'Bearer '+credential,'Content-Type':file.type,'If-Match':item.revision},body:file,cache:'no-store',credentials:'omit'});const result=await response.json();if(!response.ok)throw new Error(result.error||'Gambar belum dapat disimpan.');if(current!==session||selected?.id!==item.id)throw new Error('Sesi telah berubah.');selected=result.page;records=records.map(record=>record.id===selected.id?selected:record);render();historyUI?.show(result.page);return result;
  }finally{lockControls(false);}
 },loadImage:async url=>{const item=selected,current=session;if(!item)throw new Error('Sesi tamat.');const name=new URL(url).pathname.split('/').at(-1);const response=await fetch(new URL(base+'/links/'+item.id+'/catalog-image/'+name,endpoint),{headers:{Authorization:'Bearer '+credential},cache:'no-store',credentials:'omit'});if(!response.ok||current!==session||selected?.id!==item.id)throw new Error('Gambar tidak tersedia.');return response.blob();}});
 let previewURL;
@@ -132,7 +135,7 @@ coverFile.addEventListener('change',async()=>{
   try{
     const response=await fetch(new URL(base+'/links/'+item.id+'/cover',endpoint),{method:'POST',headers:{Authorization:'Bearer '+credential,'Content-Type':file.type,'If-Match':item.revision},body:file,credentials:'omit',cache:'no-store'});
     const updated=await response.json();if(!response.ok)throw new Error(updated.error||'Cover belum dapat disimpan.');if(current!==session||selected?.id!==item.id)return;
-    selected=updated;records=records.map(record=>record.id===updated.id?updated:record);render();$('field-cover').value=updated.profile.cover;
+    selected=updated;records=records.map(record=>record.id===updated.id?updated:record);render();historyUI?.show(updated);$('field-cover').value=updated.profile.cover;
     if(previewURL)URL.revokeObjectURL(previewURL);previewURL=URL.createObjectURL(file);coverPreview.src=previewURL;coverPreview.hidden=false;
     coverStatus.textContent='Cover telah disimpan. URL pendek dan QR kekal sama.';appearanceControls?.coverSelected(file);
   }catch(error){coverStatus.textContent=error.message;}
@@ -148,7 +151,7 @@ $('edit-form').addEventListener('submit',async event=>{
   $('save-status').textContent='Menyimpan pada URL yang sama…';
   try{
     const updated=await api(base+'/links/'+item.id,{method:'PUT',body:{profile,revision:item.revision,...(catalog?{catalog}:{})}});if(current!==session)return;
-    records=records.map(record=>record.id===updated.id?updated:record);selected=updated;render();customerArea?.update(updated);$('edit-title').textContent=updated.profile.name;
+    records=records.map(record=>record.id===updated.id?updated:record);selected=updated;render();historyUI?.show(updated);customerArea?.update(updated);$('edit-title').textContent=updated.profile.name;
     for(const key of Object.keys(fields))$('field-'+key).value=updated.profile[key]||(key==='theme'?'classic':key==='accent'?'#20543e':'');
     businessDetails?.set(updated.profile);appearanceControls?.set();catalogEditor?.set({...updated,mediaOrigin:new URL(endpoint).origin});listingTools?.set(updated.profile);
     $('save-status').textContent='Berjaya disimpan. URL dan QR pelanggan kekal sama. Buka semula halaman untuk melihat perubahan.';
@@ -160,7 +163,7 @@ $('owner-form')?.addEventListener('submit',async event=>{
   saving=true;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])$(id).disabled=true;
   $('owner-status').textContent='Mendaftarkan Gmail pemilik…';
   try{const updated=await api(base+'/links/'+item.id+'/owner',{method:'PUT',body:{email,revision:item.revision}});if(current!==session)return;
-    selected=updated;records=records.map(record=>record.id===updated.id?updated:record);render();$('owner-email').value=updated.ownerEmail;
+    selected=updated;records=records.map(record=>record.id===updated.id?updated:record);render();historyUI?.show(updated);$('owner-email').value=updated.ownerEmail;
     $('owner-status').textContent='Gmail didaftarkan. Pemilik boleh login di tap.imai.my/edit. URL dan QR kekal sama.';
   }catch(error){$('owner-status').textContent=error.message;}
   finally{saving=false;for(const id of ['save','cancel','refresh','more','save-owner','owner-email'])$(id).disabled=false;}

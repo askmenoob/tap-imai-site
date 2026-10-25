@@ -1,0 +1,17 @@
+{
+  "labels": {"app": "smarttap", "purpose": "independent-backup"},
+  "template": {
+    "taskCount": 1,
+    "parallelism": 1,
+    "template": {
+      "serviceAccount": "smarttap-backup@cedar-kiln-502614-h5.iam.gserviceaccount.com",
+      "timeout": "1800s",
+      "maxRetries": 0,
+      "containers": [{
+        "image": "REPLACE_WITH_APPROVED_IMMUTABLE_IMAGE_DIGEST",
+        "args": ["backup", "--source=cedar-kiln-502614-h5-tap-links", "--backup=smarttap-backup-cedar-kiln-502614-h5", "--execute"],
+        "resources": {"limits": {"cpu": "1", "memory": "512Mi"}}
+      }]
+    }
+  }
+}

@@ -30,6 +30,7 @@ export function createCustomerService({store,origin='https://tap.imai.my',mediaO
       requireAdmin(actor);validId(id);email=gmailAddress(email);
       const previous=await store.getVersion(id);if(!previous)throw fail(404,'Pautan tidak ditemui.');
       if(previous.revision!==revision)throw fail(409,'Rekod telah berubah. Muat semula sebelum mendaftarkan Gmail.');
+      if(previous.record.paymentResolution)throw fail(409,'Penyelesaian bayaran sedang diproses. Selesaikan semakan sebelum menukar Gmail pemilik.');
       await store.grantOwner(ownerKey(email),id);
       const saved=await savePage({store,id,previous,revision,changes:{ownerEmail:email,ownerRegisteredAt:new Date(now()).toISOString(),ownerRegisteredBy:actor.email},actor,now});
       return view(id,saved,true);
