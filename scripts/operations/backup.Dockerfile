@@ -5,6 +5,6 @@ FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 CLOUDSDK_CORE_DISABLE_PROMPTS=1
 WORKDIR /app
 COPY smarttap-backup.py /app/smarttap-backup.py
-RUN python3 -m py_compile /app/smarttap-backup.py && useradd --create-home --uid 10001 backup
+RUN python3 -m py_compile /app/smarttap-backup.py && useradd --create-home --uid 10001 smarttapbackup
 USER 10001
 ENTRYPOINT ["python3", "/app/smarttap-backup.py"]
