@@ -65,9 +65,18 @@ recovery time depends on incident assessment and a reviewed restoration.
 - Backend check: `smarttap-backend-https-iSPPFbuUd_o`.
 - HTTPS unavailable policy: `136948352592913116`.
 - Repeated backend 5xx policy: `136948352592915389`.
+- Failed backup execution policy: `136948352592912651`.
+- No successful backup in 26 hours policy: `2504525592661402670`.
+- All four permanent policies were enabled and read back. The 26-hour query
+  includes a missing-series fallback and evaluates every 300 seconds. Google
+  rejects an additional retest window for lookbacks above 25 hours, so this
+  policy has no extra retest hold. Count windows use `ALIGN_SUM` for DELTA counts.
 - Both checks reported healthy results from all five monitoring locations.
 - Controlled test notification was received at 01:17:42 Malaysia time on
   26 October 2026; temporary test policy was removed after receipt.
+- A deliberately failing, isolated test job also triggered a clearly labelled
+  Google Alerting email at 01:29:38 Malaysia time. Its temporary alert policy
+  and job were removed after proof; the production backup job was not failed.
 
 Backup-specific alert activation and Scheduler execution evidence are retained
 in the operator's release evidence. These include failed execution detection

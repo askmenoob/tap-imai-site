@@ -10,7 +10,7 @@
       "comparison": "COMPARISON_GT",
       "thresholdValue": 0,
       "duration": "0s",
-      "aggregations": [{"alignmentPeriod": "300s", "perSeriesAligner": "ALIGN_DELTA", "crossSeriesReducer": "REDUCE_SUM"}],
+      "aggregations": [{"alignmentPeriod": "300s", "perSeriesAligner": "ALIGN_SUM", "crossSeriesReducer": "REDUCE_SUM"}],
       "trigger": {"count": 1}
     }
   }]
