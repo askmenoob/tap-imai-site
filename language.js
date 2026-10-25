@@ -1,4 +1,4 @@
-import {translateUI} from './language-catalog.mjs';
+import {translateUI} from './language-catalog.mjs?v=salon-demo-20261025-1';
 
 const key='smarttap.language';
 let language='ms';
