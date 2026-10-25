@@ -122,6 +122,10 @@ Authenticated POST /api/{admin,user}/links/:id/cover accepts raw JPEG/PNG/WebP a
 
 The PWA installer targets only the top-level application header, keeping install controls out of business profile cards.
 
+## Salon showcase on the front page
+
+The root entry still opens the existing business-search page. Its native demo card links to `/demo/salon/` in a new tab and retains a secondary link to the restaurant demo. Registration and business editing hide the marketing card. The standalone fictional Ruang Rambut showcase reuses the real public-page renderer with its own original SVG logo and AI-generated, approximately 100 KB WebP cover. Six example services across four categories include fixed/from/quote prices and indicative durations; category filtering, service-specific enquiry drafts, promotion, location, review and social examples stay entirely in local dialogs. No API, customer registration, real Google listing, message, booking or payment is created. Demo copy and front-page preview support Malay/English; all prices and business details are explicitly examples.
+
 ## Super-admin subscription adjustments
 
 The admin editor can activate/extend an annual subscription by 12 calendar months or set an explicit future expiry date (inclusive until 23:59:59.999 Malaysia time). POST `/api/admin/links/:id/subscription` requires the existing verified Google admin identity, allowed origin, JSON, current page revision, registered owner, and a required internal reason (up to 200 characters). Customer requests to the equivalent endpoint are denied. No provider call, bank-reference claim, bill, payment receipt or physical order is created. Payment/manual-QR flags are unaffected. Pending payment reviews or non-terminal gateway bills must be completed/cancelled before an adjustment; conditional writes prevent concurrent edits or duplicate retries from extending twice.

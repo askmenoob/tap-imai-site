@@ -1,4 +1,11 @@
 export const translations = {
+  'CUBA DEMO SEBELUM MELANGGAN':'TRY A DEMO BEFORE SUBSCRIBING',
+  'Bukan untuk restoran sahaja.':'Made for more than restaurants.',
+  'Lihat contoh halaman salon rambut dengan servis, harga, promosi dan tempahan WhatsApp — semuanya dalam satu pautan.':'Explore a hair salon page with services, prices, promotions and WhatsApp enquiries — all in one link.',
+  'Lihat demo salon ↗':'View salon demo ↗',
+  'Tanpa login · Salon rekaan · Harga & maklumat contoh':'No login · Fictional salon · Sample prices & details',
+  'Lihat juga demo restoran ↗':'Explore the restaurant demo too ↗',
+  'Ruang salon rekaan dengan kerusi penggayaan dan cermin':'Fictional salon interior with styling chairs and mirrors',
   'Pratonton tema':'Theme preview','Klasik':'Classic','Gelap':'Dark','Ceria':'Bright','Contoh butang':'Example button','Kod warna HEX':'HEX colour code',
   'Pilih palet atau masukkan kod HEX. Warna butang digunakan pada halaman anda.':'Choose a palette or enter a HEX code. Your page buttons use this colour.',
   'Jenis pautan menu / katalog':'Menu / catalogue link type','Pilihan lokasi':'Location option','Jenis pautan promosi':'Promotion link type','Tidak dipaparkan':'Not displayed','Pautan HTTPS':'HTTPS link','Guna alamat perniagaan':'Use business address','Nombor WhatsApp Malaysia':'Malaysia WhatsApp number','Nombor WhatsApp promosi':'Promotion WhatsApp number','Uji pautan ↗':'Test link ↗',
