@@ -1,5 +1,10 @@
 # SmartTap operations and recovery
 
+**Activation record:** the approved production rollout and backup/monitoring
+activation on 26 October 2026 are recorded in [OPERATIONS-ACTIVATION.md](OPERATIONS-ACTIVATION.md).
+The proposal below is retained as the original review package; its statements
+about resources being unprovisioned describe the pre-approval state.
+
 These changes prepare durable discovery quotas and operator tooling. They do not
 prove a backup schedule, uptime alert, notification channel or recovery drill is
 already enabled. No live resources are created by the default script commands.
