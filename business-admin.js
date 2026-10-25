@@ -3167,11 +3167,12 @@ var addressFields = { name: ["Nama penerima", 100], phone: ["Telefon penerima", 
 function createOrdersUI({ customer: customer2, api: api2, onPageUpdated = () => {
 }, onOrderChanged = () => {
 }, onBusy = () => {
+}, onContact = () => {
 }, canMutate = () => true }) {
   const panel = document.createElement("section");
   panel.id = "orders-panel";
   panel.className = "orders-panel";
-  panel.innerHTML = '<h2>Pesanan saya</h2><p class="help">Semak pembelian, alamat dan penghantaran untuk perniagaan ini. Status penghantaran dikemas kini oleh super admin.</p><label for="orders-picker">Pilih pesanan</label><div class="orders-selector"><select id="orders-picker"></select><button type="button" id="orders-refresh" class="secondary" aria-label="Muat semula pesanan"><span aria-hidden="true">\u21BB</span><span class="orders-refresh-label">Muat semula pesanan</span></button><button type="button" id="orders-more" class="secondary" hidden>Pesanan terdahulu</button></div><p id="orders-status" role="status" aria-live="polite"></p><div id="order-body" hidden><nav class="customer-subnav orders-tabs" aria-label="Bahagian pesanan"></nav><section id="order-details"></section><form id="order-address-form" novalidate><div id="order-recipient"></div><div id="order-address"></div><p class="help">Penghantaran Malaysia sahaja. Alamat disimpan untuk pesanan ini dan hanya boleh dilihat oleh pemilik yang berhak serta super admin.</p><button type="submit" id="order-address-save">Simpan maklumat penghantaran</button><p id="order-address-lock" class="help" hidden>Pesanan sudah dihantar. Hubungi super admin untuk pembetulan alamat.</p></form><section id="order-tracking"><p id="order-tracking-state" class="notice"></p><div id="order-tracking-info"></div><ol id="order-timeline"></ol><form id="order-fulfillment-form"><label for="order-fulfillment-state">Status penyediaan / penghantaran</label><select id="order-fulfillment-state"></select><label for="order-courier">Nama kurier</label><input id="order-courier" maxlength="80" placeholder="Contoh: Pos Laju / J&T Express"><label for="order-tracking-number">Nombor tracking</label><input id="order-tracking-number" maxlength="100"><label for="order-tracking-url">Pautan tracking kurier (pilihan)</label><input id="order-tracking-url" type="url" maxlength="500" placeholder="https://"><button type="submit" id="order-fulfillment-save">Simpan status penghantaran</button></form></section><a id="order-contact" class="button secondary" target="_blank" rel="noopener noreferrer" hidden>WhatsApp tentang pesanan \u2197</a><p class="help" id="order-contact-help" hidden>Draf mesej mengandungi nama perniagaan dan ID pesanan. Semak dan hantar sendiri melalui WhatsApp.</p></div>';
+  panel.innerHTML = '<h2>Pesanan saya</h2><p class="help">Semak pembelian, alamat dan penghantaran untuk perniagaan ini. Status penghantaran dikemas kini oleh super admin.</p><label for="orders-picker">Pilih pesanan</label><div class="orders-selector"><select id="orders-picker"></select><button type="button" id="orders-refresh" class="secondary" aria-label="Muat semula pesanan"><span aria-hidden="true">\u21BB</span><span class="orders-refresh-label">Muat semula pesanan</span></button><button type="button" id="orders-more" class="secondary" hidden>Pesanan terdahulu</button></div><p id="orders-status" role="status" aria-live="polite"></p><div id="order-body" hidden><nav class="customer-subnav orders-tabs" aria-label="Bahagian pesanan"></nav><section id="order-details"></section><form id="order-address-form" novalidate><div id="order-recipient"></div><div id="order-address"></div><p class="help">Penghantaran Malaysia sahaja. Alamat disimpan untuk pesanan ini dan hanya boleh dilihat oleh pemilik yang berhak serta super admin.</p><button type="submit" id="order-address-save">Simpan maklumat penghantaran</button><p id="order-address-lock" class="help" hidden>Pesanan sudah dihantar. Hubungi super admin untuk pembetulan alamat.</p></form><section id="order-tracking"><p id="order-tracking-state" class="notice"></p><div id="order-tracking-info"></div><ol id="order-timeline"></ol><form id="order-fulfillment-form"><label for="order-fulfillment-state">Status penyediaan / penghantaran</label><select id="order-fulfillment-state"></select><label for="order-courier">Nama kurier</label><input id="order-courier" maxlength="80" placeholder="Contoh: Pos Laju / J&T Express"><label for="order-tracking-number">Nombor tracking</label><input id="order-tracking-number" maxlength="100"><label for="order-tracking-url">Pautan tracking kurier (pilihan)</label><input id="order-tracking-url" type="url" maxlength="500" placeholder="https://"><button type="submit" id="order-fulfillment-save">Simpan status penghantaran</button></form></section><button id="order-contact" type="button" class="secondary" hidden>Perlukan bantuan? Buka Mesej</button><p class="help" id="order-contact-help" hidden>Semua pertanyaan kepada super admin diuruskan dalam Mesej.</p></div>';
   if (!customer2) panel.querySelector("h2").textContent = "Pesanan pelanggan";
   const resolutionForm = document.createElement("form");
   resolutionForm.id = "order-resolution";
@@ -3236,7 +3237,7 @@ function createOrdersUI({ customer: customer2, api: api2, onPageUpdated = () => 
       b.hidden = b.dataset.tab !== "details" && !physical;
       b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
     }
-    const contactVisible = order?.paymentStatus === "paid" && ["details", "tracking"].includes(tab);
+    const contactVisible = customer2 && order?.paymentStatus === "paid" && ["details", "tracking"].includes(tab);
     $2("order-contact").hidden = !contactVisible;
     $2("order-contact-help").hidden = !contactVisible;
     $2("order-details").hidden = tab !== "details";
@@ -3342,11 +3343,9 @@ function createOrdersUI({ customer: customer2, api: api2, onPageUpdated = () => 
     const paid = order.paymentStatus === "paid";
     $2("order-contact").hidden = !paid;
     $2("order-contact-help").hidden = !paid;
-    if (paid) {
-      const link = new URL("https://wa.me/60103250032");
-      link.searchParams.set("text", "Salam SmartTap, saya ingin bertanya tentang pesanan.\nPerniagaan: " + page.profile.name + "\nID pesanan: " + order.id);
-      $2("order-contact").href = link.href;
-    } else $2("order-contact").removeAttribute("href");
+    $2("order-contact").onclick = () => {
+      if (customer2 && order?.paymentStatus === "paid") onContact(order.id);
+    };
     renderTabs();
     controls();
   }
@@ -3818,19 +3817,25 @@ function paymentPrompt(item, now = Date.now()) {
 }
 
 // src/order-support.mjs
-function orderSupportLink(item, { customer: customer2 = false, language = "ms" } = {}) {
+function orderSupportLink(item, { customer: customer2 = false, language = "ms", orderId = null } = {}) {
   const approved = item.renewal?.status === "approved" ? item.renewal : null;
-  const id = approved?.id || item.subscription?.lastPaymentId;
-  if (!customer2 || typeof id !== "string" || !id || item.manualState === "deleted") return null;
-  const shipping = approved?.provider === "toyyibpay" && !!(approved.includesPhysical || approved.items?.some((line) => ["bundle", "nfc", "extra_nfc", "table_sticker"].includes(line.id) && line.quantity > 0));
+  const id = orderId || approved?.id || item.subscription?.lastPaymentId;
+  if (!customer2 || item.manualState === "deleted") return null;
   const en = language === "en";
-  const lines = [shipping ? en ? "Hello SmartTap super admin, my payment is confirmed. Here are the delivery details for my NFC order." : "Salam super admin SmartTap, bayaran saya telah disahkan. Berikut maklumat penghantaran pesanan NFC saya." : en ? "Hello SmartTap super admin, I would like to ask about my confirmed order." : "Salam super admin SmartTap, saya ingin bertanya tentang pesanan yang telah disahkan.", (en ? "Business: " : "Perniagaan: ") + item.profile.name, (en ? "Order ID: " : "ID pesanan: ") + id];
-  if (approved?.items?.length) lines.push((en ? "Order: " : "Pesanan: ") + approved.items.map((line) => line.name + " \xD7 " + line.quantity).join(", "));
-  if (shipping) lines.push((en ? "Payment reference: " : "Rujukan bayaran: ") + approved.reference, "", ...en ? ["Recipient name: ", "Contact number: ", "Delivery address: ", "Postcode: ", "City: ", "State: ", "Delivery notes (optional): "] : ["Nama penerima: ", "Nombor telefon: ", "Alamat penghantaran: ", "Poskod: ", "Bandar: ", "Negeri: ", "Nota penghantaran (pilihan): "], "");
+  const lines = [en ? "Hello SmartTap super admin, I need assistance." : "Salam super admin SmartTap, saya perlukan bantuan.", (en ? "Business: " : "Perniagaan: ") + item.profile.name];
+  if (typeof id === "string" && id) lines.push((en ? "Order ID: " : "ID pesanan: ") + id);
+  if (approved && id === approved.id) {
+    if (approved.items?.length) lines.push((en ? "Order: " : "Pesanan: ") + approved.items.map((line) => line.name + " \xD7 " + line.quantity).join(", "));
+    if (approved.reference) lines.push((en ? "Payment reference: " : "Rujukan bayaran: ") + approved.reference);
+  }
+  const note = item.adminMessage?.status !== "resolved" ? item.adminMessage?.text : null;
+  const message = note || (!item.adminMessage ? item.renewal?.note : "");
+  if (message) lines.push((en ? "Admin message: " : "Mesej admin: ") + message);
   lines.push((en ? "Page link: " : "Pautan halaman: ") + item.url);
+  lines.push("", en ? "My enquiry: " : "Pertanyaan saya: ");
   const url = new URL("https://wa.me/60103250032");
   url.searchParams.set("text", lines.join("\n"));
-  return { url: url.href, shipping };
+  return { url: url.href };
 }
 
 // src/management-ui.mjs
@@ -3840,13 +3845,13 @@ var stateLabels = { active: "Aktif", disabled: "Dinyahaktifkan", deleted: "Dipad
 function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }) {
   const panel = document.createElement("section");
   panel.className = "management-panel";
-  panel.innerHTML = `<section id="admin-message-box" class="admin-message-box" hidden aria-labelledby="admin-message-title"><h3 id="admin-message-title">Mesej daripada super admin</h3><p id="admin-message-text" data-no-i18n></p><p id="admin-message-time" class="help" data-no-i18n></p><p id="admin-message-state" role="status" aria-live="polite"></p><div id="admin-message-reply" hidden><strong>Balasan pelanggan</strong><p id="admin-message-reply-text" data-no-i18n></p></div><form id="message-reply-form" hidden><label for="message-reply-text">Nombor transaksi / balasan anda</label><textarea id="message-reply-text" required maxlength="500" rows="3"></textarea><button type="submit">Hantar balasan kepada super admin</button></form><button id="message-resolve" type="button" class="secondary" hidden>Tandakan selesai</button><a id="message-whatsapp" class="button secondary" href="https://wa.me/60103250032" target="_blank" rel="noopener noreferrer" hidden>Hubungi super admin di WhatsApp \u2197</a></section>
+  panel.innerHTML = `<section id="admin-message-box" class="admin-message-box" hidden aria-labelledby="admin-message-title"><h3 id="admin-message-title">Mesej daripada super admin</h3><p id="admin-message-text" data-no-i18n></p><p id="admin-message-time" class="help" data-no-i18n></p><p id="admin-message-state" role="status" aria-live="polite"></p><div id="admin-message-reply" hidden><strong>Balasan pelanggan</strong><p id="admin-message-reply-text" data-no-i18n></p></div><form id="message-reply-form" hidden><label for="message-reply-text">Nombor transaksi / balasan anda</label><textarea id="message-reply-text" required maxlength="500" rows="3"></textarea><button type="submit">Hantar balasan kepada super admin</button></form><button id="message-resolve" type="button" class="secondary" hidden>Tandakan selesai</button></section>
   <form id="admin-message-form" class="admin-message-compose" ${customer2 ? "hidden" : ""}><h3>Hantar mesej kepada pelanggan</h3><label for="admin-message-input">Mesej / tindakan yang diperlukan</label><textarea id="admin-message-input" required maxlength="1000" rows="3" placeholder="Contoh: Sila berikan nombor transaksi bank untuk semakan bayaran."></textarea><p class="help">Mesej muncul pada halaman edit pelanggan. Mesej baharu menggantikan mesej semasa; rekod sebelumnya disimpan.</p><button type="submit">Hantar mesej</button></form><h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="google-listing-status" class="notice" hidden>Google Review belum tersedia. Super admin akan menyambungkan lokasi apabila tersedia di Google Maps.</p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review \u2197</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej \u2197</a>
   <div id="lifecycle-actions" class="actions" ${customer2 ? "hidden" : ""}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button></div>
   <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
   <p id="management-status" role="status" aria-live="polite"></p>
   <div id="billing-section"><h3>Langganan & pembayaran</h3><p id="billing-availability"></p><p id="payment-summary"></p>
-  <div id="order-support" class="notice" hidden><h4>Pertanyaan pesanan</h4><p>Hubungi super admin tentang pesanan yang telah disahkan, termasuk penyediaan NFC dan penghantaran.</p><a id="order-whatsapp" class="button" target="_blank" rel="noopener noreferrer">WhatsApp super admin tentang pesanan \u2197</a><p class="help">Draf mesej disediakan dengan nama perniagaan dan ID pesanan. Semak dan hantar sendiri dalam WhatsApp.</p></div>
+  <div id="order-support" class="notice" hidden><h4>Hubungi super admin</h4><p>Satu saluran WhatsApp untuk semua pertanyaan bayaran, pesanan dan penghantaran.</p><a id="order-whatsapp" class="button" target="_blank" rel="noopener noreferrer">Hubungi admin di WhatsApp \u2197</a><p class="help">Nama perniagaan, ID pesanan jika tersedia dan mesej admin disertakan dalam draf. Semak dan hantar sendiri melalui WhatsApp.</p></div>
   <section id="gateway-panel" class="gateway-panel" hidden><h4>Pembayaran ToyyibPay</h4><p id="gateway-availability"></p><p id="gateway-order" data-no-i18n></p><p id="gateway-status" role="status" aria-live="polite"></p><div class="actions"><a id="gateway-continue" class="button" hidden>Teruskan pembayaran \u2197</a><button type="button" id="gateway-check" class="secondary" hidden>Semak status bayaran</button><button type="button" id="gateway-cancel" class="secondary" hidden>Batalkan bil belum dibayar</button></div></section><p id="renewal-reminder" class="renewal-reminder" hidden></p><div id="payment-disclosure" class="actions" hidden><button id="payment-toggle" type="button" class="secondary" aria-controls="payment-form" aria-expanded="false">Renew / beli add-on</button><span class="help">Bayaran diproses melalui ToyyibPay.</span></div>
   <form id="payment-form" hidden><label for="payment-package">Pakej</label><select id="payment-package"></select><div class="quantity-grid"><div><label for="payment-nfc">NFC tambahan \xB7 RM30/unit</label><input id="payment-nfc" type="number" min="0" max="10" step="1" value="0"></div><div><label for="payment-stickers">NFC table sticker \xB7 kuantiti</label><input id="payment-stickers" type="number" min="0" max="200" step="1" value="0"></div></div><p class="help">Sticker: RM20/unit untuk 1\u201319 unit; RM15/unit untuk 20 unit atau lebih.</p><div id="payment-quote" role="status"></div><button id="gateway-pay" type="button" hidden>Bayar dengan ToyyibPay \u2197</button><p id="gateway-pay-help" class="help" hidden>Jumlah pesanan ditetapkan oleh SmartTap. Status disahkan terus dengan ToyyibPay.</p><p class="help">Harga produk tidak termasuk penghantaran. Urus penghantaran dan cajnya secara berasingan dengan super admin.</p>
   <details id="manual-method" open><summary>Bayaran manual (QR DuitNow)</summary><div id="payment-instructions" hidden><p>Bayar jumlah di atas menggunakan QR DuitNow ini. Semak nama penerima sebelum mengesahkan bayaran dalam aplikasi bank.</p><img id="payment-qr" width="1118" height="1762" alt="Gambar penuh QR DuitNow asal \u2014 NIK AZFAR BIN NIK ZAINAL, MAE Maybank"><strong id="payment-payee"></strong><div class="actions"><a id="payment-open" class="button secondary" target="_blank" rel="noopener noreferrer">Lihat QR penuh \u2197</a><a id="payment-download" class="button secondary" download="smarttap-duitnow-asal.jpeg">Muat turun gambar QR asal</a></div></div>
@@ -3854,7 +3859,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   <form id="payment-review" hidden><h4>Semakan super admin</h4><p id="review-details"></p><label class="check-label"><input id="bank-confirm" type="checkbox"> Saya telah menyemak akaun bank dan wang benar-benar diterima untuk transaksi ini.</label><label for="review-note">Nota kepada pelanggan (pilihan)</label><input id="review-note" maxlength="200"><div class="actions"><button id="payment-approve">Sahkan bayaran</button><button type="button" id="payment-reject" class="secondary">Tolak permohonan</button></div></form></div>`;
   document.getElementById("edit-form").before(panel);
   const $2 = (id) => panel.querySelector("#" + id);
-  let current = null, config = null, quote = null, sequence = 0, messageSequence = 0, gatewaySequence = 0, gatewayReturnChecked = null, working = false, paymentOpen = !customer2, paymentAvailable = false;
+  let current = null, config = null, quote = null, sequence = 0, messageSequence = 0, gatewaySequence = 0, gatewayReturnChecked = null, working = false, paymentOpen = !customer2, paymentAvailable = false, supportOrderId = null;
   function paymentVisibility(open) {
     paymentOpen = open;
     sequence++;
@@ -3874,6 +3879,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   const today = () => new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);
   const options = () => ({ package: $2("payment-package").value, extraNfcQty: Number($2("payment-nfc").value), stickerQty: Number($2("payment-stickers").value) });
   function clear() {
+    supportOrderId = null;
     subscriptionUI.clear();
     messageSequence++;
     current = null;
@@ -3910,19 +3916,14 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("admin-message-reply-text").textContent = message?.reply?.text || "";
     $2("message-reply-form").hidden = !customer2 || message?.status !== "open";
     $2("message-resolve").hidden = customer2 || !message || message.status === "resolved";
-    $2("message-whatsapp").hidden = !customer2 || !!message;
   }
   function orderSupport(item) {
-    const support = orderSupportLink(item, { customer: customer2, language: document.documentElement.lang });
+    const support = orderSupportLink(item, { customer: customer2, language: document.documentElement.lang, orderId: supportOrderId });
     const visible = !!support;
     $2("order-support").hidden = !visible;
     $2("order-whatsapp").removeAttribute("href");
     if (!visible) return;
     $2("order-whatsapp").href = support.url;
-    $2("order-support").querySelector("h4").textContent = support.shipping ? "Hantar alamat penghantaran" : "Pertanyaan pesanan";
-    $2("order-support").querySelector("p").textContent = support.shipping ? "Bayaran ToyyibPay anda telah disahkan. Hantar nama penerima, nombor telefon dan alamat penghantaran untuk pesanan NFC anda kepada super admin." : "Hubungi super admin tentang pesanan yang telah disahkan, termasuk penyediaan NFC dan penghantaran.";
-    $2("order-whatsapp").textContent = support.shipping ? "Hantar alamat melalui WhatsApp \u2197" : "WhatsApp super admin tentang pesanan \u2197";
-    $2("order-support").querySelector(".help").textContent = support.shipping ? "Draf mengandungi butiran pesanan dan ruang alamat. Lengkapkan alamat, semak dan hantar sendiri dalam WhatsApp." : "Draf mesej disediakan dengan nama perniagaan dan ID pesanan. Semak dan hantar sendiri dalam WhatsApp.";
   }
   window.addEventListener("smarttap:language", () => {
     if (current) orderSupport(current);
@@ -4023,6 +4024,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   async function show(item) {
     subscriptionUI.set(item);
     const changed = current?.id !== item.id, messageChanged = current?.adminMessage?.id !== item.adminMessage?.id, oldStatus = current?.renewal?.status;
+    if (changed) supportOrderId = null;
     current = item;
     if (changed || messageChanged) {
       $2("message-reply-text").value = "";
@@ -4201,7 +4203,10 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     action("/message-reply", { messageId: current.adminMessage.id, text: $2("message-reply-text").value, revision: current.revision }, "Balasan telah dihantar kepada super admin.");
   };
   $2("message-resolve").onclick = () => action("/message", { action: "resolve", messageId: current.adminMessage.id, revision: current.revision }, "Mesej telah diselesaikan.");
-  return { show, clear };
+  return { show, clear, contact(orderId = null) {
+    supportOrderId = orderId;
+    if (current) orderSupport(current);
+  } };
 }
 
 // src/google-listing-tools.mjs
@@ -4423,7 +4428,7 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
     subnav.append(button);
   }
   const emptySections = {};
-  for (const [name, text2] of [["messages", "Tiada mesej baharu daripada super admin."], ["delivery", "Maklumat penghantaran tersedia selepas bayaran pesanan fizikal disahkan."], ["gateway", "Belum ada bil pembayaran. Pilih Renew / beli untuk menyediakan pesanan."]]) {
+  for (const [name, text2] of [["messages", "Tiada mesej baharu daripada super admin."], ["delivery", "Isi alamat dan semak status penghantaran melalui Pesanan saya. Untuk bantuan, buka Mesej."], ["gateway", "Belum ada bil pembayaran. Pilih Renew / beli untuk menyediakan pesanan."]]) {
     const p = document.createElement("p");
     p.className = "notice";
     p.textContent = text2;
@@ -4451,8 +4456,14 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   orderShortcut.textContent = "Buka Pesanan saya";
   orderShortcut.onclick = () => open("orders", true);
   groups.delivery.append(orderShortcut);
+  const supportShortcut = document.createElement("button");
+  supportShortcut.type = "button";
+  supportShortcut.className = "secondary";
+  supportShortcut.textContent = "Perlukan bantuan? Buka Mesej";
+  supportShortcut.onclick = () => openMessages();
+  groups.delivery.append(supportShortcut);
   move("admin-message-box", "messages");
-  move("order-support", "delivery");
+  move("order-support", "messages");
   move("gateway-panel", "gateway");
   move("payment-form", "buy");
   const packageLink = [...management2.querySelectorAll("a")].find((a) => a.getAttribute("href") === "/subscribe/");
@@ -4636,6 +4647,10 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
     render2();
     if (focus) $2("customer-title").focus({ preventScroll: true });
   }
+  function openMessages() {
+    sectionName = "messages";
+    open("package", true);
+  }
   function render2() {
     const active = !!selected2;
     empty.hidden = active;
@@ -4661,7 +4676,7 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
       if (node.hidden !== hide) node.hidden = hide;
     }
     for (const b of subnav.children) b.setAttribute("aria-current", b.dataset.section === sectionName ? "page" : "false");
-    for (const [name, id] of Object.entries({ messages: "admin-message-box", delivery: "order-support", gateway: "gateway-panel" })) emptySections[name].hidden = !$2(id).hidden;
+    for (const [name, id] of Object.entries({ messages: "admin-message-box", gateway: "gateway-panel" })) emptySections[name].hidden = !$2(id).hidden;
     const unread = !!selected2?.adminMessage && selected2.adminMessage.status !== "resolved";
     messageAlert.hidden = !unread;
     subnav.querySelector('[data-section="messages"]').dataset.unread = String(unread);
@@ -4743,7 +4758,7 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
     paymentTab = 0;
     showCart();
     render2();
-  }, open };
+  }, open, openMessages };
 }
 
 // src/page-history.mjs
@@ -5017,7 +5032,11 @@ var management = createManagementUI({ customer, api: (path, options) => api(base
   $("edit-title").textContent = item.profile.name;
   if ($("public-sharing")) $("public-sharing").hidden = item.state === "nfc_only" || item.state === "deleted";
 } });
-var ordersUI = createOrdersUI({ customer, api: (path, options) => api(base + path, options), canMutate: () => !saving, onBusy: lockControls, onOrderChanged: () => alerts?.refresh(), onPageUpdated: async (item) => {
+var ordersUI = createOrdersUI({ customer, onContact: (orderId) => {
+  if (saving) return;
+  management.contact(orderId);
+  customerArea?.openMessages();
+}, api: (path, options) => api(base + path, options), canMutate: () => !saving, onBusy: lockControls, onOrderChanged: () => alerts?.refresh(), onPageUpdated: async (item) => {
   selected = item;
   records = records.map((record) => record.id === item.id ? item : record);
   render();

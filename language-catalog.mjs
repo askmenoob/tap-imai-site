@@ -66,6 +66,13 @@ export const translations = {
   'Mesej telah diselesaikan.':'The message has been resolved.',
   'Nota semakan bayaran daripada super admin.':'Payment review note from the super admin.',
   'Hubungi super admin di WhatsApp ↗':'Contact super admin on WhatsApp ↗',
+  'Hubungi super admin':'Contact the super admin',
+  'Hubungi admin di WhatsApp ↗':'Contact admin on WhatsApp ↗',
+  'Satu saluran WhatsApp untuk semua pertanyaan bayaran, pesanan dan penghantaran.':'One WhatsApp channel for all payment, order and delivery enquiries.',
+  'Nama perniagaan, ID pesanan jika tersedia dan mesej admin disertakan dalam draf. Semak dan hantar sendiri melalui WhatsApp.':'The draft includes your business name, order ID when available and admin message. Review and send it yourself through WhatsApp.',
+  'Isi alamat dan semak status penghantaran melalui Pesanan saya. Untuk bantuan, buka Mesej.':'Enter your address and check delivery status in My Orders. For help, open Messages.',
+  'Perlukan bantuan? Buka Mesej':'Need help? Open Messages',
+  'Semua pertanyaan kepada super admin diuruskan dalam Mesej.':'All enquiries to the super admin are handled in Messages.',
   'Mesej telah dihantar kepada pelanggan.':'Message sent to the customer.',
   'Balasan telah dihantar kepada super admin.':'Reply sent to the super admin.',
 
