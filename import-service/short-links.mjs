@@ -94,12 +94,13 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
       if(!response.ok) throw new Error('Short link storage unavailable');
       return true;
     },
-    get:read,
+    async get(id){const record=await read(id);return record?.permanentlyDeleted?null:record;},
     async getVersion(id) {
       const metadata=await request(base+encodeURIComponent(object(id)));
       if(!metadata) return null;
       const record=await read(id,metadata.generation);
       if(!record) throw Object.assign(new Error('Rekod telah berubah. Muat semula senarai.'),{status:409});
+      if(record.permanentlyDeleted)return null;
       return {record,revision:metadata.generation};
     },
     async list(cursor) {
@@ -111,9 +112,10 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
       const items=await Promise.all(entries.map(async item=>{
         const id=item.name.slice(6,-5);const record=await read(id,item.generation);
         if(!record) throw Object.assign(new Error('Senarai telah berubah. Muat semula senarai.'),{status:409});
+        if(record.permanentlyDeleted)return null;
         return {id,record,revision:item.generation};
       }));
-      return {items,cursor:page.nextPageToken||null};
+      return {items:items.filter(Boolean),cursor:page.nextPageToken||null};
     },
     createGatewayOrder:(id,record)=>write(gatewayObject(id),record),
     async getGatewayOrder(id){
@@ -154,6 +156,7 @@ export function createCloudLinkStore({bucket,getToken,fetcher=fetch}) {
     },
     archive:(id,revision,record)=>write('history/'+id+'/'+revision+'.json',record),
     update:(id,record,revision)=>write(object(id),record,revision),
+    purge:(id,marker,revision)=>write(object(id),marker,revision),
     claimPayment:(key,record)=>write('payments/'+ownerPrefix(key).slice(7,-1)+'.json',record),
     getPayment:key=>request(base+encodeURIComponent('payments/'+ownerPrefix(key).slice(7,-1)+'.json')+'?alt=media'),
     grantOwner:(key,id)=>{
@@ -183,11 +186,12 @@ export function createMemoryLinkStore(){
     claimPayment:async(key,record)=>{if(payments.has(key))return false;payments.set(key,clone(record));return true;},
     getPayment:async key=>clone(payments.get(key)||null),
     create:async(id,record)=>{if(records.has(id))return false;records.set(id,{record:clone(record),revision:String(++generation)});return true;},
-    get:async id=>clone(records.get(id)?.record||null),
-    getVersion:async id=>clone(records.get(id)||null),
-    list:async cursor=>{const offset=Number(cursor||0),all=[...records].map(([id,item])=>({id,...clone(item)}));return {items:all.slice(offset,offset+25),cursor:all.length>offset+25?String(offset+25):null};},
+    get:async id=>records.get(id)?.record.permanentlyDeleted?null:clone(records.get(id)?.record||null),
+    getVersion:async id=>records.get(id)?.record.permanentlyDeleted?null:clone(records.get(id)||null),
+    list:async cursor=>{const offset=Number(cursor||0),all=[...records].filter(([,item])=>!item.record.permanentlyDeleted).map(([id,item])=>({id,...clone(item)}));return {items:all.slice(offset,offset+25),cursor:all.length>offset+25?String(offset+25):null};},
     archive:async(id,revision,record)=>{const key=id+'/'+revision;if(history.has(key))return false;history.set(key,clone(record));return true;},
     update:async(id,record,revision)=>{if(records.get(id)?.revision!==revision)return false;records.set(id,{record:clone(record),revision:String(++generation)});return true;},
+    purge:async(id,marker,revision)=>{if(records.get(id)?.revision!==revision||records.get(id)?.record.permanentlyDeleted)return false;records.set(id,{record:clone(marker),revision:String(++generation)});return true;},
     grantOwner:async(key,id)=>{if(!memberships.has(key))memberships.set(key,new Set());memberships.get(key).add(id);return true;},
     listOwner:async(key,cursor)=>{const offset=Number(cursor||0),all=[...(memberships.get(key)||[])];return {ids:all.slice(offset,offset+25),cursor:all.length>offset+25?String(offset+25):null};},
   };

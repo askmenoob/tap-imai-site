@@ -89,6 +89,16 @@ test('HTTP signed Google identities enforce customer boundaries, role and privat
   const granted=await call(grantPath,'owner@gmail.com','POST',grant);assert.equal(granted.status,200);assert.equal(granted.data.subscription.source,'admin');assert.equal(granted.data.state,'disabled');assert.equal(granted.data.checkout,null);
   assert.equal((await call(grantPath,'owner@gmail.com','POST',grant)).status,409);
   const customerGrant=(await call('/api/user/links/'+alice.id,'alice@gmail.com')).data;assert.equal(customerGrant.subscriptionAdjustment,undefined);assert.ok(!JSON.stringify(customerGrant).includes('Internal grant test'));
+  const removable=(await call('/api/admin/register','owner@gmail.com','POST',{url,email:'alice@gmail.com'})).data;
+  const soft=(await call('/api/admin/links/'+removable.id+'/state','owner@gmail.com','POST',{state:'deleted',confirmName:profile.name,revision:removable.revision})).data;
+  const purgePath='/api/admin/links/'+soft.id+'/purge',confirm={revision:soft.revision,confirmName:profile.name,confirmId:soft.id,confirmPermanent:true};
+  assert.equal((await call(purgePath,null,'POST',confirm)).status,401);
+  assert.equal((await call(purgePath,'alice@gmail.com','POST',confirm)).status,403);
+  assert.equal((await call(purgePath.replace('/admin/','/user/'),'alice@gmail.com','POST',confirm)).status,403);
+  assert.equal((await call(purgePath,'owner@gmail.com','POST',confirm,'https://evil.test')).status,403);
+  const purged=await call(purgePath,'owner@gmail.com','POST',confirm);assert.equal(purged.status,200);assert.equal(purged.data.permanentlyDeleted,true);
+  assert.equal((await call('/api/admin/links/'+soft.id,'owner@gmail.com')).status,404);
+  assert.equal((await call('/api/user/links/'+soft.id,'alice@gmail.com')).status,404);
 });
 test('customer verifier rejects non Gmail, unverified identities and client mismatch; ignores token roles',async()=>{
   const verify=createGoogleUserAuth({clientId,keySet:pair.publicKey});

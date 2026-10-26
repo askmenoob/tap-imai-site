@@ -3842,13 +3842,15 @@ function orderSupportLink(item, { customer: customer2 = false, language = "ms", 
 var money2 = (cents) => new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(cents / 100);
 var date2 = (value) => value ? new Date(value).toLocaleDateString("ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) : "Belum bermula";
 var stateLabels = { active: "Aktif", disabled: "Dinyahaktifkan", deleted: "Dipadam", pending: "Menunggu pengaktifan", expired: "Langganan tamat", nfc_only: "NFC sahaja \xB7 sekali bayar" };
-function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }) {
+function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy, onPurge = () => {
+} }) {
   const panel = document.createElement("section");
   panel.className = "management-panel";
   panel.innerHTML = `<section id="admin-message-box" class="admin-message-box" hidden aria-labelledby="admin-message-title"><h3 id="admin-message-title">Mesej daripada super admin</h3><p id="admin-message-text" data-no-i18n></p><p id="admin-message-time" class="help" data-no-i18n></p><p id="admin-message-state" role="status" aria-live="polite"></p><div id="admin-message-reply" hidden><strong>Balasan pelanggan</strong><p id="admin-message-reply-text" data-no-i18n></p></div><form id="message-reply-form" hidden><label for="message-reply-text">Nombor transaksi / balasan anda</label><textarea id="message-reply-text" required maxlength="500" rows="3"></textarea><button type="submit">Hantar balasan kepada super admin</button></form><button id="message-resolve" type="button" class="secondary" hidden>Tandakan selesai</button></section>
   <form id="admin-message-form" class="admin-message-compose" ${customer2 ? "hidden" : ""}><h3>Hantar mesej kepada pelanggan</h3><label for="admin-message-input">Mesej / tindakan yang diperlukan</label><textarea id="admin-message-input" required maxlength="1000" rows="3" placeholder="Contoh: Sila berikan nombor transaksi bank untuk semakan bayaran."></textarea><p class="help">Mesej muncul pada halaman edit pelanggan. Mesej baharu menggantikan mesej semasa; rekod sebelumnya disimpan.</p><button type="submit">Hantar mesej</button></form><h3>Status halaman & pakej</h3><p id="page-state" class="notice"></p><p id="subscription-summary"></p><p id="google-listing-status" class="notice" hidden>Google Review belum tersedia. Super admin akan menyambungkan lokasi apabila tersedia di Google Maps.</p><p id="direct-review-wrap" hidden>Pautan untuk Google Review NFC: <a id="direct-review" target="_blank" rel="noopener noreferrer">Buka Google Review \u2197</a></p><a href="/subscribe/" target="_blank" rel="noopener noreferrer">Lihat semua pakej \u2197</a>
-  <div id="lifecycle-actions" class="actions" ${customer2 ? "hidden" : ""}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button></div>
+  <div id="lifecycle-actions" class="actions" ${customer2 ? "hidden" : ""}><button type="button" id="state-toggle" class="secondary">Nyahaktif</button><button type="button" id="delete-open" class="danger">Padam halaman</button><button type="button" id="state-restore" class="secondary" hidden>Pulihkan sebagai nyahaktif</button><button type="button" id="purge-open" class="danger" hidden>Padam kekal QR</button></div>
   <form id="delete-form" class="notice" hidden><p>Halaman akan disembunyikan dan akses pelanggan ditarik balik. Super admin boleh memulihkannya. Salinan rekod dikekalkan.</p><label for="delete-name">Taip nama perniagaan untuk sahkan</label><input id="delete-name" required autocomplete="off"><button class="danger">Sahkan padam</button><button id="delete-cancel" type="button" class="secondary">Batal</button></form>
+  <form id="purge-form" class="notice" hidden><h3>Padam kekal QR</h3><p>URL pendek dan QR ini tidak boleh dipulihkan melalui SmartTap. Rekod pesanan, audit dan backup dalam tempoh simpanan dikekalkan. Selesaikan bayaran dan penghantaran terbuka dahulu.</p><label for="purge-name">Taip nama perniagaan yang tepat</label><input id="purge-name" required autocomplete="off"><label for="purge-id">Taip kod QR untuk sahkan</label><p id="purge-code" data-no-i18n></p><input id="purge-id" required autocomplete="off" spellcheck="false"><label class="check-label"><input id="purge-confirm" type="checkbox" required> Saya faham URL dan QR lama akan dihentikan secara kekal.</label><div class="actions"><button class="danger">Sahkan padam kekal QR</button><button type="button" id="purge-cancel" class="secondary">Batal</button></div></form>
   <p id="management-status" role="status" aria-live="polite"></p>
   <div id="billing-section"><h3>Langganan & pembayaran</h3><p id="billing-availability"></p><p id="payment-summary"></p>
   <div id="order-support" class="notice" hidden><h4>Hubungi super admin</h4><p>Satu saluran WhatsApp untuk semua pertanyaan bayaran, pesanan dan penghantaran.</p><a id="order-whatsapp" class="button" target="_blank" rel="noopener noreferrer">Hubungi admin di WhatsApp \u2197</a><p class="help">Nama perniagaan, ID pesanan jika tersedia dan mesej admin disertakan dalam draf. Semak dan hantar sendiri melalui WhatsApp.</p></div>
@@ -3879,6 +3881,7 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   const today = () => new Date(Date.now() + 8 * 36e5).toISOString().slice(0, 10);
   const options = () => ({ package: $2("payment-package").value, extraNfcQty: Number($2("payment-nfc").value), stickerQty: Number($2("payment-stickers").value) });
   function clear() {
+    $2("purge-form").hidden = true;
     supportOrderId = null;
     subscriptionUI.clear();
     messageSequence++;
@@ -4057,6 +4060,8 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     $2("state-toggle").hidden = item.manualState === "deleted";
     $2("delete-open").hidden = item.manualState === "deleted";
     $2("state-restore").hidden = item.manualState !== "deleted";
+    $2("purge-open").hidden = customer2 || item.manualState !== "deleted";
+    $2("purge-form").hidden = true;
     $2("delete-form").hidden = true;
     if (changed) {
       $2("management-status").textContent = "";
@@ -4140,6 +4145,11 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
     try {
       const updated = await api2("/links/" + id + path, { method: "POST", body });
       if (current?.id !== id || version !== messageSequence) return;
+      if (updated.permanentlyDeleted) {
+        clear();
+        onPurge(id);
+        return;
+      }
       onUpdate(updated);
       await show(updated);
       if (path === "/message" && body.action === "send") $2("admin-message-input").value = "";
@@ -4168,6 +4178,22 @@ function createManagementUI({ customer: customer2, api: api2, onUpdate, onBusy }
   $2("delete-form").onsubmit = (event) => {
     event.preventDefault();
     action("/state", { state: "deleted", confirmName: $2("delete-name").value, revision: current.revision }, "Halaman dipadam daripada paparan awam dan senarai pelanggan. Rekod boleh dipulihkan oleh super admin.");
+  };
+  $2("purge-open").onclick = () => {
+    $2("purge-form").hidden = false;
+    $2("purge-name").value = "";
+    $2("purge-id").value = "";
+    $2("purge-confirm").checked = false;
+    $2("purge-code").textContent = current.id;
+    $2("purge-name").focus();
+  };
+  $2("purge-cancel").onclick = () => {
+    $2("purge-form").hidden = true;
+  };
+  $2("purge-form").onsubmit = (event) => {
+    event.preventDefault();
+    if (customer2 || !$2("purge-form").reportValidity()) return;
+    action("/purge", { revision: current.revision, confirmName: $2("purge-name").value, confirmId: $2("purge-id").value, confirmPermanent: $2("purge-confirm").checked }, "QR dipadam kekal.");
   };
   $2("payment-package").addEventListener("change", cart);
   for (const id of ["payment-nfc", "payment-stickers"]) $2(id).addEventListener("input", cart);
@@ -5021,7 +5047,16 @@ function lockControls(value) {
   historyUI?.lock(value);
 }
 var historyUI = null;
-var management = createManagementUI({ customer, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
+var management = createManagementUI({ customer, onPurge: (id) => {
+  records = records.filter((item) => item.id !== id);
+  selected = null;
+  ordersUI.clear();
+  historyUI?.clear();
+  $("editor").hidden = true;
+  render();
+  alerts?.refresh();
+  $("list-status").textContent = "QR dipadam kekal. URL lama tidak lagi tersedia.";
+}, api: (path, options) => api(base + path, options), onBusy: lockControls, onUpdate: (item) => {
   selected = item;
   records = records.map((record) => record.id === item.id ? item : record);
   render();
