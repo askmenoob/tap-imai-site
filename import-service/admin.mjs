@@ -1,7 +1,7 @@
 import {applyServiceCatalog} from './service-catalog-schema.mjs';
 import {createGoogleIdentityAuth} from './identity.mjs';
 import {validateSmartTapURL} from './short-links.mjs';
-import {malaysiaPhone,whatsappFromPhone,threadsProfile} from './contacts.mjs';
+import {malaysiaPhone,whatsappFromPhone,threadsProfile,xProfile} from './contacts.mjs';
 import {pageState} from './page-state.mjs';
 import {ownerKey} from './identity.mjs';
 
@@ -32,6 +32,7 @@ export function profileURL(value,origin='https://tap.imai.my'){
   const profile={...value};
   for(const [key,field] of Object.entries(profile))if(key!=='v'&&typeof field==='string')profile[key]=field.normalize('NFC').trim();
   if(profile.phone){const phone=malaysiaPhone(profile.phone);if(!phone)throw fail(400,'Nombor telefon Malaysia tidak sah.');profile.phone=phone;if(!profile.whatsapp)profile.whatsapp=whatsappFromPhone(phone);}
+  if(profile.x&&!xProfile(profile.x))throw fail(400,'Gunakan pautan profil X seperti https://x.com/nama.');
   if(profile.threads&&!threadsProfile(profile.threads))throw fail(400,'Gunakan pautan profil Threads yang sah.');
   return validateSmartTapURL(origin+'/?p='+Buffer.from(JSON.stringify(profile)).toString('base64url'),origin);
 }

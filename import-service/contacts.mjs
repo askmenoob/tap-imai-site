@@ -15,3 +15,13 @@ export function threadsProfile(value) {
   try {const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password&&['threads.net','www.threads.net','threads.com','www.threads.com'].includes(url.hostname)&&/^\/@[\w.]+\/?$/.test(url.pathname)?url.href:null;}
   catch{return null;}
 }
+
+// Accept account profiles only, never posts, login/share routes or lookalike hosts.
+export function xProfile(value) {
+  try {
+    const url=new URL(value);
+    const reserved=new Set(['home','explore','search','notifications','messages','i','intent','share','login','logout','signup','settings','compose','hashtag','tos','privacy','about','help','jobs','download']);
+    const handle=url.pathname.replace(/^\//,'').replace(/\/$/,'');
+    return url.protocol==='https:'&&!url.username&&!url.password&&(!url.port||url.port==='443')&&!url.search&&!url.hash&&['x.com','www.x.com','twitter.com','www.twitter.com'].includes(url.hostname)&&/^\/[A-Za-z0-9_]{1,15}\/?$/.test(url.pathname)&&!reserved.has(handle.toLowerCase())?url.href:null;
+  }catch{return null;}
+}

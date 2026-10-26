@@ -2313,6 +2313,16 @@ function threadsProfile(value) {
     return null;
   }
 }
+function xProfile(value) {
+  try {
+    const url = new URL(value);
+    const reserved = /* @__PURE__ */ new Set(["home", "explore", "search", "notifications", "messages", "i", "intent", "share", "login", "logout", "signup", "settings", "compose", "hashtag", "tos", "privacy", "about", "help", "jobs", "download"]);
+    const handle = url.pathname.replace(/^\//, "").replace(/\/$/, "");
+    return url.protocol === "https:" && !url.username && !url.password && (!url.port || url.port === "443") && !url.search && !url.hash && ["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(url.hostname) && /^\/[A-Za-z0-9_]{1,15}\/?$/.test(url.pathname) && !reserved.has(handle.toLowerCase()) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 // src/short-page.mjs
 async function generateShortPage(profile, { origin, shorten, qr, signal }) {
@@ -2385,7 +2395,7 @@ function onboardingResult({ url, name = "", registering: registering2 = false, l
 // src/import.js
 var $ = (id) => document.getElementById(id);
 var registering = new URLSearchParams(location.search).get("register") === "1";
-var fieldNames = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web" };
+var fieldNames = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", x: "X (Twitter)", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web" };
 if (!registering) delete fieldNames.google;
 else Object.assign(fieldNames, { address: "Alamat perniagaan", directions: "Pautan lokasi / pin Google Maps" });
 var listingTools = null;
@@ -2905,6 +2915,7 @@ function validate(profile) {
   if (profile.tagline.length > 140) errors.tagline = "Gunakan 140 aksara atau kurang.";
   for (const key of Object.keys(fieldNames).filter((k) => !["name", "tagline", "phone", "address"].includes(k))) if (profile[key] && (!httpsURL(profile[key]) || profile[key].length > 500)) errors[key] = "Gunakan URL https:// penuh, maksimum 500 aksara.";
   if (profile.phone && !malaysiaPhone(profile.phone)) errors.phone = "Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.";
+  if (profile.x && !xProfile(profile.x)) errors.x = "Gunakan pautan profil X seperti https://x.com/nama.";
   if (profile.threads && !threadsProfile(profile.threads)) errors.threads = "Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.";
   if (registering && profile.googleStatus !== "pending") try {
     const review = new URL(profile.google);

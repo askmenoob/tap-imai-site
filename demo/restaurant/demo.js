@@ -15,9 +15,19 @@ function threadsProfile(value) {
     return null;
   }
 }
+function xProfile(value) {
+  try {
+    const url = new URL(value);
+    const reserved = /* @__PURE__ */ new Set(["home", "explore", "search", "notifications", "messages", "i", "intent", "share", "login", "logout", "signup", "settings", "compose", "hashtag", "tos", "privacy", "about", "help", "jobs", "download"]);
+    const handle = url.pathname.replace(/^\//, "").replace(/\/$/, "");
+    return url.protocol === "https:" && !url.username && !url.password && (!url.port || url.port === "443") && !url.search && !url.hash && ["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(url.hostname) && /^\/[A-Za-z0-9_]{1,15}\/?$/.test(url.pathname) && !reserved.has(handle.toLowerCase()) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 // src/public-card.mjs
-var paths = { star: "m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z", arrow: "M7 17 17 7M7 7h10v10", menu: "M6 3h12v18H6zM9 8h6M9 12h6M9 16h4", pin: "M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0", clock: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M12 7v5l3 2", chevron: "m6 9 6 6 6-6", website: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18", whatsapp: "M21 11.5a9 9 0 0 1-13 8L3 21l1.5-5a9 9 0 1 1 16.5-4.5ZM8 7c0 5 4 9 9 9l1-3-3-1-1 1-3-3 1-1-1-3Z", instagram: "M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0M17 7h.01", facebook: "M14 21v-8h3l1-4h-4V7c0-1 1-2 2-2h2V2h-3c-4 0-5 2-5 5v2H7v4h3v8", tiktok: "M14 3v12a4 4 0 1 1-4-4M14 3c1 4 3 5 7 5", threads: "M18 7C16 1 5 2 4 11c-1 11 16 14 17 4 1-7-13-8-12-1 1 5 9 3 8-3 0-4-3-5-6-4" };
+var paths = { x: "M4 3h4l12 18h-4L4 3ZM20 3 4 21", star: "m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z", arrow: "M7 17 17 7M7 7h10v10", menu: "M6 3h12v18H6zM9 8h6M9 12h6M9 16h4", pin: "M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0", clock: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M12 7v5l3 2", chevron: "m6 9 6 6 6-6", website: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18", whatsapp: "M21 11.5a9 9 0 0 1-13 8L3 21l1.5-5a9 9 0 1 1 16.5-4.5ZM8 7c0 5 4 9 9 9l1-3-3-1-1 1-3-3 1-1-1-3Z", instagram: "M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0M17 7h.01", facebook: "M14 21v-8h3l1-4h-4V7c0-1 1-2 2-2h2V2h-3c-4 0-5 2-5 5v2H7v4h3v8", tiktok: "M14 3v12a4 4 0 1 1-4-4M14 3c1 4 3 5 7 5", threads: "M18 7C16 1 5 2 4 11c-1 11 16 14 17 4 1-7-13-8-12-1 1 5 9 3 8-3 0-4-3-5-6-4" };
 function renderCard(document2, profile2, now = Date.now()) {
   const el2 = (tag, cls, text) => {
     const node = document2.createElement(tag);
@@ -102,8 +112,8 @@ function renderCard(document2, profile2, now = Date.now()) {
   }
   const social = el2("nav", "business-social");
   social.setAttribute("aria-label", "Media sosial");
-  for (const name of ["facebook", "instagram", "tiktok", "threads"]) if (profile2[name] && (name !== "threads" || threadsProfile(profile2[name]))) {
-    const a = link(profile2[name], name[0].toUpperCase() + name.slice(1), "social-link", name);
+  for (const name of ["facebook", "instagram", "tiktok", "threads", "x"]) if (profile2[name] && (name !== "threads" || threadsProfile(profile2[name])) && (name !== "x" || xProfile(profile2[name]))) {
+    const a = link(profile2[name], name === "x" ? "X" : name[0].toUpperCase() + name.slice(1), "social-link", name);
     a.title = name;
     a.setAttribute("aria-label", name);
     social.append(a);

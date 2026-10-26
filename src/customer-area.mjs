@@ -40,7 +40,7 @@ export function createCustomerArea({coverNodes,detailsNodes={},onSelect}){
  const paymentTabs=document.createElement('nav');paymentTabs.className='customer-subnav customer-payment-tabs';paymentTabs.setAttribute('aria-label','Bahagian pembelian');
  let paymentTab=0;const showCart=()=>{cart.hidden=paymentTab!==0;checkout.hidden=paymentTab!==1;for(const [i,button] of [...paymentTabs.children].entries())button.setAttribute('aria-current',i===paymentTab?'page':'false');};
  for(const [i,label] of ['Pesanan','Jumlah & bayaran'].entries()){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>{paymentTab=i;showCart();};paymentTabs.append(button);}paymentForm.prepend(paymentTabs);showCart();
- const fieldGroups={business:[['name','tagline'],['logo'],['phone','whatsapp'],['website','instagram','facebook','tiktok','threads'],['google']],page:[['theme','accent'],['cover'],['menu','directions'],['address','hours'],['promoTitle','promoText'],['promoURL'],['promoStart','promoEnd']]};
+ const fieldGroups={business:[['name','tagline'],['logo'],['phone','whatsapp'],['website','instagram','facebook','tiktok','threads','x'],['google']],page:[['theme','accent'],['cover'],['menu','directions'],['address','hours'],['promoTitle','promoText'],['promoURL'],['promoStart','promoEnd']]};
  const pages={business:[],page:[]};
  for(const [view,steps] of Object.entries(fieldGroups))for(const keys of steps){
   const group=document.createElement('div');group.className='customer-field-step';group.dataset.fieldView=view;if(keys.includes('instagram'))group.classList.add('customer-social-fields');

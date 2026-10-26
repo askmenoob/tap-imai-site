@@ -4528,7 +4528,7 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   }
   paymentForm.prepend(paymentTabs);
   showCart();
-  const fieldGroups = { business: [["name", "tagline"], ["logo"], ["phone", "whatsapp"], ["website", "instagram", "facebook", "tiktok", "threads"], ["google"]], page: [["theme", "accent"], ["cover"], ["menu", "directions"], ["address", "hours"], ["promoTitle", "promoText"], ["promoURL"], ["promoStart", "promoEnd"]] };
+  const fieldGroups = { business: [["name", "tagline"], ["logo"], ["phone", "whatsapp"], ["website", "instagram", "facebook", "tiktok", "threads", "x"], ["google"]], page: [["theme", "accent"], ["cover"], ["menu", "directions"], ["address", "hours"], ["promoTitle", "promoText"], ["promoURL"], ["promoStart", "promoEnd"]] };
   const pages = { business: [], page: [] };
   for (const [view2, steps] of Object.entries(fieldGroups)) for (const keys of steps) {
     const group = document.createElement("div");
@@ -5021,7 +5021,7 @@ var $ = (id) => document.getElementById(id);
 var customer = document.body.dataset.role === "user";
 var base = customer ? "/api/user" : "/api/admin";
 var endpoint = location.hostname === "127.0.0.1" ? location.origin : window.SMARTTAP_IMPORT_CONFIG?.endpoint;
-var fields = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web", ...Object.fromEntries(Object.entries(appearanceFields).map(([key, spec]) => [key, spec.label])) };
+var fields = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", x: "X (Twitter)", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web", ...Object.fromEntries(Object.entries(appearanceFields).map(([key, spec]) => [key, spec.label])) };
 var listingTools = null;
 var businessDetails = null;
 var appearanceControls = null;
