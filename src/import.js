@@ -1,14 +1,14 @@
 import QRCode from 'qrcode';
 import {createGoogleListingTools} from './google-listing-tools.mjs';
 import { createSuggestions } from './business-suggestions.mjs';
-import { malaysiaPhone, whatsappFromPhone, threadsProfile } from '../import-service/contacts.mjs';
+import { malaysiaPhone, whatsappFromPhone, threadsProfile, xProfile } from '../import-service/contacts.mjs';
 import { generateShortPage } from './short-page.mjs';
 import {googleLogin} from './google-login.mjs';
 import {onboardingResult} from './onboarding-result.mjs';
 
 const $ = id => document.getElementById(id);
 const registering=new URLSearchParams(location.search).get('register')==='1';
-const fieldNames = {name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web'};
+const fieldNames = {name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',x:'X (Twitter)',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web'};
 if(!registering)delete fieldNames.google;else Object.assign(fieldNames,{address:'Alamat perniagaan',directions:'Pautan lokasi / pin Google Maps'});
 let listingTools=null,pendingStart=null;
 let publicDraftToken='';
@@ -256,6 +256,7 @@ function validate(profile) {
   if(profile.tagline.length>140) errors.tagline='Gunakan 140 aksara atau kurang.';
   for(const key of Object.keys(fieldNames).filter(k=>!['name','tagline','phone','address'].includes(k))) if(profile[key] && (!httpsURL(profile[key]) || profile[key].length>500)) errors[key]='Gunakan URL https:// penuh, maksimum 500 aksara.';
   if(profile.phone && !malaysiaPhone(profile.phone)) errors.phone='Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.';
+  if(profile.x && !xProfile(profile.x)) errors.x='Gunakan pautan profil X seperti https://x.com/nama.';
   if(profile.threads && !threadsProfile(profile.threads)) errors.threads='Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.';
   if(registering&&profile.googleStatus!=='pending')try {
     const review=new URL(profile.google); const host=review.hostname.toLowerCase();

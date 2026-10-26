@@ -90,7 +90,7 @@ export function createImportService({ google, secret, webSearch, readWebsite = f
         }
         result.warnings.push('Profil sosial daripada Google ialah cadangan. Semak nama, lokasi dan pemilikan akaun sebelum berkongsi.');
       }
-      for (const key of ['logo','tagline','instagram','facebook','tiktok','threads','whatsapp']) {
+      for (const key of ['logo','tagline','instagram','facebook','tiktok','threads','x','whatsapp']) {
         if (!result.profile[key]) result.warnings.push(`${key === 'tagline' ? 'Penerangan' : key}: ${result.candidates[key]?.length > 1 ? 'lebih daripada satu pautan ditemui; pilih pautan yang betul.' : 'belum ditemui daripada sumber rasmi.'}`);
       }
       result.draftToken=ticket({id:choice.id,purpose:'draft'});

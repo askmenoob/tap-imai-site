@@ -15,7 +15,7 @@ import {createPageHistoryUI} from './page-history.mjs';
 const $=id=>document.getElementById(id);
 const customer=document.body.dataset.role==='user',base=customer?'/api/user':'/api/admin';
 const endpoint=location.hostname==='127.0.0.1'?location.origin:window.SMARTTAP_IMPORT_CONFIG?.endpoint;
-const fields={name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web',...Object.fromEntries(Object.entries(appearanceFields).map(([key,spec])=>[key,spec.label]))};
+const fields={name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',x:'X (Twitter)',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web',...Object.fromEntries(Object.entries(appearanceFields).map(([key,spec])=>[key,spec.label]))};
 let listingTools=null,businessDetails=null,appearanceControls=null,catalogEditor=null;
 let credential='',records=[],cursor=null,selected=null,expiryTimer,session=0,busy=false,saving=false,customerArea=null;
 function lockControls(value){

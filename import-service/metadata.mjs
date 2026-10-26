@@ -1,6 +1,6 @@
 import { load } from 'cheerio';
 import { safeWebURL } from './safe-fetch.mjs';
-import { threadsProfile, malaysiaPhone } from './contacts.mjs';
+import { threadsProfile, xProfile, malaysiaPhone } from './contacts.mjs';
 
 export function socialType(value) {
   const u = safeWebURL(value);
@@ -9,6 +9,7 @@ export function socialType(value) {
   if (host === 'instagram.com' && /^\/[A-Za-z0-9._]{1,30}\/?$/.test(u.pathname) && !/^\/(?:p|reel|reels|stories|explore|accounts|about|legal|privacy)\/?$/i.test(u.pathname)) return 'instagram';
   if ((host === 'facebook.com' || host === 'fb.com') && u.pathname !== '/' && !/^\/(?:sharer|sharer.php|dialog|share.php|plugins|login|help|privacy|policies|reel|reels|watch|groups|share)(?:\/|$)/i.test(u.pathname)) return 'facebook';
   if (host === 'tiktok.com' && /^\/@[^/]+\/?$/.test(u.pathname)) return 'tiktok';
+  if (xProfile(u.href)) return 'x';
   if (threadsProfile(u.href)) return 'threads';
   if (host === 'wa.me' && /^\/\d{7,15}\/?$/.test(u.pathname)) return 'whatsapp';
   if (host === 'api.whatsapp.com' && /^\/send\/?$/.test(u.pathname) && /^\+?\d{7,15}$/.test(u.searchParams.get('phone') || '')) return 'whatsapp';
@@ -36,7 +37,7 @@ export function extractMetadata(html, website) {
   });
   const profile = { website: new URL(website).href };
   const sources = { website: website };
-  const candidates = { instagram: [], facebook: [], tiktok: [], threads: [], whatsapp: [] };
+  const candidates = { instagram: [], facebook: [], tiktok: [], threads: [], x: [], whatsapp: [] };
   const addSocial = raw => {
     const u = safeWebURL(typeof raw === 'string' ? raw : '', website);
     const kind = u && socialType(u.href);

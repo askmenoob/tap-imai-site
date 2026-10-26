@@ -242,6 +242,7 @@ export const translations = {
   'Masukkan nama perniagaan.':'Enter a business name.','Gunakan 80 aksara atau kurang.':'Use 80 characters or fewer.','Gunakan 140 aksara atau kurang.':'Use 140 characters or fewer.',
   'Gunakan URL https:// penuh, maksimum 500 aksara.':'Use a full https:// URL, up to 500 characters.',
   'Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.':'Use a Malaysian number such as 012-2258950 or +60 12-225 8950.',
+  'Gunakan pautan profil X seperti https://x.com/nama.':'Use an X profile link such as https://x.com/username.',
   'Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.':'Use a profile link such as https://www.threads.com/@name or threads.net/@name.',
   'Masukkan pautan Google Review terus dengan Place ID atau pautan g.page review.':'Enter a direct Google Review link with a Place ID or a g.page review link.',
   'Pautan Google Review diperlukan.':'A Google Review link is required.','Semak medan yang ditandakan.':'Check the marked fields.',

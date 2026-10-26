@@ -1,8 +1,9 @@
+import {xProfile} from './contacts.mjs';
 import {createHmac} from 'node:crypto';
 import {requirePublicPage} from './page-state.mjs';
 import {appearanceFields,validateAppearance} from './appearance.mjs';
 
-const urlFields=['logo','google','instagram','facebook','tiktok','threads','whatsapp','website','cover','menu','directions','promoURL'];
+const urlFields=['logo','google','instagram','facebook','tiktok','threads','x','whatsapp','website','cover','menu','directions','promoURL'];
 const fields=new Set(['v','name','tagline','phone','googleStatus',...urlFields,...Object.keys(appearanceFields)]);
 const invalid=()=>Object.assign(new Error('Gunakan pautan halaman SmartTap yang telah dijana.'),{status:400});
 export function validateSmartTapURL(value,origin='https://tap.imai.my') {
@@ -23,6 +24,7 @@ export function validateSmartTapURL(value,origin='https://tap.imai.my') {
       const link=new URL(profile[key]);
       if((link.protocol!=='https:'&&!(['cover','menu'].includes(key)&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.username||link.password||(link.port&&link.port!=='443'&&!(['cover','menu'].includes(key)&&origin.startsWith('http://127.0.0.1:')&&link.origin===origin))||link.href.length>500) throw 0;
     }
+    if(profile.x&&!xProfile(profile.x))throw 0;
     if(profile.googleStatus!==undefined&&profile.googleStatus!=='pending')throw 0;
     if(profile.googleStatus==='pending'){if(profile.google)throw 0;return url.href;}
     const review=new URL(profile.google);const host=review.hostname;

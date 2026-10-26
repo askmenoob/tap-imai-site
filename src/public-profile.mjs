@@ -1,3 +1,4 @@
+import {xProfile} from '../import-service/contacts.mjs';
 import {appearanceFields,validateAppearance} from '../import-service/appearance.mjs';
 export function profileURL(value) {
   try {const url=new URL(value);return (url.protocol==='https:'||(globalThis.location?.hostname==='127.0.0.1'&&url.origin===globalThis.location.origin))&&!url.username&&!url.password&&(!url.port||url.port==='443'||(globalThis.location?.hostname==='127.0.0.1'&&url.origin===globalThis.location.origin))&&url.href.length<=500?url.href:null;}catch{return null;}
@@ -11,10 +12,11 @@ export function decodeProfilePayload(payload) {
     const profile={v:1,name:raw.name.trim(),tagline:typeof raw.tagline==='string'?raw.tagline.slice(0,140):''};
     validateAppearance(raw);
     for(const key of Object.keys(appearanceFields))if(raw[key])profile[key]=raw[key];
-    for(const key of ['google','instagram','facebook','tiktok','whatsapp','website','logo','threads','cover','menu','directions','promoURL']) {
+    for(const key of ['google','instagram','facebook','tiktok','whatsapp','website','logo','threads','x','cover','menu','directions','promoURL']) {
       if(raw[key]&&(!profileURL(raw[key])||typeof raw[key]!=='string'))throw 0;
       if(raw[key])profile[key]=profileURL(raw[key]);
     }
+    if(profile.x&&!xProfile(profile.x))throw 0;
     if(raw.googleStatus!==undefined&&raw.googleStatus!=='pending')throw 0;
     if(raw.googleStatus==='pending'){if(profile.google)throw 0;profile.googleStatus='pending';return profile;}
     const review=new URL(profile.google);const host=review.hostname;
