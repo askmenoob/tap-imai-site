@@ -1,4 +1,4 @@
-import {translateUI} from './language-catalog.mjs?v=ops-20261025-1';
+import {translateUI} from './language-catalog.mjs?v=share-brand-20261027-1';
 
 const key='smarttap.language';
 let language='ms';

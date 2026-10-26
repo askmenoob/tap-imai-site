@@ -1,3 +1,4 @@
+import {extractBrandAppearance} from './brand-appearance.mjs';
 import { load } from 'cheerio';
 import { safeWebURL } from './safe-fetch.mjs';
 import { threadsProfile, xProfile, malaysiaPhone } from './contacts.mjs';
@@ -70,5 +71,6 @@ export function extractMetadata(html, website) {
     $(headerLogo).attr('data-src') || $(headerLogo).attr('src');
   const logo = safeWebURL(logoValue || $('link[rel~="apple-touch-icon"]').first().attr('href') || '', website);
   if (logo && logo.href !== new URL(website).href && logo.href.length <= 500) { profile.logo = logo.href; sources.logo = website; }
+  const appearance=extractBrandAppearance($,website,{logo:profile.logo});Object.assign(profile,appearance.profile);Object.assign(sources,appearance.sources);
   return { profile, sources, candidates };
 }

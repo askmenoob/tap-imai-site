@@ -1,3 +1,4 @@
+import {attachPageShare} from './page-share.mjs';
 import {renderCard} from './public-card.mjs';
 import {decodeProfilePayload} from './public-profile.mjs';
 import {threadsProfile} from '../import-service/contacts.mjs';
@@ -11,7 +12,7 @@ function status(message,error=false) {
   if(error){const id=params.get('s'),owned=/^[A-Za-z0-9_-]{16}$/.test(id||'');const link=element('a','',owned?'Login pemilik halaman':'Buka SmartTap');link.href=owned?'/edit/?s='+encodeURIComponent(id):'./setup.html';link.style.display='block';box.append(link);}
   root.replaceChildren(box);
 }
-function render(profile) {root.replaceChildren(renderCard(document,profile));document.title=profile.name+' — SmartTap';}
+function render(profile) {const page=renderCard(document,profile);root.replaceChildren(page);attachPageShare(document,page,profile,location.href);document.title=profile.name+' — SmartTap';}
 async function openPage() {
   const id=params.get('s');const payload=params.get('p');
   if(id===null&&!payload){root.hidden=true;location.replace(new URL('./setup.html',location.href).href);return;}

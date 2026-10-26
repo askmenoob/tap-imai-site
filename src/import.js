@@ -1,3 +1,4 @@
+import {validateAppearance} from '../import-service/appearance.mjs';
 import QRCode from 'qrcode';
 import {createGoogleListingTools} from './google-listing-tools.mjs';
 import { createSuggestions } from './business-suggestions.mjs';
@@ -8,7 +9,7 @@ import {onboardingResult} from './onboarding-result.mjs';
 
 const $ = id => document.getElementById(id);
 const registering=new URLSearchParams(location.search).get('register')==='1';
-const fieldNames = {name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',x:'X (Twitter)',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web'};
+const fieldNames = {name:'Nama perniagaan',logo:'URL logo',tagline:'Penerangan ringkas',google:'Google Review',instagram:'Instagram',facebook:'Facebook',tiktok:'TikTok',threads:'Threads',x:'X (Twitter)',phone:'Telefon perniagaan',whatsapp:'WhatsApp',website:'Laman web',theme:'Tema halaman',accent:'Warna utama',cover:'URL cover'};
 if(!registering)delete fieldNames.google;else Object.assign(fieldNames,{address:'Alamat perniagaan',directions:'Pautan lokasi / pin Google Maps'});
 let listingTools=null,pendingStart=null;
 let publicDraftToken='';
@@ -88,9 +89,11 @@ for (const [key,label] of Object.entries(fieldNames)) {
   const wrapper = document.createElement('div');
   if(key==='google'){wrapper.dataset.reviewOnly='true';wrapper.hidden=true;}
   const caption=document.createElement('label'); caption.htmlFor='field-'+key; caption.textContent=label+(['name','google'].includes(key)?' *':'');
-  const input=document.createElement('input'); input.id='field-'+key; input.name=key;
-  input.maxLength=key==='name'?90:key==='tagline'?150:500; input.autocomplete=key==='name'?'organization':'off';
-  if (!['name','tagline','phone','address'].includes(key)) input.inputMode='url';
+  const input=document.createElement(key==='theme'?'select':'input'); input.id='field-'+key; input.name=key;
+  if(key==='theme')for(const [value,text] of [['','Pilih tema'],['classic','Klasik'],['dark','Gelap'],['bright','Ceria']]){const option=document.createElement('option');option.value=value;option.textContent=text;input.append(option);}
+  if(key==='accent'){input.placeholder='#20543e';input.maxLength=7;}
+  input.maxLength=key==='accent'?7:key==='name'?90:key==='tagline'?150:500; input.autocomplete=key==='name'?'organization':'off';
+  if (!['name','tagline','phone','address','theme','accent'].includes(key)) input.inputMode='url';
   if(key==='phone') {input.type='tel';input.placeholder='Contoh: 012-2258950';}
   const help=document.createElement('p'); help.id='source-'+key; help.className='source';
   const error=document.createElement('p'); error.id='error-'+key; error.className='field-error';
@@ -103,8 +106,12 @@ if(registering){
  listingTools=createGoogleListingTools({input:$('field-google'),name:()=>$('field-name').value,onChange:invalidate,search:query=>api('/api/search',{query}),lookup:token=>api('/api/import',{token})});
  $('profile-form').prepend(listingTools.panel);listingTools.lock(true);
  pendingStart=document.createElement('button');pendingStart.type='button';pendingStart.className='secondary';pendingStart.disabled=true;pendingStart.textContent='Daftar perniagaan yang belum ada di Google Maps';$('registration').append(pendingStart);
- pendingStart.onclick=()=>{if(!adminCredential||adminExpiry<=Date.now())return;cancelSearch();sequence++;listingTools.invalidate();invalidate();selectedBusiness.hidden=true;searchSuggestions.hidden=true;$('warnings').hidden=true;$('fields').querySelectorAll('select').forEach(node=>node.remove());for(const key of Object.keys(fieldNames)){$('field-'+key).value='';$('error-'+key).textContent='';sourceLine(key,'');}listingTools.set({name:$('query').value.trim(),googleStatus:'pending'});$('field-name').value=$('query').value.trim();previewLogo();$('editor').hidden=false;$('editor').scrollIntoView({behavior:'smooth'});};
+ pendingStart.onclick=()=>{if(!adminCredential||adminExpiry<=Date.now())return;cancelSearch();sequence++;listingTools.invalidate();invalidate();selectedBusiness.hidden=true;searchSuggestions.hidden=true;$('warnings').hidden=true;$('fields').querySelectorAll('select:not(#field-theme)').forEach(node=>node.remove());for(const key of Object.keys(fieldNames)){$('field-'+key).value='';$('error-'+key).textContent='';sourceLine(key,'');}listingTools.set({name:$('query').value.trim(),googleStatus:'pending'});$('field-name').value=$('query').value.trim();previewLogo();previewAppearance();$('editor').hidden=false;$('editor').scrollIntoView({behavior:'smooth'});};
 }
+const autoPreview=document.createElement('section');autoPreview.className='notice';autoPreview.hidden=true;autoPreview.setAttribute('aria-label','Pratonton paparan');
+const autoName=document.createElement('strong'),autoNote=document.createElement('p'),autoCover=document.createElement('img');autoCover.style.cssText='display:block;width:100%;max-width:460px;max-height:210px;object-fit:cover;border-radius:12px';autoCover.referrerPolicy='no-referrer';autoCover.alt='Pratonton cover';autoNote.textContent='Cadangan tema dan cover daripada laman perniagaan. Semak dan ubah jika perlu.';autoPreview.append(autoName,autoNote,autoCover);$('fields').before(autoPreview);
+function previewAppearance(){const theme=$('field-theme').value,color=$('field-accent').value,cover=httpsURL($('field-cover').value);autoPreview.hidden=!theme&&!color&&!cover;autoName.textContent=$('field-name').value;autoPreview.style.background=theme==='dark'?'#202824':'#f5f7f2';autoPreview.style.color=theme==='dark'?'#ffffff':'#173b33';autoPreview.style.borderColor=/^#[a-f0-9]{6}$/i.test(color)?color:'';autoCover.hidden=!cover;if(cover)autoCover.src=cover;else autoCover.removeAttribute('src');}
+for(const key of ['name','theme','accent','cover'])$('field-'+key).addEventListener('input',previewAppearance);autoCover.onerror=()=>{autoCover.hidden=true;};
 $('logo-preview').onload=()=>{$('logo-preview').hidden=false; $('logo-fallback').hidden=true;};
 $('logo-preview').onerror=()=>{$('logo-preview').hidden=true; $('logo-fallback').hidden=false;};
 async function api(path, body, signal) {
@@ -229,7 +236,7 @@ async function choose(place,current) {
     invalidate();publicDraftToken=data.draftToken||''; sources=data.sources || {};
     searchSuggestions.hidden=!data.searchSuggestionsHtml;searchSuggestions.srcdoc=data.searchSuggestionsHtml ? '<base target="_blank"><meta name="referrer" content="no-referrer">'+data.searchSuggestionsHtml : '';
     $('editor').hidden=false;
-    $('fields').querySelectorAll('select').forEach(select=>select.remove());
+    $('fields').querySelectorAll('select:not(#field-theme)').forEach(select=>select.remove());
     for (const key of Object.keys(fieldNames)) {
       $('field-'+key).value=data.profile[key] || ''; $('field-'+key).removeAttribute('aria-invalid'); $('error-'+key).textContent=''; sourceLine(key,sources[key]);
       if((data.candidates?.[key]?.length || 0)>1) {
@@ -240,7 +247,7 @@ async function choose(place,current) {
         $('field-'+key).after(select);
       }
     }
-    listingTools?.set(data.profile);previewLogo();
+    listingTools?.set(data.profile);previewLogo();previewAppearance();
     $('warnings').textContent=(data.warnings || []).join(' '); $('warnings').hidden=!data.warnings?.length;
     $('search-status').textContent='Maklumat sedia disemak. Semua medan di bawah boleh diedit.';
     $('field-name').focus({preventScroll:true});
@@ -254,7 +261,8 @@ function validate(profile) {
   else if([...profile.name].length>80) errors.name='Gunakan 80 aksara atau kurang.';
   if((profile.address||'').length>300)errors.address='Gunakan 300 aksara atau kurang.';
   if(profile.tagline.length>140) errors.tagline='Gunakan 140 aksara atau kurang.';
-  for(const key of Object.keys(fieldNames).filter(k=>!['name','tagline','phone','address'].includes(k))) if(profile[key] && (!httpsURL(profile[key]) || profile[key].length>500)) errors[key]='Gunakan URL https:// penuh, maksimum 500 aksara.';
+  for(const key of Object.keys(fieldNames).filter(k=>!['name','tagline','phone','address','theme','accent'].includes(k))) if(profile[key] && (!httpsURL(profile[key]) || profile[key].length>500)) errors[key]='Gunakan URL https:// penuh, maksimum 500 aksara.';
+  try{validateAppearance(profile);}catch{errors.accent='Gunakan kod warna HEX seperti #20543e.';}
   if(profile.phone && !malaysiaPhone(profile.phone)) errors.phone='Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.';
   if(profile.x && !xProfile(profile.x)) errors.x='Gunakan pautan profil X seperti https://x.com/nama.';
   if(profile.threads && !threadsProfile(profile.threads)) errors.threads='Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.';
