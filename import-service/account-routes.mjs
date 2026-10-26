@@ -61,13 +61,13 @@ export function createAccountRoutes({adminAuth,userAuth,admin,customers,manageme
       const data=await body(req,8192);
       reply(res,200,action==='message'?await management.message(id,data,actor):await management.replyMessage(id,data,actor),origin);return true;
     }
-    const operation=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/(state|quote|renewal|decision|subscription)$').exec(path);
+    const operation=new RegExp('^'+base+'/links/([A-Za-z0-9_-]{16})/(state|quote|renewal|decision|subscription|purge)$').exec(path);
     if(operation&&management){
       const [,id,action]=operation;
-      if(customer&&['state','decision','subscription'].includes(action)){reply(res,403,{error:'Hanya super admin boleh mengurus status dan langganan.'},origin);return true;}
+      if(customer&&['state','decision','subscription','purge'].includes(action)){reply(res,403,{error:'Hanya super admin boleh mengurus status dan langganan.'},origin);return true;}
       if(req.method==='POST'){
         if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){reply(res,415,{error:'Gunakan JSON.'},origin);return true;}
-        const data=await body(req,4096);const result=action==='subscription'?await management.subscription(id,data,actor):action==='state'?await management.state(id,data,actor):action==='quote'?await management.quote(id,data,actor):action==='renewal'?await management.request(id,data,actor):await management.decide(id,data,actor);
+        const data=await body(req,4096);const result=action==='purge'?await management.purge(id,data,actor):action==='subscription'?await management.subscription(id,data,actor):action==='state'?await management.state(id,data,actor):action==='quote'?await management.quote(id,data,actor):action==='renewal'?await management.request(id,data,actor):await management.decide(id,data,actor);
         admin.invalidatePending();reply(res,200,result,origin);return true;
       }
     }

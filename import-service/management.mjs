@@ -17,6 +17,28 @@ export function createManagementService({store,origin='https://tap.imai.my',now=
     if(!owns||item.record.lifecycle?.state==='deleted')throw fail(404,'Halaman ini tidak tersedia untuk akaun Gmail anda.');return item;
   }
   return {
+    async purge(id,data={},actor){
+      admin(actor);if(!actor.email)throw fail(403,'Login super admin diperlukan.');
+      if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(key=>!['revision','confirmName','confirmId','confirmPermanent'].includes(key)))throw fail(400,'Pengesahan padam kekal tidak sah.');
+      const previous=await load(id,actor),record=previous.record;
+      if(typeof data.revision!=='string'||previous.revision!==data.revision)throw fail(409,'Rekod telah berubah. Muat semula sebelum memadam kekal.');
+      if(record.lifecycle?.state!=='deleted')throw fail(409,'Padam halaman dahulu sebelum memadam kekal QR.');
+      const name=JSON.parse(Buffer.from(new URL(record.url).searchParams.get('p'),'base64url')).name;
+      if(data.confirmName!==name||data.confirmId!==id||data.confirmPermanent!==true)throw fail(400,'Sahkan nama perniagaan, kod QR dan persetujuan padam kekal.');
+      const terminal=['paid','cancelled','creation_failed','resolved'];
+      if(record.paymentResolution||record.renewal?.status==='pending'||record.checkout&&!terminal.includes(record.checkout.status))throw fail(409,'Selesaikan bayaran yang masih terbuka sebelum memadam kekal QR.');
+      const ids=[...new Set([...(record.checkoutIds||[]),record.checkout?.id,...Object.keys(record.gatewayApplied||{})].filter(value=>/^ST[a-f0-9]{24}$/.test(value||'')))];
+      for(const orderId of ids){
+        const saved=await store.getGatewayOrder(orderId),order=saved?.record;
+        if(!order||order.pageId!==id)throw fail(409,'Rekod pesanan perlu disemak sebelum memadam kekal QR.');
+        if(!terminal.includes(order.status))throw fail(409,'Selesaikan semua pesanan yang masih terbuka dahulu.');
+        const physical=order.quote?.includesPhysical||order.quote?.items?.some(line=>['bundle','nfc','extra_nfc','table_sticker'].includes(line.id)&&line.quantity>0);
+        if(order.status==='paid'&&physical&&order.fulfillment?.state!=='completed')throw fail(409,'Selesaikan penghantaran pesanan fizikal sebelum memadam kekal QR.');
+      }
+      const marker={v:1,permanentlyDeleted:true,deletedAt:new Date(now()).toISOString(),deletedBy:actor.email};
+      if(!await store.purge(id,marker,data.revision))throw fail(409,'Rekod telah berubah. Muat semula sebelum memadam kekal.');
+      return {id,permanentlyDeleted:true};
+    },
     async subscription(id,data={},actor){
       admin(actor);
       if(!actor.email||!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).some(key=>!['action','expiresDate','note','revision'].includes(key)))throw fail(400,'Maklumat langganan tidak sah.');

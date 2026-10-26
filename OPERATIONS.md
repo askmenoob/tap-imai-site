@@ -1,5 +1,27 @@
 # SmartTap operations and recovery
 
+## Permanent QR retirement
+
+Only the verified super admin may POST `/api/admin/links/:id/purge`.
+The page must first be soft-deleted. Exact business name, QR ID, explicit
+confirmation and the current record revision are required. Pending payments,
+payment-resolution locks, non-terminal linked orders and paid physical orders
+whose fulfillment is not completed block the operation.
+
+The generation-guarded write replaces the primary destination and owner fields
+with a minimal permanent-deletion marker. This keeps the ID occupied so an old
+printed QR cannot be assigned to another destination. Store reads and lists
+hide these markers; app restore, media, customer and admin page reads cannot
+recover the retired page. Existing order/payment records, private audit history
+and retained backups are not erased by QR retirement. This is permanent URL
+retirement through SmartTap, not a promise to erase all copies of business data.
+
+Recovery operators must preserve permanent-deletion markers when restoring an
+older snapshot, overlaying current retirement markers before reconnecting live
+traffic. Do not deploy a backend older than marker support after using purge:
+older readers do not understand the marker format. Frontend-only rollback does
+not remove the durable retirement. Never restore a retired URL from history.
+
 **Activation record:** the approved production rollout and backup/monitoring
 activation on 26 October 2026 are recorded in [OPERATIONS-ACTIVATION.md](OPERATIONS-ACTIVATION.md).
 The proposal below is retained as the original review package; its statements
