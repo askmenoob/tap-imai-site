@@ -2102,6 +2102,34 @@ var require_browser = __commonJS({
   }
 });
 
+// import-service/appearance.mjs
+var appearanceFields = {
+  theme: { label: "Tema halaman", options: { classic: "Klasik \xB7 krim & hijau", dark: "Gelap \xB7 arang & putih", bright: "Ceria \xB7 putih & warna jenama" } },
+  accent: { label: "Warna utama", type: "color" },
+  cover: { label: "Cover tersimpan", type: "url", max: 500 },
+  menuLabel: { label: "Nama butang menu / katalog", max: 40 },
+  menu: { label: "Pautan menu / katalog", type: "url", max: 500 },
+  directions: { label: "Pautan lokasi Google Maps", type: "url", max: 500 },
+  address: { label: "Alamat perniagaan", max: 240 },
+  hours: { label: "Waktu operasi", max: 240 },
+  promoTitle: { label: "Tajuk promosi", max: 70 },
+  promoText: { label: "Penerangan promosi", max: 180 },
+  promoURL: { label: "Pautan promosi", type: "url", max: 500 },
+  promoStart: { label: "Promosi bermula (waktu Malaysia)", type: "datetime-local" },
+  promoEnd: { label: "Promosi tamat (waktu Malaysia)", type: "datetime-local" }
+};
+function validateAppearance(profile) {
+  for (const [key, spec] of Object.entries(appearanceFields)) {
+    const value = profile[key];
+    if (value === void 0 || value === "") continue;
+    if (typeof value !== "string" || value.length > (spec.max || 40)) throw new Error("Medan paparan tidak sah: " + spec.label);
+    if (spec.options && !Object.hasOwn(spec.options, value)) throw new Error("Tema tidak sah.");
+    if (key === "accent" && !/^#[a-fA-F0-9]{6}$/.test(value)) throw new Error("Warna tidak sah.");
+    if (spec.type === "datetime-local" && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) || !Number.isFinite(Date.parse(value + "+08:00")) || new Date(Date.parse(value + "+08:00") + 8 * 36e5).toISOString().slice(0, 16) !== value)) throw new Error("Tarikh promosi tidak sah.");
+  }
+  if (profile.promoStart && profile.promoEnd && profile.promoEnd <= profile.promoStart) throw new Error("Tarikh tamat mesti selepas tarikh mula.");
+}
+
 // src/import.js
 var import_qrcode = __toESM(require_browser(), 1);
 
@@ -2395,7 +2423,7 @@ function onboardingResult({ url, name = "", registering: registering2 = false, l
 // src/import.js
 var $ = (id) => document.getElementById(id);
 var registering = new URLSearchParams(location.search).get("register") === "1";
-var fieldNames = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", x: "X (Twitter)", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web" };
+var fieldNames = { name: "Nama perniagaan", logo: "URL logo", tagline: "Penerangan ringkas", google: "Google Review", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", x: "X (Twitter)", phone: "Telefon perniagaan", whatsapp: "WhatsApp", website: "Laman web", theme: "Tema halaman", accent: "Warna utama", cover: "URL cover" };
 if (!registering) delete fieldNames.google;
 else Object.assign(fieldNames, { address: "Alamat perniagaan", directions: "Pautan lokasi / pin Google Maps" });
 var listingTools = null;
@@ -2582,12 +2610,22 @@ for (const [key, label] of Object.entries(fieldNames)) {
   const caption = document.createElement("label");
   caption.htmlFor = "field-" + key;
   caption.textContent = label + (["name", "google"].includes(key) ? " *" : "");
-  const input = document.createElement("input");
+  const input = document.createElement(key === "theme" ? "select" : "input");
   input.id = "field-" + key;
   input.name = key;
-  input.maxLength = key === "name" ? 90 : key === "tagline" ? 150 : 500;
+  if (key === "theme") for (const [value, text] of [["", "Pilih tema"], ["classic", "Klasik"], ["dark", "Gelap"], ["bright", "Ceria"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    input.append(option);
+  }
+  if (key === "accent") {
+    input.placeholder = "#20543e";
+    input.maxLength = 7;
+  }
+  input.maxLength = key === "accent" ? 7 : key === "name" ? 90 : key === "tagline" ? 150 : 500;
   input.autocomplete = key === "name" ? "organization" : "off";
-  if (!["name", "tagline", "phone", "address"].includes(key)) input.inputMode = "url";
+  if (!["name", "tagline", "phone", "address", "theme", "accent"].includes(key)) input.inputMode = "url";
   if (key === "phone") {
     input.type = "tel";
     input.placeholder = "Contoh: 012-2258950";
@@ -2638,7 +2676,7 @@ if (registering) {
     selectedBusiness.hidden = true;
     searchSuggestions.hidden = true;
     $("warnings").hidden = true;
-    $("fields").querySelectorAll("select").forEach((node) => node.remove());
+    $("fields").querySelectorAll("select:not(#field-theme)").forEach((node) => node.remove());
     for (const key of Object.keys(fieldNames)) {
       $("field-" + key).value = "";
       $("error-" + key).textContent = "";
@@ -2647,10 +2685,39 @@ if (registering) {
     listingTools.set({ name: $("query").value.trim(), googleStatus: "pending" });
     $("field-name").value = $("query").value.trim();
     previewLogo();
+    previewAppearance();
     $("editor").hidden = false;
     $("editor").scrollIntoView({ behavior: "smooth" });
   };
 }
+var autoPreview = document.createElement("section");
+autoPreview.className = "notice";
+autoPreview.hidden = true;
+autoPreview.setAttribute("aria-label", "Pratonton paparan");
+var autoName = document.createElement("strong");
+var autoNote = document.createElement("p");
+var autoCover = document.createElement("img");
+autoCover.style.cssText = "display:block;width:100%;max-width:460px;max-height:210px;object-fit:cover;border-radius:12px";
+autoCover.referrerPolicy = "no-referrer";
+autoCover.alt = "Pratonton cover";
+autoNote.textContent = "Cadangan tema dan cover daripada laman perniagaan. Semak dan ubah jika perlu.";
+autoPreview.append(autoName, autoNote, autoCover);
+$("fields").before(autoPreview);
+function previewAppearance() {
+  const theme = $("field-theme").value, color = $("field-accent").value, cover = httpsURL($("field-cover").value);
+  autoPreview.hidden = !theme && !color && !cover;
+  autoName.textContent = $("field-name").value;
+  autoPreview.style.background = theme === "dark" ? "#202824" : "#f5f7f2";
+  autoPreview.style.color = theme === "dark" ? "#ffffff" : "#173b33";
+  autoPreview.style.borderColor = /^#[a-f0-9]{6}$/i.test(color) ? color : "";
+  autoCover.hidden = !cover;
+  if (cover) autoCover.src = cover;
+  else autoCover.removeAttribute("src");
+}
+for (const key of ["name", "theme", "accent", "cover"]) $("field-" + key).addEventListener("input", previewAppearance);
+autoCover.onerror = () => {
+  autoCover.hidden = true;
+};
 $("logo-preview").onload = () => {
   $("logo-preview").hidden = false;
   $("logo-fallback").hidden = true;
@@ -2865,7 +2932,7 @@ async function choose(place, current) {
     searchSuggestions.hidden = !data.searchSuggestionsHtml;
     searchSuggestions.srcdoc = data.searchSuggestionsHtml ? '<base target="_blank"><meta name="referrer" content="no-referrer">' + data.searchSuggestionsHtml : "";
     $("editor").hidden = false;
-    $("fields").querySelectorAll("select").forEach((select) => select.remove());
+    $("fields").querySelectorAll("select:not(#field-theme)").forEach((select) => select.remove());
     for (const key of Object.keys(fieldNames)) {
       $("field-" + key).value = data.profile[key] || "";
       $("field-" + key).removeAttribute("aria-invalid");
@@ -2896,6 +2963,7 @@ async function choose(place, current) {
     }
     listingTools?.set(data.profile);
     previewLogo();
+    previewAppearance();
     $("warnings").textContent = (data.warnings || []).join(" ");
     $("warnings").hidden = !data.warnings?.length;
     $("search-status").textContent = "Maklumat sedia disemak. Semua medan di bawah boleh diedit.";
@@ -2913,7 +2981,12 @@ function validate(profile) {
   else if ([...profile.name].length > 80) errors.name = "Gunakan 80 aksara atau kurang.";
   if ((profile.address || "").length > 300) errors.address = "Gunakan 300 aksara atau kurang.";
   if (profile.tagline.length > 140) errors.tagline = "Gunakan 140 aksara atau kurang.";
-  for (const key of Object.keys(fieldNames).filter((k) => !["name", "tagline", "phone", "address"].includes(k))) if (profile[key] && (!httpsURL(profile[key]) || profile[key].length > 500)) errors[key] = "Gunakan URL https:// penuh, maksimum 500 aksara.";
+  for (const key of Object.keys(fieldNames).filter((k) => !["name", "tagline", "phone", "address", "theme", "accent"].includes(k))) if (profile[key] && (!httpsURL(profile[key]) || profile[key].length > 500)) errors[key] = "Gunakan URL https:// penuh, maksimum 500 aksara.";
+  try {
+    validateAppearance(profile);
+  } catch {
+    errors.accent = "Gunakan kod warna HEX seperti #20543e.";
+  }
   if (profile.phone && !malaysiaPhone(profile.phone)) errors.phone = "Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.";
   if (profile.x && !xProfile(profile.x)) errors.x = "Gunakan pautan profil X seperti https://x.com/nama.";
   if (profile.threads && !threadsProfile(profile.threads)) errors.threads = "Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.";
