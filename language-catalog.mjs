@@ -242,6 +242,7 @@ export const translations = {
   'Masukkan nama perniagaan.':'Enter a business name.','Gunakan 80 aksara atau kurang.':'Use 80 characters or fewer.','Gunakan 140 aksara atau kurang.':'Use 140 characters or fewer.',
   'Gunakan URL https:// penuh, maksimum 500 aksara.':'Use a full https:// URL, up to 500 characters.',
   'Gunakan nombor Malaysia seperti 012-2258950 atau +60 12-225 8950.':'Use a Malaysian number such as 012-2258950 or +60 12-225 8950.',
+  'Kongsi halaman SmartTap':'Share SmartTap page','Kongsi':'Share','URL pendek SmartTap':'SmartTap short URL',
   'Pilih tema':'Choose a theme','URL cover':'Cover URL','Pratonton cover':'Cover preview','Pratonton paparan':'Appearance preview','Cadangan tema dan cover daripada laman perniagaan. Semak dan ubah jika perlu.':'Suggested theme and cover from the business website. Review and edit as needed.','Gunakan kod warna HEX seperti #20543e.':'Use a HEX colour such as #20543e.',
   'Gunakan pautan profil X seperti https://x.com/nama.':'Use an X profile link such as https://x.com/username.',
   'Gunakan pautan profil https://www.threads.com/@nama atau threads.net/@nama.':'Use a profile link such as https://www.threads.com/@name or threads.net/@name.',
