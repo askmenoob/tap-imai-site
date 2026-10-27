@@ -11,7 +11,7 @@ function requireAdmin(actor){if(actor?.role!=='admin'||!actor.email)throw fail(4
 function userKey(actor){if(actor?.role!=='user')throw fail(403,'Login Gmail diperlukan.');return ownerKey(actor.email);}
 function owns(record,key){try{return !!record.ownerEmail&&ownerKey(record.ownerEmail)===key;}catch{return false;}}
 function validCursor(cursor){if(cursor!==undefined&&cursor!==null&&(typeof cursor!=='string'||cursor.length>2048||!/^[-A-Za-z0-9_+/=]*$/.test(cursor)))throw fail(400,'Halaman senarai tidak sah.');}
-export function createCustomerService({store,origin='https://tap.imai.my',mediaOrigin='https://tap-business-import-262870839474.asia-southeast1.run.app',now=Date.now,newId=()=>randomBytes(12).toString('base64url'),newSubscription=null}){
+export function createCustomerService({store,origin='https://tap.imai.my',mediaOrigin='https://tap-business-import-262870839474.asia-southeast1.run.app',now=Date.now,newId=()=>randomBytes(12).toString('base64url'),newSubscription=null,trialEnabled=false}){
   const view=(id,item,admin=false)=>pageView({id,...item},origin,admin,now());
   async function owned(id,actor){validId(id);const key=userKey(actor);const item=await store.getVersion(id);if(!item||item.record.lifecycle?.state==='deleted'||!owns(item.record,key))throw notFound();return item;}
   return {
@@ -22,7 +22,8 @@ export function createCustomerService({store,origin='https://tap.imai.my',mediaO
         // Membership is discoverability only; each read/write rechecks the primary record.
         await store.grantOwner(ownerKey(email),id);
         const createdAt=new Date(now()).toISOString();
-        if(await store.create(id,{v:1,url,createdAt,ownerEmail:email,ownerRegisteredAt:createdAt,ownerRegisteredBy:actor.email,...(newSubscription?{subscription:structuredClone(newSubscription)}:{})}))return view(id,await store.getVersion(id),true);
+        const trial=trialEnabled?{startedAt:createdAt,expiresAt:new Date(Date.parse(createdAt)+24*60*60*1000).toISOString()}:null;
+        if(await store.create(id,{v:1,url,createdAt,ownerEmail:email,ownerRegisteredAt:createdAt,ownerRegisteredBy:actor.email,...(trial?{trial}:{}),...(newSubscription?{subscription:structuredClone(newSubscription)}:{})}))return view(id,await store.getVersion(id),true);
       }
       throw fail(503,'Pendaftaran belum dapat disimpan. Cuba lagi.');
     },

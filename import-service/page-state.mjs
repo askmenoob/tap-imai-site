@@ -4,6 +4,10 @@ export function pageState(record,now=Date.now()){
   const state=record.lifecycle?.state||'active';
   if(state==='deleted'||state==='disabled')return state;
   if(record.subscription?.plan==='nfc_only')return 'nfc_only';
+  if(record.trial && !hasEntitlement(record)){
+    const end=Date.parse(record.trial.expiresAt||'');
+    return Number.isFinite(end)&&end>now?'active':'expired';
+  }
   if(record.subscription?.plan==='annual'){
     const end=Date.parse(record.subscription.expiresAt||'');
     if(!Number.isFinite(end))return 'pending';

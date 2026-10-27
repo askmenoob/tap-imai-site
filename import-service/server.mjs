@@ -45,7 +45,7 @@ const adminEmails=(process.env.ADMIN_EMAILS||'').split(',');
 const adminAuth=createGoogleAdminAuth({clientId:adminClientId,emails:adminEmails});
 const userAuth=createGoogleUserAuth({clientId:adminClientId});
 const admin=linkStore?createAdminService({store:linkStore,mediaOrigin,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my'}):null;
-const customers=linkStore?createCustomerService({store:linkStore,mediaOrigin,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription}):null;
+const customers=linkStore?createCustomerService({store:linkStore,mediaOrigin,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',newSubscription,trialEnabled:process.env.TRIAL_24H_ENABLED==='true'}):null;
 const management=linkStore?createManagementService({store:linkStore,origin:preview?'http://127.0.0.1:'+port:'https://tap.imai.my',enabled:paymentsEnabled,manualEnabled:process.env.MANUAL_PAYMENTS_ENABLED==='true',qrPayload:paymentQR}):null;
 const toyMode=process.env.TOYYIBPAY_MODE||'live';
 if(!preview&&toyMode!=='live')throw new Error('ToyyibPay sandbox requires an isolated preview environment.');
