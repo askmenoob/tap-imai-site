@@ -1,11 +1,11 @@
 # SMARTTAP — Botanical A checkpoint, 5 November 2026
 
 CURRENT TASK: Correct the redesign against the user-supplied A reference.
-USER CHOICE: A — Botanical Premium Tech. Preview for user review before live.
+USER CHOICE: A — Botanical Premium Tech. User approved release: “Terbitkan A”.
 BRANCH: codex/smarttap-botanical-a-20261105
-BASE / CURRENT PRODUCTION SHA: 54a38c5d03035636131d566a2248a2c2f2ad97cf
+BASE / ROLLBACK SHA: 54a38c5d03035636131d566a2248a2c2f2ad97cf
 PRODUCTION ROLLBACK: Cloudflare d24d47d9-2ad5-45ff-a60a-f444296370a8
-PRODUCTION STATUS: Not changed by this task. No merge or production deployment.
+PRODUCTION STATUS: LIVE — UI merge 9713169cb6217c23b43fc903af47a7f3e8d1a925.
 
 IMPLEMENTED: Real owner home using src/customer-home.mjs, integrated into the
 existing customer-area.mjs lifecycle. Actual premise picker, package state/date,
@@ -53,14 +53,13 @@ an explicit accessible name to the mobile language select. Mobile empty/error,
 drawer Escape/focus restore and logout pass. Axe repeated at an actual 390px
 context: eight routes, zero violations. Final branch deployment must be checked
 for this follow-up commit before handoff. Production remains at the base SHA.
-BLOCKER: Production is intentionally waiting for user review of the A preview.
+BLOCKER: None for the approved visual release. User review/release approved.
 Cloud Run/account/billing/storage infrastructure not changed. Server file diff
 only extends localhost --preview static allowlist for the new demo paths.
 Authenticated Google production flows and real payments are not exercised.
 24h trial remains separate undeployed work. No migration, seed, IAM or data write.
 
-NEXT: Verify branch preview, record URL/SHA, hand off desktop and mobile screenshots.
-After user accepts preview, check git/deployment state again before production.
+NEXT: No remaining release work after the production verification below.
 On any timeout, inspect the existing process/deployment; do not repeat mutations.
 
 ## Final preview verification
@@ -72,5 +71,38 @@ PROFILE: https://06b89215.tap-imai-site.pages.dev/demo/botanical/
 Actual localhost account functional flows and empty/error/keyboard/logout checks
 passed again on the final UI. Static hosted preview interaction checks pass.
 Production canonical deployment checked and unchanged: d24d47d9 / 54a38c5.
-Only remaining next action is user visual review, followed by a separately
-approved production promotion. The documentation follow-up contains no UI change.
+This preview was subsequently approved and promoted; see production record below.
+
+## Production release — 5 November 2026, Asia/Kuala_Lumpur
+
+AUTHORIZATION: User explicitly instructed “Terbitkan A”.
+PR: https://github.com/askmenoob/tap-imai-site/pull/43 — MERGED.
+APPROVED HEAD: c9eda5b101deda3cfbae4503b7b079c6cca152a6, unchanged at promotion.
+UI MERGE SHA: 9713169cb6217c23b43fc903af47a7f3e8d1a925.
+VERIFIED DEPLOYMENT: b83fd377-dd46-47bf-927b-ac43c6501686 — production, SUCCESS.
+LIVE: https://tap.imai.my ; owner /edit/ ; demo /demo/botanical/.
+ROLLBACK: d24d47d9-2ad5-45ff-a60a-f444296370a8 / 54a38c5d03035636131d566a2248a2c2f2ad97cf.
+
+Fresh pre-release verification: npm test 159/159 and operations 5/5 pass;
+npm build and 61-file public allowlist pass. Git working trees clean. Preview
+Cloudflare check successful; exact-head merge used. Existing infrastructure only.
+
+Production smoke: 7 routes at 1440x1000 and 390x844 + backend health = 15 checks,
+all pass. Page identity/content, no overflow, no uncaught page errors, package
+estimator, BM/English and salon demo dialog verified. Botanical demo additionally
+passes QR PNG download, in-memory edit, dynamic state translation, search handoff,
+public dialogs and 1440/1030/390/360px route sweep on the actual domain. No live
+owner record, payment or order written. Login Google button renders; config GET
+configured=true; anonymous account-list GET returns 401. Health ready=true,
+demo=false, shortLinks=true. Backend deployment/configuration unchanged.
+
+SHA-256 of production CSS, account JS, public JS and botanical demo JS matches
+the tested local files. Cloudflare logs confirm asset publication success.
+Screenshots visually inspected on production, including mobile login and profile.
+Known console noise remains: existing CSP blocks injected Cloudflare telemetry/
+inline scripts and a Google inline style. No CSP weakening or unrelated hosting
+configuration change was made; do not report a completely empty console.
+
+This documentation-only follow-up records the verified UI release and may trigger
+the existing Pages pipeline again. UI/assets are unchanged. Check deployment state
+before any retry; no migrations, seeds, backend release or billing changes.

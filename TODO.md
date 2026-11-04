@@ -10,8 +10,8 @@
 - [x] Build/static allowlist, 159 service tests + 5 operations tests, syntax checks.
 - [x] Automated accessibility: eight routes, zero A/AA violations.
 - [x] Verify Cloudflare branch preview and record its URL/SHA in checkpoint.
-- [ ] User review of A preview.
-- [ ] Only after acceptance: merge/release and production smoke verification.
+- [x] User review of A preview — explicit instruction “Terbitkan A”.
+- [x] Merge/release and production smoke verification — PR #43, release 9713169.
 
 Reference differences that preserve truth: analytics unavailable instead of sample
 counts/graph; subscription from actual records instead of 14-day demo trial; no
