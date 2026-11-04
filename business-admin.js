@@ -4890,6 +4890,7 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
     if (!items.length) {
       const option = document.createElement("option");
       option.textContent = "Tiada premis berdaftar";
+      option.value = "";
       picker.append(option);
     }
     picker.value = selected2?.id || current;

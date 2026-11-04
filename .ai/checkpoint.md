@@ -41,7 +41,18 @@ differences: no fake statistics/graph/14-day trial/user avatar; package shows re
 state; production navigation includes actual editor/order functions. No device
 frames or presentation-board labels are embedded in the app.
 
-PREVIEW DEPLOY: Pending branch push and Cloudflare deployment verification.
+PREVIEW DEPLOY: Cloudflare edad23f5-5a64-40b1-99ad-9faeb91e833e, SUCCESS,
+code SHA de0bfbc31d657505f14dde6a47f71a8acc868d5d.
+URL: https://edad23f5.tap-imai-site.pages.dev/demo/botanical/dashboard.html
+PROFILE: https://edad23f5.tap-imai-site.pages.dev/demo/botanical/
+DRAFT PR: https://github.com/askmenoob/tap-imai-site/pull/43
+Hosted preview passed QR download, demo edit, language/dynamic-state switching,
+search handoff, public dialogs, no overflow at 1440/1030/390/360px and zero
+console or page errors. Follow-up fixes the empty-premise option value and adds
+an explicit accessible name to the mobile language select. Mobile empty/error,
+drawer Escape/focus restore and logout pass. Axe repeated at an actual 390px
+context: eight routes, zero violations. Final branch deployment must be checked
+for this follow-up commit before handoff. Production remains at the base SHA.
 BLOCKER: Production is intentionally waiting for user review of the A preview.
 Cloud Run/account/billing/storage infrastructure not changed. Server file diff
 only extends localhost --preview static allowlist for the new demo paths.

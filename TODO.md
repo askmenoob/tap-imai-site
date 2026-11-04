@@ -9,7 +9,7 @@
 - [x] Test desktop/mobile, actual local account workflows, QR download, languages.
 - [x] Build/static allowlist, 159 service tests + 5 operations tests, syntax checks.
 - [x] Automated accessibility: eight routes, zero A/AA violations.
-- [ ] Verify Cloudflare branch preview and record its URL/SHA in checkpoint.
+- [x] Verify Cloudflare branch preview and record its URL/SHA in checkpoint.
 - [ ] User review of A preview.
 - [ ] Only after acceptance: merge/release and production smoke verification.
 
