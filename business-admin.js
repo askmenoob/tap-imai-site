@@ -4373,6 +4373,8 @@ function createGoogleListingTools({ input, name, onChange, search, lookup }) {
 }
 
 // src/customer-area.mjs
+var menuPaths = { "package": "M3 7h18v14H3zM3 7l4-4h10l4 4M12 3v18M3 12h18", "business": "M4 21V7l8-4 8 4v14M8 21v-6h8v6M8 8h.01M16 8h.01M8 11h.01M16 11h.01", "page": "M3 4h18v16H3zM3 9h18M8 9v11", "orders": "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4", "my": "M9 3H3v18h18v-6M13 3h8v8M21 3 10 14" };
+var menuIcon = (id) => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + menuPaths[id] + '"/></svg>';
 var menus = [["package", "Status pakej", "\u25C8"], ["business", "Sunting perniagaan", "\u270E"], ["page", "Sunting paparan", "\u25A7"], ["orders", "Pesanan saya", "\u25A4"], ["my", "Halaman saya", "\u2197"]];
 function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   const $2 = (id) => document.getElementById(id), dashboard = $2("dashboard"), editor = $2("editor"), form = $2("edit-form");
@@ -4386,11 +4388,11 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   nav.id = "customer-menu";
   nav.className = "customer-menu";
   nav.setAttribute("aria-label", "Menu pelanggan");
-  for (const [id, label, icon] of menus) {
+  for (const [id, label] of menus) {
     const b = document.createElement("button");
     b.type = "button";
     b.dataset.view = id;
-    b.innerHTML = '<span aria-hidden="true">' + icon + "</span><span>" + label + "</span>";
+    b.innerHTML = '<span aria-hidden="true">' + menuIcon(id) + "</span><span>" + label + "</span>";
     b.onclick = () => open(id, true);
     nav.append(b);
   }

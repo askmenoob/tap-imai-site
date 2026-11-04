@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="strict-origin-when-cross-origin"><meta name="robots" content="noindex,nofollow">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; manifest-src 'self'; worker-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' https://accounts.google.com/gsi/style; frame-src https://accounts.google.com; connect-src 'self' https://tap-business-import-262870839474.asia-southeast1.run.app https://accounts.google.com/gsi/; img-src 'self' data: blob: https:; object-src 'none'; base-uri 'self'; form-action 'none'">
-  <meta name="theme-color" content="#173b33"><title>Super admin — SmartTap</title>
+  <meta name="theme-color" content="#f3f2fc"><title>Super admin — SmartTap</title>
   <link rel="stylesheet" href="business-import.css?v=share-brand-20261027-1">
   <link rel="stylesheet" href="business-admin.css?v=ops-20261025-1">
   <script src="import-config.js"></script><script type="module" src="assets/business-admin-toyyib-only.js?v=share-brand-20261027-1"></script>
@@ -17,10 +17,12 @@
 <meta name="apple-mobile-web-app-title" content="SmartTap">
 <link rel="stylesheet" href="/pwa.css?v=layout-20261024-1">
 <script defer src="/pwa.js?v=layout-20261024-1"></script>
-<link rel="stylesheet" href="/language.css?v=smarttap-brand-20261024-1"><script type="module" src="/language.js?v=share-brand-20261027-2"></script></head>
+<link rel="stylesheet" href="/language.css?v=smarttap-brand-20261024-1"><script type="module" src="/language.js?v=share-brand-20261027-2"></script><link rel="stylesheet" href="/assets/signature-hub.css?v=connected-hub-20261105-1">
+</head>
 <body data-role="admin">
   <header class="app-header"><a class="brand" href="./setup.html"><img class="brand-icon" src="/assets/smarttap-mark.png?v=smarttap-brand-20261024-1" alt="" width="36" height="36"><span class="brand-wordmark">SMART<span>TAP</span></span></a><nav class="app-nav"><a href="./setup.html?register=1">Daftar pelanggan ↗</a></nav><div class="app-tools"></div></header>
-  <main>
+  <a class="skip-link" href="#main-content">Langkau ke kandungan</a>
+  <main id="main-content">
     <section class="intro"><p class="eyebrow">RUANG PENGURUSAN</p><h1>Semua pautan.<br><em>Satu tempat untuk urus.</em></h1><p>Sunting maklumat perniagaan pada pautan yang sama. Pelanggan boleh terus menggunakan QR yang telah dicetak.</p></section>
     <p id="demo" class="notice" hidden>DEMO TEMPATAN — rekod contoh sahaja. Login Google dan simpanan sebenar tidak digunakan.</p>
     <section id="login-panel" class="panel"><h2>Login super admin</h2><p>Log masuk dengan akaun Google yang diberi akses oleh pemilik SmartTap.</p><div id="google-login"></div><button id="demo-login" hidden>Masuk demo tempatan</button><p id="login-status" role="status" aria-live="polite">Menyediakan login Google…</p></section>

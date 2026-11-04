@@ -1,4 +1,5 @@
 export const translations = {
+  'Langkau ke kandungan':'Skip to content',
   'CUBA DEMO SEBELUM MELANGGAN':'TRY A DEMO BEFORE SUBSCRIBING',
   'Bukan untuk restoran sahaja.':'Made for more than restaurants.',
   'Lihat contoh halaman salon rambut dengan servis, harga, promosi dan tempahan WhatsApp — semuanya dalam satu pautan.':'Explore a hair salon page with services, prices, promotions and WhatsApp enquiries — all in one link.',
