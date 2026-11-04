@@ -3075,3 +3075,7 @@ $("copy").addEventListener("click", async () => {
     $("copy-status").textContent = "Pilih dan salin pautan di atas secara manual.";
   }
 });
+var initialQuery = new URLSearchParams(location.search).get("q");
+if (initialQuery && initialQuery.length <= 160) {
+  $("query").value = initialQuery;
+}

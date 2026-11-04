@@ -8,6 +8,7 @@ const protectedContent='script,style,textarea,input,code,pre,[data-no-i18n],.lan
 const picker=document.createElement('div');picker.className='language-picker';
 const label=document.createElement('label');label.htmlFor='smarttap-language';label.textContent='Bahasa / Language';
 const select=document.createElement('select');select.id='smarttap-language';select.name='language';
+select.setAttribute('aria-label','Bahasa / Language');
 for(const [value,text] of [['ms','Bahasa Melayu'],['en','English']]){const option=document.createElement('option');option.value=value;option.textContent=text;select.append(option);}
 select.value=language;picker.append(label,select);
 

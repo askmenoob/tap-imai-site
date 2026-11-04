@@ -4372,10 +4372,118 @@ function createGoogleListingTools({ input, name, onChange, search, lookup }) {
   } };
 }
 
+// src/brand-icons.mjs
+function createBrandIcon(document2, name) {
+  const ns = "http://www.w3.org/2000/svg", svg = document2.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = (d, colour) => {
+    const p = document2.createElementNS(ns, "path");
+    p.setAttribute("d", d);
+    p.setAttribute("fill", colour);
+    svg.append(p);
+  };
+  if (name === "google") {
+    path("M22 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.6a4.8 4.8 0 0 1-2.1 3.2v2.6h3.4C21 18 22 15.4 22 12.2Z", "#4285f4");
+    path("M12 22c2.8 0 5.1-.9 6.9-2.4l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10.4 10.4 0 0 0 12 22Z", "#34a853");
+    path("M6.2 13.7a6 6 0 0 1 0-3.4V7.6H2.7a10.1 10.1 0 0 0 0 8.8Z", "#fbbc05");
+    path("M12 6c1.6 0 3 .6 4.1 1.6l3.1-3A10.3 10.3 0 0 0 12 2a10.4 10.4 0 0 0-9.3 5.6l3.5 2.7A6.1 6.1 0 0 1 12 6Z", "#ea4335");
+  } else {
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    const p = document2.createElementNS(ns, "path");
+    p.setAttribute("d", name === "whatsapp" ? "M21 11.5a9 9 0 0 1-13 8L3 21l1.5-5a9 9 0 1 1 16.5-4.5ZM8 7c0 5 4 9 9 9l1-3-3-1-1 1-3-3 1-1-1-3Z" : "M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0M17 7h.01");
+    svg.append(p);
+  }
+  return svg;
+}
+
+// src/customer-home.mjs
+var icons = { plus: "M12 5v14M5 12h14", qr: "M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h2v2h-2zM19 15h2v6h-6v-2", eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0", tap: "M5 12a3 3 0 0 1 3 3M5 7a8 8 0 0 1 8 8M5 2a13 13 0 0 1 13 13M5 17v4M2 21h6", star: "m12 3 3 6 6 1-4.5 4.5 1 6-5.5-3-5.5 3 1-6L3 10l6-1Z", shop: "M3 10 5 3h14l2 7M3 10c0 4 5 4 5 0 0 4 8 4 8 0 0 4 5 4 5 0M5 13v8h14v-8M9 21v-6h6v6", crown: "m3 6 5 5 4-8 4 8 5-5-2 14H5Z", arrow: "M5 12h14M14 7l5 5-5 5", leaf: "M20 3C8 2 2 8 5 17c9 3 16-3 15-14ZM5 20 15 9" };
+var homeIcon = (name) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (icons[name] || icons.arrow) + '"/></svg>';
+function createCustomerHome({ document: document2, picker, onOpen }) {
+  const el = (tag, cls, text2) => {
+    const n = document2.createElement(tag);
+    if (cls) n.className = cls;
+    if (text2) n.textContent = text2;
+    return n;
+  };
+  const panel = el("section", "botanical-home");
+  panel.id = "customer-home";
+  panel.setAttribute("aria-label", "Ringkasan perniagaan");
+  panel.innerHTML = `<div class="home-top"><section class="home-hero"><div class="home-hero-copy"><h1>Your business,<br>one tap away</h1><p>Hubungkan pelanggan dengan menu, ulasan, WhatsApp dan sosial media \u2014 semuanya dalam satu tap.</p><div class="home-hero-actions"><a class="button" href="/setup.html">${homeIcon("plus")}<span>Tambah Premis</span></a><button type="button" class="secondary" data-home-open="my">${homeIcon("qr")}<span>Jana QR</span></button></div></div></section><div class="home-side"><section class="home-premise"><h2>${homeIcon("shop")}<span>Premis Aktif</span></h2><div class="home-picker-row"><img class="home-premise-photo" alt="" hidden><div class="home-picker-slot"></div></div><p class="home-premise-address" data-no-i18n></p></section><button type="button" class="home-subscription" data-home-open="package">${homeIcon("crown")}<span><span class="home-small-label">Status Langganan</span><strong class="home-package-state" data-no-i18n>Tiada premis dipilih</strong><span class="home-package-date" data-no-i18n>Pilih premis untuk melihat status.</span></span><span class="home-subscription-arrow">${homeIcon("arrow")}</span></button></div></div>
+ <div class="home-bottom"><div class="home-data"><div class="home-stat-grid">${[["eye", "Views"], ["tap", "NFC Taps"], ["star", "Ulasan Baharu"]].map(([icon, label]) => `<section class="home-stat"><span class="home-stat-icon ${icon}">${homeIcon(icon)}</span><div><h2>${label}</h2><strong aria-label="Data belum tersedia">\u2014</strong><p>Data belum tersedia</p></div></section>`).join("")}</div><section class="home-activity"><div class="home-activity-heading"><div><h2>Aktiviti Tap & Lihat Profil</h2><p>Statistik perniagaan anda</p></div><span class="home-data-label">Belum tersedia</span></div><div class="home-chart-empty">${homeIcon("leaf")}<h3>Setiap hubungan bermula dengan satu tap.</h3><p>Statistik lawatan, tap dan ulasan belum tersedia. Anda masih boleh berkongsi profil melalui pautan dan QR.</p><button type="button" class="home-text-button" data-home-open="my">Buka pautan & QR ${homeIcon("arrow")}</button></div></section></div><section class="home-profile"><h2>Pratonton Profil Perniagaan</h2><div class="home-profile-card"><div class="home-profile-cover"></div><div class="home-profile-content"><div class="home-profile-logo"></div><h3 data-no-i18n></h3><p data-no-i18n></p><div class="home-profile-links"></div></div></div><a class="button home-public-link" target="_blank" rel="noopener noreferrer">${homeIcon("eye")}<span>Lihat Paparan Penuh</span>${homeIcon("arrow")}</a><p class="home-preview-empty">Pilih premis untuk melihat profil.</p></section></div>
+ <section class="home-search-band"><div>${homeIcon("leaf")}<span><strong>Ada nama perniagaan?</strong><span>Cari & isi maklumat automatik.</span></span></div><form action="/setup.html" method="get"><label class="visually-hidden" for="home-search">Nama perniagaan</label><input id="home-search" name="q" placeholder="Contoh: Kafe Taman Kota, Restoran Selera, \u2026" maxlength="160"><button type="submit">Cari & Isi Automatik ${homeIcon("arrow")}</button></form></section>`;
+  panel.querySelector(".home-picker-slot").append(picker);
+  panel.querySelector(".home-search-band form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const query = panel.querySelector("#home-search").value.trim();
+    const url = new URL("/setup.html", document2.defaultView.location.origin);
+    if (query) url.searchParams.set("q", query);
+    document2.defaultView.location.assign(url.href);
+  });
+  for (const b of panel.querySelectorAll("[data-home-open]")) b.addEventListener("click", () => onOpen(b.dataset.homeOpen, true));
+  const photo = panel.querySelector(".home-premise-photo"), state = panel.querySelector(".home-package-state"), date4 = panel.querySelector(".home-package-date"), address = panel.querySelector(".home-premise-address"), preview = panel.querySelector(".home-profile-card"), open = panel.querySelector(".home-public-link"), empty = panel.querySelector(".home-preview-empty");
+  const image = (container, src, alt) => {
+    container.replaceChildren();
+    if (src) {
+      const img = el("img");
+      img.src = src;
+      img.alt = alt;
+      img.referrerPolicy = "no-referrer";
+      img.onerror = () => img.remove();
+      container.append(img);
+    }
+  };
+  let current = null;
+  function update(item) {
+    current = item;
+    const english = document2.documentElement.lang === "en";
+    const p = item?.profile;
+    preview.hidden = open.hidden = !p;
+    empty.hidden = !!p;
+    photo.hidden = !p?.cover;
+    photo.onerror = () => photo.hidden = true;
+    if (p?.cover) photo.src = p.cover;
+    else photo.removeAttribute("src");
+    panel.querySelector('[data-home-open="my"]').disabled = !p;
+    panel.querySelector('.home-chart-empty [data-home-open="my"]').disabled = !p;
+    const enStates = { active: "Active", disabled: "Disabled", deleted: "Deleted", pending: "Awaiting activation", expired: "Subscription expired", nfc_only: "NFC only \xB7 one-time payment" };
+    state.textContent = item ? english ? enStates[item.state] || item.state : stateLabels[item.state] || item.state : english ? "No business selected" : "Tiada premis dipilih";
+    date4.textContent = item?.subscription?.expiresAt ? (english ? "Ends " : "Tamat ") + new Date(item.subscription.expiresAt).toLocaleDateString(english ? "en-MY" : "ms-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" }) : item ? english ? "Check package details and subscription options." : "Semak butiran pakej dan pilihan langganan." : english ? "Choose a business to see its status." : "Pilih premis untuk melihat status.";
+    address.textContent = p?.address?.split("\n")[0] || "";
+    if (!p) return;
+    image(panel.querySelector(".home-profile-cover"), p.cover, "Cover " + p.name);
+    const logo = panel.querySelector(".home-profile-logo");
+    image(logo, p.logo, "Logo " + p.name);
+    if (!p.logo) logo.textContent = p.name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("");
+    panel.querySelector(".home-profile h3").textContent = p.name;
+    panel.querySelector(".home-profile-content>p").textContent = p.tagline || "";
+    open.href = item.url;
+    const links = panel.querySelector(".home-profile-links");
+    links.replaceChildren();
+    for (const [key, label] of [["google", "Google Review"], ["whatsapp", "WhatsApp"], ["instagram", "Instagram"]]) if (p[key]) {
+      const a = el("a", "home-mini-link");
+      a.append(createBrandIcon(document2, key));
+      a.href = p[key];
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.setAttribute("aria-label", label);
+      links.append(a);
+    }
+  }
+  document2.defaultView.addEventListener("smarttap:language", () => update(current));
+  update(null);
+  return { panel, update };
+}
+
 // src/customer-area.mjs
-var menuPaths = { "package": "M3 7h18v14H3zM3 7l4-4h10l4 4M12 3v18M3 12h18", "business": "M4 21V7l8-4 8 4v14M8 21v-6h8v6M8 8h.01M16 8h.01M8 11h.01M16 11h.01", "page": "M3 4h18v16H3zM3 9h18M8 9v11", "orders": "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4", "my": "M9 3H3v18h18v-6M13 3h8v8M21 3 10 14" };
+var menuPaths = { home: "M3 11 12 3l9 8M5 10v11h5v-7h4v7h5V10", "package": "M3 7h18v14H3zM3 7l4-4h10l4 4M12 3v18M3 12h18", "business": "M4 21V7l8-4 8 4v14M8 21v-6h8v6M8 8h.01M16 8h.01M8 11h.01M16 11h.01", "page": "M3 4h18v16H3zM3 9h18M8 9v11", "orders": "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4", "my": "M9 3H3v18h18v-6M13 3h8v8M21 3 10 14" };
 var menuIcon = (id) => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + menuPaths[id] + '"/></svg>';
-var menus = [["package", "Status pakej", "\u25C8"], ["business", "Sunting perniagaan", "\u270E"], ["page", "Sunting paparan", "\u25A7"], ["orders", "Pesanan saya", "\u25A4"], ["my", "Halaman saya", "\u2197"]];
+var menus = [["home", "Utama"], ["business", "Premis"], ["page", "Paparan"], ["my", "NFC / QR"], ["package", "Langganan"], ["orders", "Pesanan"]];
 function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   const $2 = (id) => document.getElementById(id), dashboard = $2("dashboard"), editor = $2("editor"), form = $2("edit-form");
   document.body.classList.add("customer-workspace");
@@ -4431,6 +4539,9 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   nav.prepend(closeMenu);
   dashboard.prepend(bar, backdrop, nav, stage);
   stage.append(empty, packageView, editor, orderView, myView);
+  const home = createCustomerHome({ document, picker, onOpen: open });
+  stage.prepend(home.panel);
+  home.panel.querySelector(".home-premise").append($2("list-status"));
   const management2 = document.querySelector(".management-panel");
   packageView.append(management2);
   const subnav = document.createElement("nav");
@@ -4606,7 +4717,7 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   fieldTabs.setAttribute("aria-label", "Bahagian suntingan");
   form.prepend(fieldTabs);
   const tabLabels = { business: ["Maklumat", "Logo", "Hubungi", "Social Media", "Google Review"], page: ["Tema & warna", "Cover", "Menu & lokasi", "Alamat & waktu", "Promosi", "Pautan promosi", "Tarikh promosi"] };
-  let view = "package", sectionName = "overview", activeTab = { business: 0, page: 0 }, selected2 = null;
+  let view = "home", sectionName = "overview", activeTab = { business: 0, page: 0 }, selected2 = null;
   for (const [name, labels] of Object.entries(tabLabels)) for (const [i, label] of labels.entries()) {
     const button = document.createElement("button");
     button.type = "button";
@@ -4681,14 +4792,17 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
   }
   function render2() {
     const active = !!selected2;
-    empty.hidden = active;
+    home.panel.hidden = view !== "home";
+    dashboard.dataset.view = view;
+    home.update(selected2);
+    empty.hidden = active || view === "home";
     orderView.hidden = !active || view !== "orders";
     packageView.hidden = !active || view !== "package";
     myView.hidden = view !== "my";
     editor.hidden = !active || !["business", "page"].includes(view);
     for (const b of nav.querySelectorAll("[data-view]")) {
       b.setAttribute("aria-current", b.dataset.view === view ? "page" : "false");
-      b.disabled = !active && b.dataset.view !== "my";
+      b.disabled = !active && !["my", "home"].includes(b.dataset.view);
     }
     const title = menus.find((m) => m[0] === view)[1];
     if ($2("customer-title").textContent !== title) $2("customer-title").textContent = title;
@@ -4757,7 +4871,7 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
       }
     }
   }, update(item) {
-    if (!selected2) view = "package";
+    if (!selected2) view = "home";
     selected2 = item;
     $2("customer-business-name").textContent = item.profile.name;
     picker.value = item.id;
@@ -4772,15 +4886,22 @@ function createCustomerArea({ coverNodes, detailsNodes = {}, onSelect }) {
       option.textContent = item.profile.name;
       picker.append(option);
     }
+    picker.disabled = !items.length;
+    if (!items.length) {
+      const option = document.createElement("option");
+      option.textContent = "Tiada premis berdaftar";
+      option.value = "";
+      picker.append(option);
+    }
     picker.value = selected2?.id || current;
     document.body.classList.add("customer-session");
-    if (!selected2) view = "my";
+    if (!selected2) view = "home";
     render2();
   }, clear() {
     selected2 = null;
     document.body.classList.remove("customer-session");
     dismissMenu();
-    view = "package";
+    view = "home";
     sectionName = "overview";
     activeTab = { business: 0, page: 0 };
     paymentTab = 0;

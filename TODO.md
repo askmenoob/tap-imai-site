@@ -1,21 +1,19 @@
-# SMARTTAP — Connected Hub redesign
+# SMARTTAP — A / Botanical Premium Tech
 
-- [x] Audit GitHub main, Ubuntu workspaces, Cloudflare production and build setup.
-- [x] Preserve rollback: commit 8b5d630cd049f7e562923c6bce0ff696cc6c491c,
-  Cloudflare deployment 3e86008d-2ab2-4510-9e10-289656ed750f.
-- [x] Apply Concept B design system to setup, owner/admin, packages, public/demo,
-  catalogue, legal and offline surfaces.
-- [x] Preserve all API/auth/storage/billing contracts and existing selected logo.
-- [x] Build/static allowlist; 159/159 tests; desktop/mobile browser flows.
-- [x] WCAG A/AA automated checks on six core routes; fix pricing caption contrast.
-- [x] Verify Cloudflare preview, promote existing main deployment, smoke production.
-- [x] Record final commit/deployment and verification in .ai/checkpoint.md.
+- [x] User chose A and supplied the actual reference image.
+- [x] Inspect baseline git/checkpoint; retain current production rollback.
+- [x] Extract the design spec and generate matching production art assets.
+- [x] Build the real owner home composition and integrate existing account flows.
+- [x] Rebuild public-profile anatomy and Google/WhatsApp/Instagram action rows.
+- [x] Create explicitly fictional, usable preview routes using shared components.
+- [x] Test desktop/mobile, actual local account workflows, QR download, languages.
+- [x] Build/static allowlist, 159 service tests + 5 operations tests, syntax checks.
+- [x] Automated accessibility: eight routes, zero A/AA violations.
+- [x] Verify Cloudflare branch preview and record its URL/SHA in checkpoint.
+- [ ] User review of A preview.
+- [ ] Only after acceptance: merge/release and production smoke verification.
 
-Separate existing work (not activated by this visual release): 24-hour trial
-backend in PR #41 / Ubuntu smarttap-trial-work. Its checkpoint records missing
-Cloud Run deployment access. Keep the server feature flag and production state
-unchanged until that feature's release is separately verified.
-
-Full original master-prompt text and last mockup are not retrievable from the
-linked chat export. The supplied written Concept B specification is preserved
-in .ai/design-standard.md; exact image comparison remains unavailable.
+Reference differences that preserve truth: analytics unavailable instead of sample
+counts/graph; subscription from actual records instead of 14-day demo trial; no
+invented owner identity or notifications. Existing 24-hour trial work remains
+separate and is not enabled by the redesign.
