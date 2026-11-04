@@ -29,3 +29,36 @@ BLOCKERS/LIMITS: exact reference mockup/full prompt unavailable in chat export;
 Google-authenticated production account flows require a real account session;
 no production payment, order, owner record or subscription was created/modified.
 24h trial exists on separate unmerged work, not activated by this release.
+
+
+## Release verified — 5 November 2026, 02:18 MYT
+
+STATUS: IMPLEMENTED, MERGED AND LIVE. PR https://github.com/askmenoob/tap-imai-site/pull/42
+UI HEAD SHA: a7a4a81b8c5264a5a3b2943d4624714039e708ec
+PRODUCTION MERGE SHA: a93a4e823c973c8f6c49e712ca55142de78f926f
+VERIFIED PRODUCTION DEPLOYMENT: 69408af8-9a8e-4a03-8e15-373b5aa6d9fd
+FINAL PREVIEW: b3f5b025-ddfa-482d-841d-76f81e1fdf0c (success)
+LIVE: https://tap.imai.my ; owner /edit/ ; public demo /demo/salon/
+
+Both final preview and custom-domain production passed 15 smoke checks each:
+seven routes at desktop/mobile plus backend health. All returned HTTP 200,
+loaded signature CSS, rendered meaningful content, had no horizontal overflow
+or uncaught page errors. BM/English switching, price estimator and demo dialog
+interactions passed. Cloudflare deployment log: asset validation/upload and
+publication succeeded. Backend health: ready=true, demo=false, shortLinks=true.
+No authenticated production writes, purchase or live payment were performed.
+Local functional suite passed again after final CSS change; its second run
+required selecting the fixture in the existing multi-page picker before editing.
+Axe repeated with final CSS: six routes, zero automated WCAG violations.
+Five operations tests also pass; JavaScript/CSS syntax and diff checks pass.
+
+Browser plugin unavailable: Chrome via regular Playwright used. Screenshots and
+QA scripts kept outside the repository. Palette, desktop rail, mobile drawer,
+typography, identity, public branding/media and unchanged visible workflow copy
+were visually inspected. Exact mockup dimensions/pixel comparison unavailable.
+Cloud Run production logs/account write flows are not verified by this release.
+The 24h trial release remains separate and undeployed; no trial flag was changed.
+
+This documentation-only follow-up records the verified UI release above. It
+may trigger the same existing Pages build; inspect canonical deployment before
+any retry. No migrations, seeds, backend release or infrastructure changes.

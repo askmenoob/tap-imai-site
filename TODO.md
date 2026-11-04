@@ -8,8 +8,8 @@
 - [x] Preserve all API/auth/storage/billing contracts and existing selected logo.
 - [x] Build/static allowlist; 159/159 tests; desktop/mobile browser flows.
 - [x] WCAG A/AA automated checks on six core routes; fix pricing caption contrast.
-- [ ] Verify Cloudflare preview, promote existing main deployment, smoke production.
-- [ ] Record final commit/deployment and verification in .ai/checkpoint.md.
+- [x] Verify Cloudflare preview, promote existing main deployment, smoke production.
+- [x] Record final commit/deployment and verification in .ai/checkpoint.md.
 
 Separate existing work (not activated by this visual release): 24-hour trial
 backend in PR #41 / Ubuntu smarttap-trial-work. Its checkpoint records missing
