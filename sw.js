@@ -1,4 +1,4 @@
-const CACHE = 'smarttap-pwa-v3-brand';
+const CACHE = 'smarttap-pwa-v4-connected-hub';
 const OFFLINE = '/offline.html';
 const LANGUAGE = ['/language.js', '/language.css', '/language-catalog.mjs'];
 const BRAND = ['/assets/smarttap-mark.png', '/assets/app-icon-maskable-512.png', '/assets/favicon-32.png', '/favicon.ico'];

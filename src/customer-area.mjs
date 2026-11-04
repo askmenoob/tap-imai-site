@@ -1,3 +1,5 @@
+const menuPaths={"package":"M3 7h18v14H3zM3 7l4-4h10l4 4M12 3v18M3 12h18","business":"M4 21V7l8-4 8 4v14M8 21v-6h8v6M8 8h.01M16 8h.01M8 11h.01M16 11h.01","page":"M3 4h18v16H3zM3 9h18M8 9v11","orders":"M6 3h12v18l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4","my":"M9 3H3v18h18v-6M13 3h8v8M21 3 10 14"};
+const menuIcon=id=>'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+menuPaths[id]+'"/></svg>';
 const menus=[['package','Status pakej','◈'],['business','Sunting perniagaan','✎'],['page','Sunting paparan','▧'],['orders','Pesanan saya','▤'],['my','Halaman saya','↗']];
 export function createCustomerArea({coverNodes,detailsNodes={},onSelect}){
  const $=id=>document.getElementById(id),dashboard=$('dashboard'),editor=$('editor'),form=$('edit-form');
@@ -6,7 +8,7 @@ export function createCustomerArea({coverNodes,detailsNodes={},onSelect}){
  const bar=document.createElement('div');bar.className='customer-toolbar';
  bar.innerHTML='<div><p class="eyebrow">RUANG PELANGGAN</p><h1 id="customer-title" tabindex="-1">Status pakej</h1><p id="customer-business-name" data-no-i18n></p></div><button type="button" id="customer-menu-toggle" class="secondary" aria-label="Buka menu pelanggan" aria-expanded="false" aria-controls="customer-menu">☰ <span>Menu</span></button>';
  const nav=document.createElement('nav');nav.id='customer-menu';nav.className='customer-menu';nav.setAttribute('aria-label','Menu pelanggan');
- for(const [id,label,icon] of menus){const b=document.createElement('button');b.type='button';b.dataset.view=id;b.innerHTML='<span aria-hidden="true">'+icon+'</span><span>'+label+'</span>';b.onclick=()=>open(id,true);nav.append(b);}
+ for(const [id,label] of menus){const b=document.createElement('button');b.type='button';b.dataset.view=id;b.innerHTML='<span aria-hidden="true">'+menuIcon(id)+'</span><span>'+label+'</span>';b.onclick=()=>open(id,true);nav.append(b);}
  const account=document.createElement('button');account.type='button';account.textContent='Log keluar';account.className='customer-logout';account.onclick=()=>$('logout').click();nav.append(account);
  const stage=document.createElement('div');stage.className='customer-stage';stage.id='customer-stage';
  const packageView=document.createElement('section');packageView.id='customer-package';

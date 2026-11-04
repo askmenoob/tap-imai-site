@@ -13,7 +13,7 @@ export async function createAppIcon(size,{maskable=false}={}){
   const fraction=maskable?0.56:size<=32?0.88:0.76;
   const edge=Math.round(size*fraction);
   const image=await sharp(await mark).resize(edge,edge,{fit:'inside'}).png().toBuffer();
-  return sharp({create:{width:size,height:size,channels:4,background:'#fffaf4'}}).composite([{input:image,gravity:'centre'}]).png().toBuffer();
+  return sharp({create:{width:size,height:size,channels:4,background:'#f3f2fc'}}).composite([{input:image,gravity:'centre'}]).png().toBuffer();
 }
 export async function createFavicon(){
   const images=await Promise.all([16,32].map(size=>createAppIcon(size)));
