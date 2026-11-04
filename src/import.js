@@ -307,3 +307,5 @@ function showShareURL(url,png) {
   $('share').value=url;$('qr').src=png;$('open').href=url;$('download').href=png;$('copy-status').textContent='';
 }
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('share').value);$('copy-status').textContent='Pautan disalin.';}catch{$('share').focus();$('share').select();$('copy-status').textContent='Pilih dan salin pautan di atas secara manual.';}});
+
+const initialQuery=new URLSearchParams(location.search).get('q');if(initialQuery&&initialQuery.length<=160){$('query').value=initialQuery;}

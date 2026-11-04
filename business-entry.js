@@ -176,6 +176,35 @@ function xProfile(value) {
   }
 }
 
+// src/brand-icons.mjs
+function createBrandIcon(document2, name) {
+  const ns = "http://www.w3.org/2000/svg", svg = document2.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = (d, colour) => {
+    const p = document2.createElementNS(ns, "path");
+    p.setAttribute("d", d);
+    p.setAttribute("fill", colour);
+    svg.append(p);
+  };
+  if (name === "google") {
+    path("M22 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.6a4.8 4.8 0 0 1-2.1 3.2v2.6h3.4C21 18 22 15.4 22 12.2Z", "#4285f4");
+    path("M12 22c2.8 0 5.1-.9 6.9-2.4l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10.4 10.4 0 0 0 12 22Z", "#34a853");
+    path("M6.2 13.7a6 6 0 0 1 0-3.4V7.6H2.7a10.1 10.1 0 0 0 0 8.8Z", "#fbbc05");
+    path("M12 6c1.6 0 3 .6 4.1 1.6l3.1-3A10.3 10.3 0 0 0 12 2a10.4 10.4 0 0 0-9.3 5.6l3.5 2.7A6.1 6.1 0 0 1 12 6Z", "#ea4335");
+  } else {
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    const p = document2.createElementNS(ns, "path");
+    p.setAttribute("d", name === "whatsapp" ? "M21 11.5a9 9 0 0 1-13 8L3 21l1.5-5a9 9 0 1 1 16.5-4.5ZM8 7c0 5 4 9 9 9l1-3-3-1-1 1-3-3 1-1-1-3Z" : "M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0M17 7h.01");
+    svg.append(p);
+  }
+  return svg;
+}
+
 // src/public-card.mjs
 var paths = { x: "M4 3h4l12 18h-4L4 3ZM20 3 4 21", star: "m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z", arrow: "M7 17 17 7M7 7h10v10", menu: "M6 3h12v18H6zM9 8h6M9 12h6M9 16h4", pin: "M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0", clock: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M12 7v5l3 2", chevron: "m6 9 6 6 6-6", website: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18", whatsapp: "M21 11.5a9 9 0 0 1-13 8L3 21l1.5-5a9 9 0 1 1 16.5-4.5ZM8 7c0 5 4 9 9 9l1-3-3-1-1 1-3-3 1-1-1-3Z", instagram: "M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0M17 7h.01", facebook: "M14 21v-8h3l1-4h-4V7c0-1 1-2 2-2h2V2h-3c-4 0-5 2-5 5v2H7v4h3v8", tiktok: "M14 3v12a4 4 0 1 1-4-4M14 3c1 4 3 5 7 5", threads: "M18 7C16 1 5 2 4 11c-1 11 16 14 17 4 1-7-13-8-12-1 1 5 9 3 8-3 0-4-3-5-6-4" };
 function renderCard(document2, profile, now = Date.now()) {
@@ -238,13 +267,23 @@ function renderCard(document2, profile, now = Date.now()) {
   identity.append(avatar, el("h1", "", profile.name));
   if (profile.tagline) identity.append(el("p", "business-tagline", profile.tagline));
   content.append(identity);
+  const action = (url, text, cls, mark) => {
+    const a = link(url, text, "business-action " + cls, mark);
+    const arrow = icon("arrow");
+    arrow.classList.add("action-arrow");
+    a.append(arrow);
+    return a;
+  };
   if (profile.google) {
     const review = el("section", "business-review");
     review.setAttribute("aria-label", "Ulasan Google");
-    review.append(el("h2", "", "Pernah singgah di sini?"), el("p", "", "Kongsikan pengalaman anda di Google."), link(profile.google, "Tulis ulasan di Google", "business-action review-action", "star"));
+    const a = action(profile.google, "Tinggalkan Ulasan di Google", "review-action");
+    a.prepend(createBrandIcon(document2, "google"));
+    review.append(a);
     content.append(review);
   }
-  if (profile.whatsapp) content.append(link(profile.whatsapp, "Hubungi melalui WhatsApp", "business-action whatsapp-action", "whatsapp"));
+  if (profile.whatsapp) content.append(action(profile.whatsapp, "WhatsApp Kami", "whatsapp-action", "whatsapp"));
+  if (profile.instagram) content.append(action(profile.instagram, "Instagram", "instagram-action", "instagram"));
   const quick = el("div", "business-quick");
   if (profile.menu) quick.append(link(profile.menu, profile.menuLabel || "Lihat menu / katalog", "business-action outline-action", "menu"));
   if (profile.directions) quick.append(link(profile.directions, "Arah ke lokasi", "business-action outline-action", "pin"));
@@ -262,7 +301,7 @@ function renderCard(document2, profile, now = Date.now()) {
   }
   const social = el("nav", "business-social");
   social.setAttribute("aria-label", "Media sosial");
-  for (const name of ["facebook", "instagram", "tiktok", "threads", "x"]) if (profile[name] && (name !== "threads" || threadsProfile(profile[name])) && (name !== "x" || xProfile(profile[name]))) {
+  for (const name of ["facebook", "tiktok", "threads", "x"]) if (profile[name] && (name !== "threads" || threadsProfile(profile[name])) && (name !== "x" || xProfile(profile[name]))) {
     const a = link(profile[name], name === "x" ? "X" : name[0].toUpperCase() + name.slice(1), "social-link", name);
     a.title = name;
     a.setAttribute("aria-label", name);
@@ -278,6 +317,21 @@ function renderCard(document2, profile, now = Date.now()) {
     if (profile.hours) details.append(el("p", "", profile.hours));
     content.append(details);
   }
+  const nfc = el("section", "business-nfc-info");
+  const phone = document2.createElementNS("http://www.w3.org/2000/svg", "svg");
+  phone.setAttribute("viewBox", "0 0 70 100");
+  phone.setAttribute("fill", "none");
+  phone.setAttribute("aria-hidden", "true");
+  const outline = document2.createElementNS(phone.namespaceURI, "path");
+  outline.setAttribute("d", "M14 3h42a7 7 0 0 1 7 7v80a7 7 0 0 1-7 7H14a7 7 0 0 1-7-7V10a7 7 0 0 1 7-7ZM26 9h18M28 89h14M23 48a8 8 0 0 1 8 8M23 37a19 19 0 0 1 19 19M23 26a30 30 0 0 1 30 30");
+  outline.setAttribute("stroke", "currentColor");
+  outline.setAttribute("stroke-width", "2.3");
+  outline.setAttribute("stroke-linecap", "round");
+  phone.append(outline);
+  const note = el("div");
+  note.append(el("h2", "", "Tap NFC atau Imbas QR"), el("p", "", "Untuk akses pantas ke menu, ulasan dan media sosial kami."));
+  nfc.append(phone, note);
+  content.append(nfc);
   const footer = el("footer", "business-footer");
   footer.append(el("span", "", "POWERED BY SMARTTAP"));
   content.append(footer);

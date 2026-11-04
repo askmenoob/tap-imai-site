@@ -1,64 +1,53 @@
-# SMARTTAP checkpoint — 5 November 2026 (Asia/Kuala_Lumpur)
+# SMARTTAP — Botanical A checkpoint, 5 November 2026
 
-TASK: Actual Concept B / Connected Hub visual redesign.
-BRANCH: codex/smarttap-connected-hub-20261105
-BASE SHA: 8b5d630cd049f7e562923c6bce0ff696cc6c491c
-ROLLBACK DEPLOYMENT: 3e86008d-2ab2-4510-9e10-289656ed750f
-HOST: existing Cloudflare Pages project tap-imai-site, production branch main.
-BACKEND: existing tap-business-import Cloud Run; no backend deployment or writes.
-FIREBASE: not used by the current serving repo; Firebase Hosting remains disabled.
+CURRENT TASK: Correct the redesign against the user-supplied A reference.
+USER CHOICE: A — Botanical Premium Tech. Preview for user review before live.
+BRANCH: codex/smarttap-botanical-a-20261105
+BASE / CURRENT PRODUCTION SHA: 54a38c5d03035636131d566a2248a2c2f2ad97cf
+PRODUCTION ROLLBACK: Cloudflare d24d47d9-2ad5-45ff-a60a-f444296370a8
+PRODUCTION STATUS: Not changed by this task. No merge or production deployment.
 
-CHANGED: assets/signature-hub.css; HTML stylesheet/skip-link/metadata integration;
-src/customer-area.mjs SVG navigation; language-catalog.mjs skip-link translation;
-scripts/prepare-pages.mjs public allowlist; app-icon surface, manifest, SW version;
-generated business-admin.js; design standard and TODO.
+IMPLEMENTED: Real owner home using src/customer-home.mjs, integrated into the
+existing customer-area.mjs lifecycle. Actual premise picker, package state/date,
+profile preview, existing QR/editor/order/package navigation. Desktop horizontal
+navigation, retained mobile drawer. Real server-provided states, no invented
+chart, view/tap/review counts or trial activation. Public renderer now uses the
+reference's cover/avatar/serif identity and full Google/WhatsApp/Instagram rows,
+plus NFC/QR explanatory panel. Shared A styling across public/setup/account UI.
+Existing customer accent/logo/cover and dark theme remain supported.
 
-EVIDENCE: npm ci (audit 0 vulnerabilities), npm run build, prepare-pages (53 public
-files), npm test 159 passed / 0 failed / 0 skipped. Local Chrome via Playwright:
-1440x1000, 390x844, 360x844 route sweep; no horizontal overflow or page errors.
-Owner login, navigation, tabs, save with stable QR URL, mobile drawer, sharing,
-business details, search/import, package calculation and admin listing verified
-against localhost demo only. QA fixture records live only in local process memory.
-Automated axe WCAG 2 A/AA + 2.1 AA: zero violations across six core routes after
-fixing pricing caption contrast. Not a full manual WCAG conformance certification.
-No configured lint/typecheck in this vanilla-JS repo; syntax checks used instead.
+ART: Generated cafe hero, garden cafe cover, transparent botanical leaves;
+optimized WebP assets in assets/. Vector brand and Google/social icons.
+REFERENCE: codex-clipboard-58251c76-a643-44bc-bb1e-173565777a32.png, 1578x986.
+Demo surfaces /demo/botanical/dashboard.html and /demo/botanical/ reuse the real
+home/profile components with explicitly fictional data and no backend calls.
+Demo edit is in-memory only; QR download opens its fictional public profile.
 
-DEPLOY: pending preview and production verification. Do not rerun a deployment
-blindly after timeout; inspect Cloudflare deployment and git SHA first.
-BLOCKERS/LIMITS: exact reference mockup/full prompt unavailable in chat export;
-Google-authenticated production account flows require a real account session;
-no production payment, order, owner record or subscription was created/modified.
-24h trial exists on separate unmerged work, not activated by this release.
+VERIFICATION: 159 service + 5 operations tests pass, build and 61-file static
+allowlist pass, changed JS/CSS syntax pass. Browser: Chrome via Playwright
+(Browser plugin unavailable), 1440/1200/1030/390/360px, no horizontal overflow
+on demo route sweep. 1030x700 is checked because reference laptop app is about
+1030x700; mobile 390x844 and 360x800. Local actual account demo: premise selection,
+all views, stable-URL save, package sections, mobile drawer, sharing/details,
+search/import, estimator and admin list pass. Static preview: QR PNG download,
+in-memory edit, BM/English incl dynamic status, search handoff, public dialog pass.
+8 routes scanned with axe WCAG 2 A/AA + 2.1 AA: 0 automated violations after
+correcting demo-caption contrast. Not a full manual WCAG certification.
 
+VISUAL QA: Reference and rendered dashboard/mobile inspected via view_image.
+Preserved composition, cream/forest/sage palette, serif headings, cafe photography,
+overlapping profile identity, coloured action rows, botanical details. Intentional
+differences: no fake statistics/graph/14-day trial/user avatar; package shows real
+state; production navigation includes actual editor/order functions. No device
+frames or presentation-board labels are embedded in the app.
 
-## Release verified — 5 November 2026, 02:18 MYT
+PREVIEW DEPLOY: Pending branch push and Cloudflare deployment verification.
+BLOCKER: Production is intentionally waiting for user review of the A preview.
+Cloud Run/account/billing/storage infrastructure not changed. Server file diff
+only extends localhost --preview static allowlist for the new demo paths.
+Authenticated Google production flows and real payments are not exercised.
+24h trial remains separate undeployed work. No migration, seed, IAM or data write.
 
-STATUS: IMPLEMENTED, MERGED AND LIVE. PR https://github.com/askmenoob/tap-imai-site/pull/42
-UI HEAD SHA: a7a4a81b8c5264a5a3b2943d4624714039e708ec
-PRODUCTION MERGE SHA: a93a4e823c973c8f6c49e712ca55142de78f926f
-VERIFIED PRODUCTION DEPLOYMENT: 69408af8-9a8e-4a03-8e15-373b5aa6d9fd
-FINAL PREVIEW: b3f5b025-ddfa-482d-841d-76f81e1fdf0c (success)
-LIVE: https://tap.imai.my ; owner /edit/ ; public demo /demo/salon/
-
-Both final preview and custom-domain production passed 15 smoke checks each:
-seven routes at desktop/mobile plus backend health. All returned HTTP 200,
-loaded signature CSS, rendered meaningful content, had no horizontal overflow
-or uncaught page errors. BM/English switching, price estimator and demo dialog
-interactions passed. Cloudflare deployment log: asset validation/upload and
-publication succeeded. Backend health: ready=true, demo=false, shortLinks=true.
-No authenticated production writes, purchase or live payment were performed.
-Local functional suite passed again after final CSS change; its second run
-required selecting the fixture in the existing multi-page picker before editing.
-Axe repeated with final CSS: six routes, zero automated WCAG violations.
-Five operations tests also pass; JavaScript/CSS syntax and diff checks pass.
-
-Browser plugin unavailable: Chrome via regular Playwright used. Screenshots and
-QA scripts kept outside the repository. Palette, desktop rail, mobile drawer,
-typography, identity, public branding/media and unchanged visible workflow copy
-were visually inspected. Exact mockup dimensions/pixel comparison unavailable.
-Cloud Run production logs/account write flows are not verified by this release.
-The 24h trial release remains separate and undeployed; no trial flag was changed.
-
-This documentation-only follow-up records the verified UI release above. It
-may trigger the same existing Pages build; inspect canonical deployment before
-any retry. No migrations, seeds, backend release or infrastructure changes.
+NEXT: Verify branch preview, record URL/SHA, hand off desktop and mobile screenshots.
+After user accepts preview, check git/deployment state again before production.
+On any timeout, inspect the existing process/deployment; do not repeat mutations.
