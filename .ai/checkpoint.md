@@ -62,3 +62,15 @@ Authenticated Google production flows and real payments are not exercised.
 NEXT: Verify branch preview, record URL/SHA, hand off desktop and mobile screenshots.
 After user accepts preview, check git/deployment state again before production.
 On any timeout, inspect the existing process/deployment; do not repeat mutations.
+
+## Final preview verification
+
+UI HEAD: 6d8a402819cee5068256a32484048f75f9ad5bc1.
+DEPLOYMENT: 06b89215-004e-4397-af13-9fd6dcbf1b1e — preview, SUCCESS.
+DASHBOARD: https://06b89215.tap-imai-site.pages.dev/demo/botanical/dashboard.html
+PROFILE: https://06b89215.tap-imai-site.pages.dev/demo/botanical/
+Actual localhost account functional flows and empty/error/keyboard/logout checks
+passed again on the final UI. Static hosted preview interaction checks pass.
+Production canonical deployment checked and unchanged: d24d47d9 / 54a38c5.
+Only remaining next action is user visual review, followed by a separately
+approved production promotion. The documentation follow-up contains no UI change.
